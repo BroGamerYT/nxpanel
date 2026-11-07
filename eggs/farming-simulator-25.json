@@ -1,0 +1,226 @@
+{
+  "_comment": "NexusPanel-Egg fuer Farming Simulator 25. Abgeleitet aus dem AMP-Template (CubeCoders/AMPTemplates, farming-simulator-25.kvp). Nutzt Proton, weil der Server nur unter Windows laeuft. Nicht fuer gewerbliche Nutzung - GIANTS verlangt dafuer ein Partnerprogramm.",
+  "name": "Farming Simulator 25",
+  "author": "nxpanel",
+  "nest": "Simulation",
+  "docker_images": {
+    "Proton (parkervcp/steamcmd)": "ghcr.io/parkervcp/steamcmd:proton"
+  },
+  "install_image": "ghcr.io/parkervcp/steamcmd:proton",
+  "extra_packages": [
+    "xdotool",
+    "socat",
+    "wget",
+    "jq",
+    "tar"
+  ],
+  "startup": "if [ -f game/dedicatedServer.exe ]; then proton run game/dedicatedServer.exe; else echo 'Warte auf GIANTS-Dateien in game/'; sleep infinity; fi",
+  "environment": {
+    "STEAM_COMPAT_DATA_PATH": "/home/container/.steam/steam/steamapps/compatdata/2300320",
+    "STEAM_COMPAT_CLIENT_INSTALL_PATH": "/home/container/.steam/steam",
+    "HOME": "/home/container",
+    "WINEDEBUG": "-all",
+    "SRCDS_APPID": "2300320",
+    "AUTO_UPDATE": "0"
+  },
+  "console": "readonly",
+  "_console_comment": "Der Server nimmt keine Konsolenbefehle an. Konfiguriert wird ueber die eigene Weboberflaeche.",
+  "web_interface": {
+    "url": "http://{{SERVER_IP}}:{{WEB_PORT}}",
+    "label": "Webinterface oeffnen",
+    "note": "Zugangsdaten stehen in game/dedicatedServer.xml"
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Starting server|Warte auf GIANTS-Dateien|dedicatedServer",
+    "timeout_seconds": 120
+  },
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ports": {
+    "primary": {
+      "ref": "web",
+      "name": "Webinterface",
+      "start": 8080,
+      "end": 8179,
+      "protocol": "tcp"
+    },
+    "secondary": [
+      {
+        "ref": "webtls",
+        "name": "Webinterface TLS",
+        "offset": 363,
+        "protocol": "tcp",
+        "optional": true
+      },
+      {
+        "ref": "game",
+        "name": "Spiel",
+        "start": 10823,
+        "end": 10922,
+        "protocol": "udp"
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 4096,
+    "ram_per_player_mb": 300,
+    "min_cpu_percent": 300,
+    "disk_mb": 50000,
+    "notes": "Rund 45 GB fuer Spiel, Karte und Mods einplanen. Proton kostet zusaetzlich RAM."
+  },
+  "variables": [
+    {
+      "name": "App ID",
+      "env_variable": "SRCDS_APPID",
+      "default_value": "2300320",
+      "rules": "required|string",
+      "user_viewable": false,
+      "user_editable": false
+    },
+    {
+      "name": "Auto Update",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "0",
+      "rules": "required|string",
+      "user_viewable": false,
+      "user_editable": false
+    },
+    {
+      "name": "Bezugsquelle",
+      "name_locales": { "de": "Bezugsquelle", "en": "Source" },
+      "env_variable": "FS_SOURCE",
+      "description": "steam = Spieldateien per SteamCMD vom zweiten Steam-Konto. giants = eigenstaendiges Paket aus dem GIANTS-Portal, ohne Steam-Client. GIANTS ist der robustere Weg.",
+      "description_locales": { "de": "steam = Spieldateien per SteamCMD vom zweiten Steam-Konto. giants = eigenständiges Paket aus dem GIANTS-Portal, ohne Steam-Client. GIANTS ist der robustere Weg.", "en": "steam = Download via SteamCMD using dedicated Steam account. giants = standalone installer from GIANTS portal (recommended)." },
+      "default_value": "steam",
+      "rules": "required|in:steam,giants",
+      "user_viewable": true,
+      "user_editable": true
+    },
+    {
+      "name": "Steam-Benutzername",
+      "name_locales": { "de": "Steam-Benutzername", "en": "Steam Username" },
+      "env_variable": "STEAM_USER",
+      "description": "Nur bei FS_SOURCE=steam. Das ZWEITE Konto, auf dem die Server-Lizenz liegt. Nicht das Konto, mit dem du spielst.",
+      "description_locales": { "de": "Nur bei FS_SOURCE=steam. Das ZWEITE Konto, auf dem die Server-Lizenz liegt. Nicht das Konto, mit dem du spielst.", "en": "Only for FS_SOURCE=steam. Dedicated secondary account with the server license." },
+      "default_value": "",
+      "rules": "nullable|string",
+      "user_viewable": true,
+      "user_editable": true,
+      "requires": "FS_SOURCE=steam"
+    },
+    {
+      "name": "Steam-Passwort",
+      "name_locales": { "de": "Steam-Passwort", "en": "Steam Password" },
+      "env_variable": "STEAM_PASS",
+      "description": "Nur bei FS_SOURCE=steam. Wird verschluesselt gespeichert und nur an SteamCMD uebergeben. Nach dem ersten erfolgreichen Login merkt sich SteamCMD die Sitzung; das Passwort kann danach geleert werden.",
+      "description_locales": { "de": "Nur bei FS_SOURCE=steam. Wird verschlüsselt gespeichert und nur an SteamCMD übergeben. Nach dem ersten erfolgreichen Login merkt sich SteamCMD die Sitzung.", "en": "Only for FS_SOURCE=steam. Encrypted in database, used by SteamCMD. Saved session after first successful sign-in." },
+      "default_value": "",
+      "rules": "nullable|string",
+      "user_viewable": true,
+      "user_editable": true,
+      "secret": true,
+      "requires": "FS_SOURCE=steam"
+    },
+    {
+      "name": "Steam Guard Code",
+      "name_locales": { "de": "Steam Guard Code", "en": "Steam Guard Code" },
+      "env_variable": "STEAM_GUARD",
+      "description": "Nur beim ersten Login noetig. Code aus der Steam-App oder E-Mail eintragen, Server starten, danach wieder leeren.",
+      "description_locales": { "de": "Nur beim ersten Login nötig. Code aus der Steam-App oder E-Mail eintragen, Server starten, danach wieder leeren.", "en": "Only needed on first login. Enter 2FA code from app or email, start server, clear afterwards." },
+      "default_value": "",
+      "rules": "nullable|string|max:10",
+      "user_viewable": true,
+      "user_editable": true,
+      "requires": "FS_SOURCE=steam"
+    },
+    {
+      "name": "GIANTS Lizenzschluessel",
+      "name_locales": { "de": "GIANTS Lizenzschlüssel", "en": "GIANTS License Key" },
+      "env_variable": "FS_LICENSE_KEY",
+      "description": "Schluessel der ZWEITEN Lizenz. Nicht derselbe wie im Spiel, sonst bricht die Verbindung ab. Zu haeufige Aktivierung sperrt den Schluessel.",
+      "description_locales": { "de": "Schlüssel der ZWEITEN Lizenz. Nicht derselbe wie im Spiel, sonst bricht die Verbindung ab. Zu häufige Aktivierung sperrt den Schlüssel.", "en": "License key for dedicated server. Must differ from personal game client key." },
+      "default_value": "",
+      "rules": "required|string",
+      "user_viewable": true,
+      "user_editable": true,
+      "secret": true
+    },
+    {
+      "name": "Webinterface-Benutzer",
+      "name_locales": { "de": "Webinterface-Benutzer", "en": "Web Interface Username" },
+      "env_variable": "FS_WEB_USER",
+      "description": "Benutzername fuer die Weboberflaeche des Servers.",
+      "description_locales": { "de": "Benutzername für die Weboberfläche des Servers.", "en": "Username for the server's web admin interface." },
+      "default_value": "admin",
+      "rules": "required|string|max:32",
+      "user_viewable": true,
+      "user_editable": true
+    },
+    {
+      "name": "Webinterface-Passwort",
+      "name_locales": { "de": "Webinterface-Passwort", "en": "Web Interface Password" },
+      "env_variable": "FS_WEB_PASSWORD",
+      "description": "Wird beim ersten Start in dedicatedServer.xml geschrieben. Leer lassen erzeugt ein zufaelliges Passwort.",
+      "description_locales": { "de": "Wird beim ersten Start in dedicatedServer.xml geschrieben. Leer lassen erzeugt ein zufälliges Passwort.", "en": "Written to dedicatedServer.xml upon first start. Leave blank for random password." },
+      "default_value": "",
+      "rules": "nullable|string|min:8",
+      "user_viewable": true,
+      "user_editable": true,
+      "secret": true
+    },
+    {
+      "name": "Proton-Version",
+      "name_locales": { "de": "Proton-Version", "en": "Proton Version" },
+      "env_variable": "PROTON_VERSION",
+      "description": "Leer lassen fuer die neueste GE-Proton-Version, sonst z.B. GE-Proton9-20.",
+      "description_locales": { "de": "Leer lassen für die neueste GE-Proton-Version, sonst z. B. GE-Proton9-20.", "en": "Leave blank for latest GE-Proton release, or e.g. GE-Proton9-20." },
+      "default_value": "",
+      "rules": "nullable|regex:/^GE-Proton[0-9]+-[0-9]+$/",
+      "user_viewable": true,
+      "user_editable": true
+    }
+  ],
+  "config_files": {
+    "game/dedicatedServer.xml": {
+      "parser": "xml",
+      "protected": [
+        "webserver.port",
+        "game_port"
+      ],
+      "set": {
+        "webserver.username": "{{FS_WEB_USER}}",
+        "webserver.passphrase": "{{FS_WEB_PASSWORD}}",
+        "webserver.port": "{{WEB_PORT}}",
+        "game_port": "{{GAME_PORT}}"
+      }
+    }
+  },
+  "install_script": "#!/bin/bash\nset -e\n\nSRC=\"${FS_SOURCE:-steam}\"\nmkdir -p \"$SERVER_DIR/game\"\ncd \"$SERVER_DIR\"\n\necho \"[1/2] Vorbereitung\"\necho \"[2/2] Bezugsquelle: $SRC\"\n\nif [ \"$SRC\" = \"steam\" ]; then\n  if [ -z \"$STEAM_USER\" ]; then\n    echo \"HINWEIS: STEAM_USER ist leer. Das zweite Steam-Konto mit FS25-Lizenz in den Variablen eintragen oder GIANTS-Dateien nach game/ laden.\"\n    exit 0\n  fi\n\n  GUARD_ARG=\"\"\n  [ -n \"$STEAM_GUARD\" ] && GUARD_ARG=\"$STEAM_GUARD\"\n\n  echo \"      Lade Farming Simulator 25 (AppID 2300320) per SteamCMD...\"\n  set +e\n  ./steamcmd/steamcmd.sh +force_install_dir \"$SERVER_DIR/game\" \\\n           +login \"$STEAM_USER\" \"$STEAM_PASS\" $GUARD_ARG \\\n           +app_update 2300320 validate \\\n           +quit\n  RC=$?\n  set -e\n\n  if [ $RC -ne 0 ]; then\n    echo \"SteamCMD-Login fehlgeschlagen (Code $RC).\"\n    exit 1\n  fi\nelif [ \"$SRC\" = \"giants\" ]; then\n  echo \"GIANTS-Modus aktiv. Windows-Paket aus dem GIANTS-Portal nach game/ entpacken.\"\n  exit 0\nfi\n",
+  "notes": [
+    "Zweite Lizenz zwingend erforderlich - Spiel und Server gehen nicht gleichzeitig auf einem Key.",
+    "Bei FS_SOURCE=steam wird ein zweites Steam-Konto gebraucht; Steam erlaubt keine zwei Keys desselben Spiels auf einem Konto.",
+    "Bei FS_SOURCE=steam kann dieses Konto waehrend der Serverlaufzeit kein anderes Spiel starten.",
+    "FS_SOURCE=giants ist der robustere Weg: eigenstaendiges Paket, kein Steam-Client, kein Steam Guard.",
+    "Nicht fuer gewerbliche Nutzung freigegeben - GIANTS verlangt dafuer ein Partnerprogramm.",
+    "Bekanntes Problem unter Proton: Beitritt bleibt gelegentlich bei 55 Prozent stehen.",
+    "Erster Start dauert mehrere Minuten, weil Proton das Prefix aufbaut."
+  ],
+  "steam_app_id": 2300320,
+  "tmp": "disk",
+  "_comment_tmp": "Proton laedt sich beim ersten Start nach /tmp (500+ MB) - die 256-MB-RAM-Disk reicht dafuer nicht.",
+  "hints": [
+    {
+      "match": "ProtonFixes\\[\\d+\\] WARN|fsync: up and running",
+      "flags": "",
+      "level": "ignore",
+      "text": "Harmlose Meldung von Proton – kann ignoriert werden.",
+      "text_locales": {
+        "de": "Harmlose Meldung von Proton – kann ignoriert werden.",
+        "en": "Harmless message from Proton – safe to ignore."
+      }
+    }
+  ]
+}

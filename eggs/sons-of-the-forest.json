@@ -1,0 +1,119 @@
+{
+  "_comment": "NexusPanel-Egg fuer Sons of the Forest Dedicated Server. Nutzt das jammsen/sons-of-the-forest-dedicated-server Docker-Image unter Proton mit automatischer SteamCMD-Aktualisierung.",
+  "name": "Sons of the Forest",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "docker_images": {
+    "Sons of the Forest (jammsen/sons-of-the-forest-dedicated-server)": "jammsen/sons-of-the-forest-dedicated-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/sonsoftheforest",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 90
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Server main thread started|Game server started|Connected to Steam servers",
+    "timeout_seconds": 1200
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Game Blob / UDP",
+      "start": 9700,
+      "end": 9710,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Query",
+        "start": 8766,
+        "end": 8776,
+        "protocol": "udp"
+      },
+      {
+        "ref": "steam",
+        "name": "Steam Communication",
+        "start": 27016,
+        "end": 27026,
+        "protocol": "udp"
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 8192,
+    "ram_per_player_mb": 250,
+    "min_cpu_percent": 300,
+    "disk_mb": 25000,
+    "notes": "Sons of the Forest benoetigt unter Proton rund 8-10 GB Arbeitsspeicher."
+  },
+  "config_files": {
+    "dedicatedserver.cfg": {
+      "parser": "json",
+      "find": {
+        "IpAddress": "0.0.0.0",
+        "GamePort": "{{SERVER_PORT}}",
+        "QueryPort": "{{QUERY_PORT}}",
+        "BlobPort": "{{STEAM_PORT}}",
+        "ServerName": "{{SERVER_NAME}}",
+        "MaxPlayers": "{{MAX_PLAYERS}}",
+        "Password": "{{SERVER_PASSWORD}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "SERVER_NAME",
+      "description": "Angezeigter Servername in der Spielliste.",
+      "description_locales": {
+        "de": "Angezeigter Servername in der Spielliste.",
+        "en": "Server name shown in multiplayer browser."
+      },
+      "default_value": "Germany LanGame Sons of the Forest",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "SERVER_PASSWORD",
+      "description": "Passwort fuer den Serverbeitritt (leer fuer oeffentlich).",
+      "description_locales": {
+        "de": "Passwort fuer den Serverbeitritt (leer fuer oeffentlich).",
+        "en": "Password to join the server (leave empty for public)."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Maximale Spieler",
+      "name_locales": {
+        "de": "Maximale Spieler",
+        "en": "Maximum Players"
+      },
+      "env_variable": "MAX_PLAYERS",
+      "description": "Maximale Spieleranzahl (bis zu 8 Spieler).",
+      "description_locales": {
+        "de": "Maximale Spieleranzahl.",
+        "en": "Max player limit (up to 8 players)."
+      },
+      "default_value": "8",
+      "rules": "required|numeric|between:1,8"
+    }
+  ],
+  "query": {
+    "kind": "source",
+    "port_ref": "query"
+  }
+}

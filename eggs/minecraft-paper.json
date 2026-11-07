@@ -1,0 +1,720 @@
+{
+  "name": "Minecraft Java",
+  "author": "nxpanel",
+  "nest": "Minecraft",
+  "docker_images": {
+    "Java 25 (Minecraft 26.1 und neuer)": "itzg/minecraft-server:java25",
+    "Java 21 (Minecraft 1.20.5 bis 1.21.x)": "itzg/minecraft-server:java21",
+    "Java 17 (Minecraft 1.18 bis 1.20.4)": "itzg/minecraft-server:java17",
+    "Java 8 (Minecraft bis 1.16, altes Forge)": "itzg/minecraft-server:java8"
+  },
+  "startup": "/start",
+  "data_dir": "/data",
+  "capabilities": [
+    "CHOWN",
+    "SETUID",
+    "SETGID",
+    "DAC_OVERRIDE",
+    "FOWNER"
+  ],
+  "console": "full",
+  "stop": "stop",
+  "config": {
+    "startup": {
+      "done": "\\)! For help, type"
+    }
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel",
+      "start": 25565,
+      "end": 25664,
+      "protocol": "tcp"
+    },
+    "secondary": [
+      {
+        "ref": "rcon",
+        "name": "RCON",
+        "offset": 10,
+        "protocol": "tcp",
+        "optional": false,
+        "internal": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 2048,
+    "ram_per_player_mb": 120,
+    "min_cpu_percent": 200
+  },
+  "config_files": {
+    "server.properties": {
+      "parser": "properties",
+      "find": {
+        "server-port": "{{SERVER_PORT}}",
+        "max-players": "{{MAX_PLAYERS}}",
+        "motd": "{{MOTD}}",
+        "difficulty": "{{DIFFICULTY}}",
+        "pvp": "{{PVP}}",
+        "gamemode": "{{GAMEMODE}}",
+        "hardcore": "{{HARDCORE}}",
+        "view-distance": "{{VIEW_DISTANCE}}",
+        "simulation-distance": "{{SIMULATION_DISTANCE}}",
+        "spawn-protection": "{{SPAWN_PROTECTION}}",
+        "white-list": "{{WHITE_LIST}}",
+        "allow-nether": "{{ALLOW_NETHER}}",
+        "allow-flight": "{{ALLOW_FLIGHT}}",
+        "online-mode": "{{ONLINE_MODE}}",
+        "level-seed": "{{LEVEL_SEED}}",
+        "level-name": "{{LEVEL_NAME}}",
+        "level-type": "{{LEVEL_TYPE}}",
+        "enable-command-block": "{{ENABLE_COMMAND_BLOCK}}",
+        "enable-rcon": "true",
+        "rcon.port": "{{RCON_PORT}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Minecraft-Version",
+      "name_locales": {
+        "de": "Minecraft-Version",
+        "en": "Minecraft Version"
+      },
+      "env_variable": "VERSION",
+      "description": "LATEST für die neueste, sonst z. B. 1.21.4",
+      "description_locales": {
+        "de": "LATEST für die neueste, sonst z. B. 1.21.4",
+        "en": "LATEST for latest, or e.g. 1.21.4"
+      },
+      "default_value": "LATEST",
+      "rules": "required|string|max:20"
+    },
+    {
+      "name": "Servertyp",
+      "name_locales": {
+        "de": "Servertyp",
+        "en": "Server Type"
+      },
+      "env_variable": "TYPE",
+      "description": "PAPER/PURPUR/FOLIA/SPIGOT für Plugins, FABRIC/QUILT/FORGE/NEOFORGE für Mods, MOHIST/ARCLIGHT für Mods und Plugins zusammen, VANILLA ganz ohne. MODRINTH und AUTO_CURSEFORGE installieren ein ganzes Modpack. FTBA = Feed-the-Beast-Modpack.",
+      "description_locales": {
+        "de": "PAPER/PURPUR/FOLIA/SPIGOT für Plugins, FABRIC/QUILT/FORGE/NEOFORGE für Mods, MOHIST/ARCLIGHT für Mods und Plugins zusammen, VANILLA ganz ohne. MODRINTH und AUTO_CURSEFORGE installieren ein ganzes Modpack. FTBA = Feed-the-Beast-Modpack.",
+        "en": "PAPER/PURPUR/FOLIA/SPIGOT for plugins, FABRIC/QUILT/FORGE/NEOFORGE for mods, MOHIST/ARCLIGHT for mods and plugins together, VANILLA for none. MODRINTH and AUTO_CURSEFORGE install a whole modpack. FTBA = Feed the Beast modpack."
+      },
+      "default_value": "PAPER",
+      "rules": "required|in:PAPER,PURPUR,FOLIA,SPIGOT,VANILLA,FABRIC,QUILT,FORGE,NEOFORGE,MOHIST,ARCLIGHT,MODRINTH,AUTO_CURSEFORGE,FTBA"
+    },
+    {
+      "name": "Modrinth-Modpack",
+      "name_locales": {
+        "de": "Modrinth-Modpack",
+        "en": "Modrinth Modpack"
+      },
+      "env_variable": "MODRINTH_MODPACK",
+      "description": "Projekt-Name (z. B. cobblemon-fabric), Link oder eigene Datei im Server-Ordner wie /data/packs/meinpack.mrpack (Export aus Prism Launcher oder Modrinth App).",
+      "description_locales": {
+        "de": "Projekt-Name (z. B. cobblemon-fabric), Link oder eigene Datei im Server-Ordner wie /data/packs/meinpack.mrpack (Export aus Prism Launcher oder Modrinth App).",
+        "en": "Project slug (e.g. cobblemon-fabric), URL or own file in the server folder like /data/packs/mypack.mrpack (export from Prism Launcher or Modrinth App)."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:200",
+      "requires": "TYPE=MODRINTH"
+    },
+    {
+      "name": "Modrinth-Pack-Version",
+      "name_locales": {
+        "de": "Modrinth-Pack-Version",
+        "en": "Modrinth Pack Version"
+      },
+      "env_variable": "MODRINTH_VERSION",
+      "description": "Festgesetzte Version (ID). Leer = immer die neueste – dann aktualisiert sich das Pack bei jedem Neustart ohne Backup.",
+      "description_locales": {
+        "de": "Festgesetzte Version (ID). Leer = immer die neueste – dann aktualisiert sich das Pack bei jedem Neustart ohne Backup.",
+        "en": "Pinned version (ID). Empty = always latest, the pack then updates on every restart without a backup."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "requires": "TYPE=MODRINTH"
+    },
+    {
+      "name": "CurseForge-Modpack",
+      "name_locales": {
+        "de": "CurseForge-Modpack",
+        "en": "CurseForge Modpack"
+      },
+      "env_variable": "CF_SLUG",
+      "description": "Slug aus der CurseForge-Adresse, z. B. all-the-mods-10",
+      "description_locales": {
+        "de": "Slug aus der CurseForge-Adresse, z. B. all-the-mods-10",
+        "en": "Slug from the CurseForge URL, e.g. all-the-mods-10"
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:200",
+      "requires": "TYPE=AUTO_CURSEFORGE"
+    },
+    {
+      "name": "CurseForge-API-Schlüssel",
+      "name_locales": {
+        "de": "CurseForge-API-Schlüssel",
+        "en": "CurseForge API Key"
+      },
+      "env_variable": "CF_API_KEY",
+      "description": "Leer lassen = der Schlüssel, den der Admin beim Modpack-Reiter hinterlegt hat. Eigener Schlüssel kostenlos unter console.curseforge.com.",
+      "description_locales": {
+        "de": "Leer lassen = der Schlüssel, den der Admin beim Modpack-Reiter hinterlegt hat. Eigener Schlüssel kostenlos unter console.curseforge.com.",
+        "en": "Leave empty to use the key the admin stored in the modpack tab. Own key for free at console.curseforge.com."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:200",
+      "requires": "TYPE=AUTO_CURSEFORGE",
+      "secret": true
+    },
+    {
+      "name": "CurseForge-Pack-Version",
+      "name_locales": {
+        "de": "CurseForge-Pack-Version",
+        "en": "CurseForge Pack Version"
+      },
+      "env_variable": "CF_FILE_ID",
+      "description": "Festgesetzte Datei-ID. Leer = immer die neueste.",
+      "description_locales": {
+        "de": "Festgesetzte Datei-ID. Leer = immer die neueste.",
+        "en": "Pinned file ID. Empty = always latest."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:20",
+      "requires": "TYPE=AUTO_CURSEFORGE"
+    },
+    {
+      "name": "Eigene Pack-Datei (CurseForge-Zip)",
+      "name_locales": {
+        "de": "Eigene Pack-Datei (CurseForge-Zip)",
+        "en": "Own Pack File (CurseForge zip)"
+      },
+      "env_variable": "CF_MODPACK_ZIP",
+      "description": "Pfad im Server-Ordner, z. B. /data/packs/meinpack.zip – für Packs, die nicht automatisch geladen werden dürfen, oder Exporte aus Prism/CurseForge-App.",
+      "description_locales": {
+        "de": "Pfad im Server-Ordner, z. B. /data/packs/meinpack.zip – für Packs, die nicht automatisch geladen werden dürfen, oder Exporte aus Prism/CurseForge-App.",
+        "en": "Path in the server folder, e.g. /data/packs/mypack.zip – for packs that may not be downloaded automatically, or exports from Prism/CurseForge app."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:200",
+      "requires": "TYPE=AUTO_CURSEFORGE"
+    },
+    {
+      "name": "FTB-Modpack-ID",
+      "name_locales": {
+        "de": "FTB-Modpack-ID",
+        "en": "FTB Modpack ID"
+      },
+      "env_variable": "FTB_MODPACK_ID",
+      "description": "Nummer aus der Adresse auf feed-the-beast.com, z. B. 125 für FTB Evolution.",
+      "description_locales": {
+        "de": "Nummer aus der Adresse auf feed-the-beast.com, z. B. 125 für FTB Evolution.",
+        "en": "Number from the feed-the-beast.com URL, e.g. 125 for FTB Evolution."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:10",
+      "requires": "TYPE=FTBA"
+    },
+    {
+      "name": "FTB-Pack-Version",
+      "name_locales": {
+        "de": "FTB-Pack-Version",
+        "en": "FTB Pack Version"
+      },
+      "env_variable": "FTB_MODPACK_VERSION_ID",
+      "description": "Festgesetzte Versions-ID. Leer = immer die neueste.",
+      "description_locales": {
+        "de": "Festgesetzte Versions-ID. Leer = immer die neueste.",
+        "en": "Pinned version ID. Empty = always latest."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:12",
+      "requires": "TYPE=FTBA"
+    },
+    {
+      "name": "EULA zugestimmt",
+      "name_locales": {
+        "de": "EULA zugestimmt",
+        "en": "Agree to EULA"
+      },
+      "env_variable": "EULA",
+      "description": "Mojangs Nutzungsbedingungen müssen angenommen werden.",
+      "description_locales": {
+        "de": "Mojangs Nutzungsbedingungen müssen angenommen werden.",
+        "en": "Mojang's terms of service must be accepted."
+      },
+      "default_value": "TRUE",
+      "rules": "required|in:TRUE,FALSE"
+    },
+    {
+      "name": "Maximale Spielerzahl",
+      "name_locales": {
+        "de": "Maximale Spielerzahl",
+        "en": "Maximum Players"
+      },
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "20",
+      "rules": "required|numeric|between:1,200"
+    },
+    {
+      "name": "Begrüßung",
+      "name_locales": {
+        "de": "Begrüßung (MOTD)",
+        "en": "Message of the Day (MOTD)"
+      },
+      "env_variable": "MOTD",
+      "default_value": "Ein NexusPanel-Server",
+      "rules": "nullable|string|max:256",
+      "description": "Zwei Zeilen mit \\n trennen. Farben mit §-Codes – bequemer im MOTD-Editor in den Einstellungen."
+    },
+    {
+      "name": "Schwierigkeit",
+      "name_locales": {
+        "de": "Schwierigkeit",
+        "en": "Difficulty"
+      },
+      "env_variable": "DIFFICULTY",
+      "default_value": "normal",
+      "rules": "required|in:peaceful,easy,normal,hard"
+    },
+    {
+      "name": "RCON-Passwort",
+      "name_locales": {
+        "de": "RCON-Passwort",
+        "en": "RCON Password"
+      },
+      "env_variable": "RCON_PASSWORD",
+      "description": "Leer lassen erzeugt eines.",
+      "description_locales": {
+        "de": "Leer lassen erzeugt eines.",
+        "en": "Leave blank to generate one automatically."
+      },
+      "default_value": "",
+      "rules": "nullable|string|min:8",
+      "secret": true
+    },
+    {
+      "name": "PvP erlauben",
+      "name_locales": {
+        "de": "PvP erlauben",
+        "en": "Allow PvP"
+      },
+      "env_variable": "PVP",
+      "description": "Erlaubt Schaden zwischen Spielern.",
+      "description_locales": {
+        "de": "Erlaubt Schaden zwischen Spielern.",
+        "en": "Enable player vs player damage."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Spielmodus",
+      "name_locales": {
+        "de": "Spielmodus (Gamemode)",
+        "en": "Game Mode"
+      },
+      "env_variable": "GAMEMODE",
+      "description": "Standard-Spielmodus fuer beitretende Spieler.",
+      "description_locales": {
+        "de": "Standard-Spielmodus fuer beitretende Spieler.",
+        "en": "Default gamemode for new players."
+      },
+      "default_value": "survival",
+      "rules": "required|in:survival,creative,adventure,spectator"
+    },
+    {
+      "name": "Hardcore-Modus",
+      "name_locales": {
+        "de": "Hardcore-Modus",
+        "en": "Hardcore Mode"
+      },
+      "env_variable": "HARDCORE",
+      "description": "Spieler werden beim Tod zu Zuschauern gesperrt.",
+      "description_locales": {
+        "de": "Spieler werden beim Tod zu Zuschauern gesperrt.",
+        "en": "Permadeath - players become spectators on death."
+      },
+      "default_value": "false",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Sichtweite (View Distance)",
+      "name_locales": {
+        "de": "Sichtweite (Chunks)",
+        "en": "View Distance (Chunks)"
+      },
+      "env_variable": "VIEW_DISTANCE",
+      "description": "Server-Sichtweite in Chunks (Standard 10).",
+      "description_locales": {
+        "de": "Server-Sichtweite in Chunks (Standard 10).",
+        "en": "Server view distance in chunks (default 10)."
+      },
+      "default_value": "10",
+      "rules": "required|numeric|between:4,32"
+    },
+    {
+      "name": "Simulationsdistanz",
+      "name_locales": {
+        "de": "Simulationsdistanz (Chunks)",
+        "en": "Simulation Distance"
+      },
+      "env_variable": "SIMULATION_DISTANCE",
+      "description": "Distanz in Chunks, in der Entities und Ticks berechnet werden.",
+      "description_locales": {
+        "de": "Distanz in Chunks, in der Entities berechnet werden.",
+        "en": "Distance around players where ticking occurs."
+      },
+      "default_value": "10",
+      "rules": "required|numeric|between:4,32"
+    },
+    {
+      "name": "Spawn-Schutz",
+      "name_locales": {
+        "de": "Spawn-Schutzradius (Blöcke)",
+        "en": "Spawn Protection Radius"
+      },
+      "env_variable": "SPAWN_PROTECTION",
+      "description": "Schutzradius um den Weltspawn in Bloecken (0 = deaktiviert).",
+      "description_locales": {
+        "de": "Schutzradius um den Weltspawn in Bloecken.",
+        "en": "Block radius around world spawn where only OPs can build."
+      },
+      "default_value": "16",
+      "rules": "required|numeric|between:0,100"
+    },
+    {
+      "name": "Whitelist aktivieren",
+      "name_locales": {
+        "de": "Whitelist aktivieren",
+        "en": "Enable Whitelist"
+      },
+      "env_variable": "WHITE_LIST",
+      "description": "Nur eingetragene Spieler duerfen dem Server beitreten.",
+      "description_locales": {
+        "de": "Nur eingetragene Spieler duerfen dem Server beitreten.",
+        "en": "Only players on whitelist can join."
+      },
+      "default_value": "false",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Nether erlauben",
+      "name_locales": {
+        "de": "Nether erlauben",
+        "en": "Allow Nether"
+      },
+      "env_variable": "ALLOW_NETHER",
+      "description": "Ermoeglicht Portale und Reisen in die Nether-Dimension.",
+      "description_locales": {
+        "de": "Ermoeglicht Portale und Reisen in die Nether-Dimension.",
+        "en": "Allows portals and travel to the Nether."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Fliegen erlauben",
+      "name_locales": {
+        "de": "Fliegen erlauben",
+        "en": "Allow Flight"
+      },
+      "env_variable": "ALLOW_FLIGHT",
+      "description": "Verhindert Kicks durch Anticheat beim Nutzen von Elytren oder Jetpacks.",
+      "description_locales": {
+        "de": "Verhindert Kicks durch Anticheat beim Nutzen von Elytren.",
+        "en": "Prevents anticheat kicks while flying with elytra or mods."
+      },
+      "default_value": "false",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Online-Modus (Konto-Prüfung)",
+      "name_locales": {
+        "de": "Online-Modus (Mojang-Auth)",
+        "en": "Online Mode"
+      },
+      "env_variable": "ONLINE_MODE",
+      "description": "Prueft offizielle Mojang-/Microsoft-Konten beim Verbinden.",
+      "description_locales": {
+        "de": "Prueft offizielle Mojang-/Microsoft-Konten beim Verbinden.",
+        "en": "Validates official Minecraft accounts with Mojang."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Weltsaat (Level Seed)",
+      "name_locales": {
+        "de": "Weltsaat (Level Seed)",
+        "en": "World Seed"
+      },
+      "env_variable": "LEVEL_SEED",
+      "description": "Zufallssaat fuer die Welterzeugung (nur fuer neue Welten).",
+      "description_locales": {
+        "de": "Zufallssaat fuer die Welterzeugung.",
+        "en": "Seed for generating new worlds."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64"
+    },
+    {
+      "name": "Welt-Ordnername",
+      "name_locales": {
+        "de": "Welt-Ordnername",
+        "en": "Level Name"
+      },
+      "env_variable": "LEVEL_NAME",
+      "description": "Verzeichnisname der Spielwelt (Standard: world).",
+      "description_locales": {
+        "de": "Verzeichnisname der Spielwelt.",
+        "en": "Folder name of the main world."
+      },
+      "default_value": "world",
+      "rules": "required|string|max:32"
+    },
+    {
+      "name": "Befehlsblöcke erlauben",
+      "name_locales": {
+        "de": "Befehlsblöcke erlauben",
+        "en": "Enable Command Blocks"
+      },
+      "env_variable": "ENABLE_COMMAND_BLOCK",
+      "description": "Ermoeglicht die Ausfuehrung von Command Blocks.",
+      "description_locales": {
+        "de": "Ermoeglicht die Ausfuehrung von Command Blocks.",
+        "en": "Allows execution of command blocks."
+      },
+      "default_value": "false",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Arbeitsspeicher",
+      "name_locales": {
+        "de": "Arbeitsspeicher",
+        "en": "Memory"
+      },
+      "env_variable": "MEMORY",
+      "description": "Java-Heap, vom Panel aus dem RAM des Servers berechnet (85 %).",
+      "description_locales": {
+        "de": "Java-Heap, vom Panel aus dem RAM des Servers berechnet (85 %).",
+        "en": "Java Heap, computed by the panel from server RAM (85%)."
+      },
+      "default_value": "{{SERVER_MEMORY_HEAP}}M",
+      "rules": "nullable|string",
+      "user_editable": false
+    }
+  ],
+  "notes": [
+    "Das itzg-Image laedt Paper beim ersten Start selbst herunter - deshalb kein Installationsskript.",
+    "EULA muss auf TRUE stehen, sonst beendet sich der Server sofort.",
+    "Das itzg-Image startet als root und wechselt dann zu Benutzer 1000 - dafuer braucht es CHOWN, SETUID und SETGID. Ohne endet es sofort mit Exit-Code 1.",
+    "Die Java-Version muss zur Minecraft-Version passen: 26.1 und neuer braucht Java 25, 1.20.5 bis 1.21 Java 21, 1.18 bis 1.20.4 Java 17. Bei VERSION=LATEST also immer das neueste Image waehlen."
+  ],
+  "import": {
+    "notes": "Uebernimmt Welten, server.properties, Spielerlisten, Plugins und Plugin-Einstellungen. Den Servertyp (z. B. VANILLA) vorher in den Spiel-Einstellungen passend setzen.",
+    "rules": [
+      {
+        "match": "world",
+        "to": "world"
+      },
+      {
+        "match": "world_nether",
+        "to": "world_nether"
+      },
+      {
+        "match": "world_the_end",
+        "to": "world_the_end"
+      },
+      {
+        "match": "server.properties",
+        "to": "server.properties"
+      },
+      {
+        "match": "ops.json",
+        "to": "ops.json"
+      },
+      {
+        "match": "whitelist.json",
+        "to": "whitelist.json"
+      },
+      {
+        "match": "banned-players.json",
+        "to": "banned-players.json"
+      },
+      {
+        "match": "banned-ips.json",
+        "to": "banned-ips.json"
+      },
+      {
+        "match": "usercache.json",
+        "to": "usercache.json"
+      },
+      {
+        "match": "plugins",
+        "to": "plugins"
+      },
+      {
+        "match": "config",
+        "to": "config"
+      },
+      {
+        "match": "mods",
+        "to": "mods"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "eula.txt",
+        "level.dat",
+        "server.properties"
+      ],
+      "vars": [
+        {
+          "var": "VERSION",
+          "from": "nbt",
+          "file": "world/level.dat",
+          "key": "Data.Version.Name"
+        },
+        {
+          "var": "VERSION",
+          "from": "filename",
+          "pattern": "^(?:minecraft_server|server)[.-](\\d+(?:\\.\\d+)+)\\.jar$"
+        },
+        {
+          "var": "VERSION",
+          "from": "filename",
+          "pattern": "^(?:paper|purpur|spigot)-(\\d+(?:\\.\\d+)+)(?:-\\d+)?\\.jar$"
+        },
+        {
+          "var": "TYPE",
+          "from": "exists",
+          "cases": [
+            {
+              "path": "purpur.yml",
+              "value": "PURPUR"
+            },
+            {
+              "path": "config/paper-global.yml",
+              "value": "PAPER"
+            },
+            {
+              "path": "paper.yml",
+              "value": "PAPER"
+            },
+            {
+              "path": ".fabric",
+              "value": "FABRIC"
+            },
+            {
+              "path": "fabric-server-launch.jar",
+              "value": "FABRIC"
+            },
+            {
+              "path": "libraries/net/minecraftforge",
+              "value": "FORGE"
+            },
+            {
+              "path": "spigot.yml",
+              "value": "SPIGOT"
+            }
+          ],
+          "fallback": "VANILLA"
+        },
+        {
+          "var": "MOTD",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "motd"
+        },
+        {
+          "var": "MAX_PLAYERS",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "max-players"
+        },
+        {
+          "var": "DIFFICULTY",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "difficulty",
+          "map": {
+            "0": "peaceful",
+            "1": "easy",
+            "2": "normal",
+            "3": "hard"
+          }
+        }
+      ]
+    }
+  },
+  "hints": [
+    {
+      "match": "OutOfMemoryError",
+      "level": "error",
+      "text": "Java hat keinen Speicher mehr. In den Einstellungen unter Leistung mehr RAM geben.",
+      "text_locales": {
+        "de": "Java hat keinen Speicher mehr. In den Einstellungen unter Leistung mehr RAM geben.",
+        "en": "Java ran out of memory. Allocate more RAM in Server Settings."
+      }
+    },
+    {
+      "match": "Can't keep up!",
+      "level": "warn",
+      "text": "Der Server kommt nicht hinterher (weniger als 20 TPS). Ursachen: zu wenig CPU, viele Entities oder Chunk-Erzeugung. Mehr CPU-Kerne geben oder mit „spark profiler“ suchen.",
+      "text_locales": {
+        "de": "Der Server kommt nicht hinterher (weniger als 20 TPS). Ursachen: zu wenig CPU, viele Entities oder Chunk-Erzeugung. Mehr CPU-Kerne geben oder mit „spark profiler“ suchen.",
+        "en": "Server can't keep up (below 20 TPS). Reasons: CPU bottleneck, too many entities or chunk generation. Allocate more CPU or run spark profiler."
+      }
+    },
+    {
+      "match": "FAILED TO BIND TO PORT",
+      "flags": "i",
+      "level": "error",
+      "text": "Der Port ist belegt. In den Einstellungen „Ports neu vergeben“.",
+      "text_locales": {
+        "de": "Der Port ist belegt. In den Einstellungen „Ports neu vergeben“.",
+        "en": "Port is already bound. Reallocate ports in Server Settings."
+      }
+    },
+    {
+      "match": "You need to agree to the EULA",
+      "flags": "i",
+      "level": "error",
+      "text": "EULA nicht akzeptiert – in den Spiel-Einstellungen „EULA zugestimmt“ anhaken.",
+      "text_locales": {
+        "de": "EULA nicht akzeptiert – in den Spiel-Einstellungen „EULA zugestimmt“ anhaken.",
+        "en": "EULA not accepted – check 'Agree to EULA' in Game Settings."
+      }
+    },
+    {
+      "match": "Unsupported Java|UnsupportedClassVersionError|requires running the server with Java",
+      "flags": "i",
+      "level": "error",
+      "text": "Falsche Java-Version für diese Minecraft-Version. In den Einstellungen die Laufzeitumgebung wechseln (Java 25 ab Minecraft 26.1).",
+      "text_locales": {
+        "de": "Falsche Java-Version für diese Minecraft-Version. In den Einstellungen die Laufzeitumgebung wechseln (Java 25 ab Minecraft 26.1).",
+        "en": "Incompatible Java version for this Minecraft release. Switch runtime environment in Server Settings (Java 25 for MC 26.1+)."
+      }
+    }
+  ],
+  "log_dirs": [
+    "logs"
+  ],
+  "query": {
+    "kind": "minecraft",
+    "rcon": {
+      "port_ref": "rcon",
+      "password_var": "RCON_PASSWORD",
+      "password_files": [
+        ".rcon-cli.env",
+        ".rcon-cli.yaml"
+      ]
+    },
+    "_comment": "Live-Abfrage: Server List Ping (Spieler, Version, Antwortzeit) fuer jeden Typ, TPS und Spielerverwaltung ueber RCON. itzg legt RCON selbst an und schreibt das Passwort nach .rcon-cli.env."
+  }
+}

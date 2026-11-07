@@ -1,0 +1,61 @@
+{
+  "name": "nxpanel",
+  "version": "0.21.2",
+  "description": "NexusPanel - Gameserver-Verwaltung ueber Docker",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file=.env dist/index.js",
+    "migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "db:up": "docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d postgres redis",
+    "db:down": "docker compose --env-file .env -f deploy/docker-compose.yml down",
+    "dev:server": "tsx src/cli/dev-server.ts",
+    "egg": "tsx src/cli/egg.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "mc": "tsx src/cli/mc.ts",
+    "user": "tsx src/cli/user.ts",
+    "test:games": "tsx src/cli/test-all-games.ts",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web ci && npm --prefix web run build"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^10.1.8",
+    "@fastify/static": "^10.1.10",
+    "@fastify/swagger": "^9.9.3",
+    "@fastify/swagger-ui": "^6.1.3",
+    "@fastify/websocket": "^11.0.1",
+    "@node-rs/argon2": "^2.2.2",
+    "dockerode": "^4.0.2",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.1.0",
+    "fastify-plugin": "^6.0.1",
+    "ioredis": "^5.4.1",
+    "jose": "^6.2.15",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0",
+    "postgres": "^3.4.5",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.31",
+    "@types/node": "^22.9.0",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^5.1.0"
+  }
+}

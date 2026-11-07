@@ -1,0 +1,137 @@
+{
+  "_comment": "NexusPanel-Egg fuer Core Keeper. Image escaping/core-keeper-dedicated laedt den Server per SteamCMD. Weil das Panel SERVER_PORT setzt, laeuft der Server im Direktverbindungs-Modus (IP:Port). Die Spieldateien liegen im Container und werden nach einem Neuaufbau neu geladen; Welt und Einstellungen liegen im Datenordner. UNGETESTET.",
+  "name": "Core Keeper",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "cover": {
+    "steam": 1621690
+  },
+  "docker_images": {
+    "SteamCMD (escaping/core-keeper-dedicated)": "escaping/core-keeper-dedicated:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/home/steam/core-keeper-data",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 120
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Game ID:|GameID|Started session",
+    "timeout_seconds": 1200
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 27015,
+      "end": 27114,
+      "protocol": "udp"
+    }
+  },
+  "resources": {
+    "base_ram_mb": 2048,
+    "ram_per_player_mb": 150,
+    "min_cpu_percent": 100,
+    "disk_mb": 5000,
+    "notes": "2-4 GB reichen fuer die meisten Welten."
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "WORLD_NAME",
+      "default_value": "Germany LanGame Core Keeper",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Welt-Nummer",
+      "name_locales": {
+        "de": "Welt-Nummer",
+        "en": "World Index"
+      },
+      "env_variable": "WORLD_INDEX",
+      "default_value": "0",
+      "rules": "required|numeric|between:0,29"
+    },
+    {
+      "name": "Weltsaat",
+      "name_locales": {
+        "de": "Weltsaat",
+        "en": "World Seed"
+      },
+      "env_variable": "WORLD_SEED",
+      "description": "Leer = zufällig. Nur für neue Welten.",
+      "description_locales": {
+        "de": "Leer = zufällig. Nur für neue Welten.",
+        "en": "Empty = random. Only for new worlds."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:32"
+    },
+    {
+      "name": "Spielmodus",
+      "name_locales": {
+        "de": "Spielmodus",
+        "en": "World Mode"
+      },
+      "env_variable": "WORLD_MODE",
+      "description": "0 Normal, 1 Schwer, 2 Kreativ, 4 Entspannt.",
+      "description_locales": {
+        "de": "0 Normal, 1 Schwer, 2 Kreativ, 4 Entspannt.",
+        "en": "0 normal, 1 hard, 2 creative, 4 casual."
+      },
+      "default_value": "0",
+      "rules": "required|in:0,1,2,4"
+    },
+    {
+      "name": "Maximale Spielerzahl",
+      "name_locales": {
+        "de": "Maximale Spielerzahl",
+        "en": "Maximum Players"
+      },
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "8",
+      "rules": "required|numeric|between:1,100"
+    },
+    {
+      "name": "Game-ID",
+      "name_locales": {
+        "de": "Game-ID",
+        "en": "Game ID"
+      },
+      "env_variable": "GAME_ID",
+      "description": "Leer = der Server erzeugt eine; sie steht danach im Log und in GameID.txt.",
+      "description_locales": {
+        "de": "Leer = der Server erzeugt eine; sie steht danach im Log und in GameID.txt.",
+        "en": "Empty = the server creates one; it then appears in the log and GameID.txt."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:28"
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Welten und Einstellungen.",
+    "rules": [
+      {
+        "match": "worlds",
+        "to": "worlds"
+      },
+      {
+        "match": "ServerConfig.json",
+        "to": "ServerConfig.json"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "CoreKeeperServer",
+        "worlds"
+      ],
+      "vars": []
+    }
+  }
+}

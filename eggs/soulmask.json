@@ -1,0 +1,258 @@
+{
+  "_comment": "NexusPanel-Egg, angepasst nach pelican-eggs/games-steamcmd (soulmask/egg-pterodactyl-soulmask.json), Lizenz MIT, Copyright (c) Michael Parker and Contributors. Anpassungen: Kategorie, Titelbild, deutsche Feldnamen, RAM-Vorschlag. Zusatzports, Startmuster, Konfigurationsdateien und Benutzer uebernimmt der Import automatisch. UNGETESTET.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-11-01T10:15:47+00:00",
+  "name": "Soulmask",
+  "author": "quinten@pelican.dev",
+  "description": "Escaping a deadly sacrificial ritual, you find an ancient mystical mask on your journey. This mask holds potent knowledge, changing the world you knew. Face the harsh challenges of nature, survive, rally followers, and build your own tribe. Explore and unveil the truths behind the enigmatic mask.",
+  "features": [
+    "steam_disk_space"
+  ],
+  "docker_images": {
+    "SteamCMD Debian": "ghcr.io/pelican-eggs/steamcmd:debian"
+  },
+  "file_denylist": [],
+  "startup": "/home/container/WS/Binaries/Linux/WSServer-Linux-Shipping WS {{MAP}} -server -SILENT -SteamServerName=\"{{SERVER_NAME}}\" -saving={{SAVE_TIME}} -Port={{SERVER_PORT}} -QueryPort={{QUERY_PORT}} -EchoPort={{ECHO_PORT}} -forcepassthrough -MaxPlayers={{MAX_PLAYERS}} -backup={{BACKUP_TIME}} -log -UTF8Output -MULTIHOME=0.0.0.0 {{EXTRA_ARGS}} -online=Steam -adminpsw={{ADMIN_PASSWORD}} -PSW={{SERVER_PASSWORD}}",
+  "config": {
+    "files": "{}",
+    "startup": "{\n    \"done\": \"Create Dungeon Successed\"\n}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# steamcmd Base Installation Script\n#\n# Server Files: /mnt/server\n# Image to install with is 'ghcr.io/parkervcp/installers:debian'\n\n\n# Install packages. Default packages below are not required if using our existing install image thus speeding up the install process.\n#apt -y update\n#apt -y --no-install-recommends install curl lib32gcc-s1 ca-certificates\n\n## just in case someone removed the defaults.\nif [[ \"${STEAM_USER}\" == \"\" ]] || [[ \"${STEAM_PASS}\" == \"\" ]]; then\n    echo -e \"steam user is not set.\\n\"\n    echo -e \"Using anonymous user.\\n\"\n    STEAM_USER=anonymous\n    STEAM_PASS=\"\"\n    STEAM_AUTH=\"\"\nelse\n    echo -e \"user set to ${STEAM_USER}\"\nfi\n\n## download and install steamcmd\ncd /tmp\nmkdir -p /mnt/server/steamcmd\ncurl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz\ntar -xzvf steamcmd.tar.gz -C /mnt/server/steamcmd\nmkdir -p /mnt/server/steamapps # Fix steamcmd disk write error when this folder is missing\ncd /mnt/server/steamcmd\n\n# SteamCMD fails otherwise for some reason, even running as root.\n# This is changed at the end of the install process anyways.\nchown -R root:root /mnt\nexport HOME=/mnt/server\n\n## install game using steamcmd\n./steamcmd.sh +force_install_dir /mnt/server +login ${STEAM_USER} ${STEAM_PASS} ${STEAM_AUTH} $( [[ \"${WINDOWS_INSTALL}\" == \"1\" ]] && printf %s '+@sSteamCmdForcePlatformType windows' ) +app_update ${SRCDS_APPID} +app_update 1007 $( [[ -z ${SRCDS_BETAID} ]] || printf %s \"-beta ${SRCDS_BETAID}\" ) $( [[ -z ${SRCDS_BETAPASS} ]] || printf %s \"-betapassword ${SRCDS_BETAPASS}\" ) ${INSTALL_FLAGS} validate +quit ## other flags may be needed depending on install. looking at you cs 1.6\n\n## set up 32 bit libraries\nmkdir -p /mnt/server/.steam/sdk32\ncp -v linux32/steamclient.so ../.steam/sdk32/steamclient.so\n\n## set up 64 bit libraries\nmkdir -p /mnt/server/.steam/sdk64\ncp -v linux64/steamclient.so ../.steam/sdk64/steamclient.so\n\n## add below your custom commands if needed\n## Maybe this path is just needed?\nmkdir -p /mnt/server/WS/Saved/Config/LinuxServer\n\n## install end\necho \"-----------------------------------------\"\necho \"Installation completed...\"\necho \"-----------------------------------------\"",
+      "container": "ghcr.io/pelican-eggs/installers:debian",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "App ID",
+      "description": "",
+      "env_variable": "SRCDS_APPID",
+      "default_value": "3017300",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "string|in:3017300",
+      "field_type": "text",
+      "name_locales": {
+        "de": "App-ID",
+        "en": "App ID"
+      }
+    },
+    {
+      "name": "Auto Update",
+      "description": "Auto update the server on start",
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "1",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "boolean",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Automatisch aktualisieren",
+        "en": "Auto Update"
+      },
+      "description_locales": {
+        "de": "Auto update the server on start",
+        "en": "Auto update the server on start"
+      }
+    },
+    {
+      "name": "Server Name",
+      "description": "Specifies the name of the game instance displayed in the server list",
+      "env_variable": "SERVER_NAME",
+      "default_value": "Soulmask Server",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:85",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "description_locales": {
+        "de": "Specifies the name of the game instance displayed in the server list",
+        "en": "Specifies the name of the game instance displayed in the server list"
+      }
+    },
+    {
+      "name": "Max Players",
+      "description": "Specifies the maximum number of players the game instance can support.",
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "60",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|between:1,70",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Maximale Spielerzahl",
+        "en": "Max Players"
+      },
+      "description_locales": {
+        "de": "Specifies the maximum number of players the game instance can support.",
+        "en": "Specifies the maximum number of players the game instance can support."
+      }
+    },
+    {
+      "name": "Backup Interval",
+      "description": "Specifies the interval for writing the game database to disk (unit: seconds).",
+      "env_variable": "BACKUP_TIME",
+      "default_value": "960",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Backup Interval",
+        "en": "Backup Interval"
+      },
+      "description_locales": {
+        "de": "Specifies the interval for writing the game database to disk (unit: seconds).",
+        "en": "Specifies the interval for writing the game database to disk (unit: seconds)."
+      }
+    },
+    {
+      "name": "Save Time Interval",
+      "description": "Specifies the interval for writing game objects to the database (unit: seconds).",
+      "env_variable": "SAVE_TIME",
+      "default_value": "600",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Save Time Interval",
+        "en": "Save Time Interval"
+      },
+      "description_locales": {
+        "de": "Specifies the interval for writing game objects to the database (unit: seconds).",
+        "en": "Specifies the interval for writing game objects to the database (unit: seconds)."
+      }
+    },
+    {
+      "name": "Query Port",
+      "description": "Specifies the Steam query port, UDP, needs to be open to the public.",
+      "env_variable": "QUERY_PORT",
+      "default_value": "27015",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|numeric|between:1024,65536",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Query-Port",
+        "en": "Query Port"
+      },
+      "description_locales": {
+        "de": "Specifies the Steam query port, UDP, needs to be open to the public.",
+        "en": "Specifies the Steam query port, UDP, needs to be open to the public."
+      }
+    },
+    {
+      "name": "Maintenance Port",
+      "description": "Maintenance port, used for local telnet server maintenance, TCP, does not need to be open.",
+      "env_variable": "ECHO_PORT",
+      "default_value": "18888",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|numeric|between:1024,65536",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Maintenance Port",
+        "en": "Maintenance Port"
+      },
+      "description_locales": {
+        "de": "Maintenance port, used for local telnet server maintenance, TCP, does not need to be open.",
+        "en": "Maintenance port, used for local telnet server maintenance, TCP, does not need to be open."
+      }
+    },
+    {
+      "name": "Server Password",
+      "description": "Server password, private servers can specify a password, players must enter the password to enter the server.",
+      "env_variable": "SERVER_PASSWORD",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:32",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "description_locales": {
+        "de": "Server password, private servers can specify a password, players must enter the password to enter the server.",
+        "en": "Server password, private servers can specify a password, players must enter the password to enter the server."
+      }
+    },
+    {
+      "name": "Admin Password",
+      "description": "GM activation password.Open GM Panel (gm key [password])",
+      "env_variable": "ADMIN_PASSWORD",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:32",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Admin-Passwort",
+        "en": "Admin Password"
+      },
+      "description_locales": {
+        "de": "GM activation password.Open GM Panel (gm key [password])",
+        "en": "GM activation password.Open GM Panel (gm key [password])"
+      }
+    },
+    {
+      "name": "Extra Arguments",
+      "description": "Additional arguments passed on startup such as: -pve or -pve",
+      "env_variable": "EXTRA_ARGS",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:32",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Extra Arguments",
+        "en": "Extra Arguments"
+      },
+      "description_locales": {
+        "de": "Additional arguments passed on startup such as: -pve or -pve",
+        "en": "Additional arguments passed on startup such as: -pve or -pve"
+      }
+    },
+    {
+      "name": "Map",
+      "description": "You need the DLC \"Soulmask: Shifting Sands\" for the map DLC_Level01_Main",
+      "env_variable": "MAP",
+      "default_value": "Level01_Main",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:Level01_Main,DLC_Level01_Main",
+      "field_type": "text",
+      "name_locales": {
+        "de": "Karte",
+        "en": "Map"
+      },
+      "description_locales": {
+        "de": "You need the DLC \"Soulmask: Shifting Sands\" for the map DLC_Level01_Main",
+        "en": "You need the DLC \"Soulmask: Shifting Sands\" for the map DLC_Level01_Main"
+      }
+    }
+  ],
+  "nest": "Survival",
+  "cover": {
+    "steam": 2646460
+  },
+  "resources": {
+    "base_ram_mb": 8192,
+    "min_cpu_percent": 200
+  },
+  "query": {
+    "kind": "source",
+    "port_ref": "query"
+  }
+}

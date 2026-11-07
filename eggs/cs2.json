@@ -1,0 +1,203 @@
+{
+  "_comment": "NexusPanel-Egg fuer Counter-Strike 2 Dedicated Server. Nutzt das cm2network/cs2 Image mit SteamCMD, Source2 und Metamod/CounterStrikeSharp-Bereitschaft.",
+  "name": "Counter-Strike 2",
+  "author": "nxpanel",
+  "nest": "Shooter",
+  "docker_images": {
+    "CS2 (cm2network/cs2)": "cm2network/cs2:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/home/steam/cs2-dedicated",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "SV:  maxplayers set to|GC Connection established for server|Server Steam ID|Network: IP|Connection to Steam servers successful",
+    "timeout_seconds": 1200
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP & RCON / TCP",
+      "start": 27015,
+      "end": 27025,
+      "protocol": "both"
+    },
+    "secondary": [
+      {
+        "ref": "tv",
+        "name": "CSTV",
+        "offset": 5,
+        "protocol": "udp",
+        "optional": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 6144,
+    "ram_per_player_mb": 120,
+    "min_cpu_percent": 300,
+    "disk_mb": 65536,
+    "notes": "Counter-Strike 2 braucht rund 60 GB freien Speicher (Download plus Entpacken)."
+  },
+  "config_files": {
+    "game/csgo/cfg/server.cfg": {
+      "parser": "properties",
+      "find": {
+        "hostname": "\"{{CS2_HOSTNAME}}\"",
+        "rcon_password": "\"{{CS2_RCON_PASSWORD}}\"",
+        "sv_password": "\"{{CS2_PASSWORD}}\"",
+        "maxplayers": "{{CS2_MAXPLAYERS}}",
+        "sv_cheats": "{{CS2_CHEATS}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Server-Name",
+      "name_locales": {
+        "de": "Servername (Hostname)",
+        "en": "Server Hostname"
+      },
+      "env_variable": "CS2_HOSTNAME",
+      "description": "Angezeigter Name in der Steam-Serverliste.",
+      "description_locales": {
+        "de": "Angezeigter Name in der Steam-Serverliste.",
+        "en": "Server name shown in Steam server browser."
+      },
+      "default_value": "Germany LanGame CS2 Server",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "RCON-Passwort",
+      "name_locales": {
+        "de": "RCON-Passwort",
+        "en": "RCON Password"
+      },
+      "env_variable": "CS2_RCON_PASSWORD",
+      "description": "Fernsteuerungs-Passwort fuer Serverbefehle.",
+      "description_locales": {
+        "de": "Fernsteuerungs-Passwort fuer Serverbefehle.",
+        "en": "Remote console administrator password."
+      },
+      "default_value": "{{GENERATE_PASSWORD}}",
+      "rules": "required|string|min:8|max:64",
+      "secret": true
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "CS2_PASSWORD",
+      "description": "Passwort fuer private Spiele (leer fuer oeffentlich).",
+      "description_locales": {
+        "de": "Passwort fuer private Spiele (leer fuer oeffentlich).",
+        "en": "Password for private matches (empty for public)."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Steam Game Server Token (GSLT)",
+      "name_locales": {
+        "de": "Steam GSLT Token",
+        "en": "Steam GSLT Token"
+      },
+      "env_variable": "CS2_GSLT",
+      "description": "GSLT Token von steamcommunity.com/dev/managegameservers (App ID 730).",
+      "description_locales": {
+        "de": "GSLT Token von steamcommunity.com/dev/managegameservers (App ID 730).",
+        "en": "Game Server Login Token from Steam Developer portal."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Startkarte",
+      "name_locales": {
+        "de": "Startkarte (Map)",
+        "en": "Default Map"
+      },
+      "env_variable": "CS2_STARTMAP",
+      "description": "Kartenname beim Serverstart.",
+      "description_locales": {
+        "de": "Kartenname beim Serverstart.",
+        "en": "Map loaded on startup."
+      },
+      "default_value": "de_dust2",
+      "rules": "required|string|max:32"
+    },
+    {
+      "name": "Maximale Spieler",
+      "name_locales": {
+        "de": "Maximale Spieler",
+        "en": "Maximum Players"
+      },
+      "env_variable": "CS2_MAXPLAYERS",
+      "description": "Maximale Spieleranzahl.",
+      "description_locales": {
+        "de": "Maximale Spieleranzahl.",
+        "en": "Maximum players slot count."
+      },
+      "default_value": "12",
+      "rules": "required|numeric|between:2,64"
+    },
+    {
+      "name": "Spielmodus",
+      "name_locales": {
+        "de": "Spielmodus",
+        "en": "Game Mode"
+      },
+      "env_variable": "CS2_GAME_MODE",
+      "description": "Wettkampf, Gelegenheitsspiel, Deathmatch etc.",
+      "description_locales": {
+        "de": "Wettkampf, Gelegenheitsspiel, Deathmatch etc.",
+        "en": "Competitive, Casual, Deathmatch etc."
+      },
+      "default_value": "competitive",
+      "rules": "required|in:competitive,casual,deathmatch,wingman"
+    },
+    {
+      "name": "Cheats erlauben",
+      "name_locales": {
+        "de": "sv_cheats",
+        "en": "Allow Cheats (sv_cheats)"
+      },
+      "env_variable": "CS2_CHEATS",
+      "description": "0 = aus (Standard fuer faires Spiel), 1 = an (fuer Tests/Training).",
+      "description_locales": {
+        "de": "0 = aus (Standard fuer faires Spiel), 1 = an (fuer Tests/Training).",
+        "en": "0 = disabled (fair play), 1 = enabled (practice/testing)."
+      },
+      "default_value": "0",
+      "rules": "required|in:0,1"
+    }
+  ],
+  "query": {
+    "kind": "source",
+    "port_ref": "game",
+    "rcon": {
+      "port_ref": "game",
+      "password_var": "CS2_RCON_PASSWORD"
+    }
+  },
+  "hints": [
+    {
+      "match": "No space left on device|state is 0x202|Not enough disk space|Disk write failure",
+      "flags": "i",
+      "level": "error",
+      "text": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+      "text_locales": {
+        "de": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+        "en": "Disk full: the host does not have enough free space for the game files. Check with \"df -h\" and free up space or enlarge the disk."
+      }
+    }
+  ]
+}

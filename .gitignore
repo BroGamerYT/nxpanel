@@ -1,0 +1,49 @@
+# Geheimnisse & Lokale Zugangsdaten
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+deploy/deploy.config.json
+deploy.config.json
+VM-INFOS.md
+
+# Laufzeit & Lokale Testdaten
+data/
+/data/
+volumes/
+/volumes/
+backups/
+/backups/
+*.log
+
+# Temporäre Archive & Synchronisation
+_to_delete/
+_sync/
+*.tgz
+*.tar
+*.tar.gz
+*.tar.zst
+*.zip
+
+# Builds & Abhängigkeiten
+dist/
+/dist/
+build/
+/build/
+bin/
+/bin/
+web/dist/
+node_modules/
+web/node_modules/
+*.tsbuildinfo
+
+# Editor und System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Vom Updater erzeugt
+build-info.json

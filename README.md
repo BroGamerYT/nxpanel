@@ -1,0 +1,128 @@
+<p align="center">
+  <img src="web/public/branding/banner-github.png" alt="NexusPanel Banner" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/brogameryt/nxpanel/releases"><img src="https://img.shields.io/badge/version-v0.21.0--alpha-F2A93B?style=for-the-badge&logo=git&logoColor=black" alt="Version"></a>
+  <img src="https://img.shields.io/badge/status-In%20Entwicklung%20(Alpha)-E5484D?style=for-the-badge" alt="Status">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3CCB8C?style=for-the-badge" alt="Lizenz"></a>
+  <img src="https://img.shields.io/badge/node->=22-5B9DF5?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js">
+  <img src="https://img.shields.io/badge/docker-OCI%20Container-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
+</p>
+
+---
+
+> [!CAUTION]
+> ### ⚠️ Wichtiger Hinweis: Projekt in aktiver Entwicklung (Alpha / Work in Progress)
+> **NexusPanel befindet sich derzeit in einer frühen Alpha-Phase!**
+> - Funktionen können sich jederzeit ändern, und es kann zu **Fehlern, Abstürzen oder Datenverlust** kommen.
+> - **Bitte noch nicht auf produktiven Live-Servern ohne externe Backups einsetzen!**
+> - Wir empfehlen das Testen in isolierten VMs, Containern oder Testumgebungen.
+> - Fehler, Ideen und Feedback können gerne unter [Issues](https://github.com/brogameryt/nxpanel/issues) gemeldet werden.
+
+---
+
+## ⚡ Schnellzugriff
+
+| Bereich | Beschreibung | Link |
+|---|---|---|
+| 📦 **Downloads & Releases** | Neueste Versionen, Pakete und Release-Assets | [👉 Zu den Releases (Rechte Leiste)](https://github.com/brogameryt/nxpanel/releases) |
+| 📜 **Changelog** | Vollständige Historie aller Versionen und Änderungen | [CHANGELOG.md](CHANGELOG.md) |
+| 📋 **Roadmap & Geplant** | Offene Aufgaben, Meilensteine und Kriterien für 1.0 | [docs/TODO.md](docs/TODO.md) |
+| 📐 **Architektur** | Technischer Aufbau, Host-Schicht & NexusCore | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
+| 🎮 **Egg-Katalog** | 263 analysierte Spielvorlagen & 25 integrierte Eggs | [docs/EGG-KATALOG.md](docs/EGG-KATALOG.md) |
+| 🧪 **Testberichte** | Automatisierte Installations- und Start-Tests | [docs/GAME-INSTALL-TESTS.md](docs/GAME-INSTALL-TESTS.md) |
+
+---
+
+## 🌟 Über NexusPanel
+
+NexusPanel ist eine moderne, leichtgewichtige Gameserver-Verwaltungsplattform auf Basis von OCI-Docker-Containern. Inspiriert von Pterodactyl und AMP, kombiniert es maximale Leistung mit voller Kontrolle, moderner Benutzeroberfläche und nativer Integration für gängige Spieleserver.
+
+### Kern-Features
+- 🎮 **Vielfältige Spieleserver**: Direkte Unterstützung für Minecraft (Java & Bedrock), ARK: Survival Ascended, Palworld, Rust, Valheim, Counter-Strike 2, Satisfactory, 7 Days to Die, Sons of the Forest, TeamSpeak und viele mehr.
+- 📦 **Modpack-Integration**: Direkte Suche und 1-Klick-Updates für CurseForge-, Modrinth- und FTB-Modpacks.
+- ⏱️ **Automatisierte Zeitpläne**: Minütlicher Hintergrund-Scheduler für automatische Neustarts, Backups und Server-Kommandos.
+- 🛡️ **Rechteverwaltung (RBAC)**: Rollen (`admin`, `moderator`, `user`), anpassbare Mitnutzer-Rechte (Zuschauer, Operator, Verwalter, Co-Admin) und Server-Zuweisungen.
+- 💾 **Streaming Backups**: Hochkomprimierte `tar.zst` (Zstandard) Archive mit SHA-256 Prüfsummen, Validitätsprüfung und automatischer NAS-Spiegelung (SMB/CIFS).
+- 📜 **Dateimanager mit Historie**: Integrierter Quelltext-Editor mit Zeilennummern, Syntax-Highlighting, Revisions-Historie (bis zu 25 Versionen/Datei) und formatierter Markdown-Vorschau.
+- 📖 **Dokumentations-Bibliothek**: Vollständiger Dokumentations-Viewer direkt im Webinterface mit Live-Suche und Inhaltsverzeichnis.
+
+---
+
+## 🚀 Installation & Schnellstart
+
+### 1. Linux-Server oder VM (Empfohlen)
+
+Voraussetzungen: Debian 12 (Bookworm) oder Ubuntu 22.04+, Docker Engine 26+.
+
+```bash
+# Repository klonen
+git clone https://github.com/brogameryt/nxpanel.git /opt/nxpanel
+cd /opt/nxpanel
+
+# Konfiguration vorbereiten
+cp .env.example .env
+nano .env  # Passwörter und JWT_SECRET / ENCRYPTION_KEY anpassen!
+
+# Dienste über Docker Compose starten
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+Das Panel ist anschließend unter `http://<DEINE-SERVER-IP>:8080` erreichbar.
+
+### 2. Automatische Installation via Skript
+
+```bash
+sudo bash install/install-linux.sh
+```
+
+### 3. Proxmox VE (VM oder LXC)
+
+```bash
+# Auf dem Proxmox-Host ausführen:
+bash install/proxmox-vm.sh  # Erstellt eine Debian-12-VM
+# oder
+bash install/proxmox-ct.sh  # Erstellt einen unprivilegierten LXC-Container
+```
+
+### 4. Windows 10/11 (Entwicklung & Test)
+
+PowerShell als Administrator ausführen:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\install\install-windows.ps1
+```
+
+*Hinweis: Benötigt Docker Desktop mit aktivem WSL2-Backend.*
+
+---
+
+## 🛠️ Entwicklung & Manueller Build
+
+```bash
+# Abhängigkeiten installieren
+npm install
+npm --prefix web install
+
+# Entwicklungsserver starten
+npm run dev
+
+# Produktion bauen
+npm run build
+npm --prefix web run build
+```
+
+---
+
+## 🔒 Sicherheit & Vertraulichkeit
+
+- **Sicherheitsmeldungen:** Bitte Sicherheitslücken **nicht** öffentlich in den Issues posten. Siehe [SECURITY.md](SECURITY.md) für den Meldekontakt.
+- **Docker-Socket:** Der Panel-Dienst steuert die Docker Engine des Hosts. Aus Sicherheitsgründen sollte NexusPanel immer in einer dedizierten virtuellen Maschine (VM) oder einem isolierten Server betrieben werden.
+
+---
+
+## 📄 Lizenz
+
+Dieses Projekt steht unter der **[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE)**. Wer NexusPanel modifiziert oder als Online-Dienst anbietet, muss den Quellcode seiner Änderungen offenlegen.

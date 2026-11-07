@@ -1,0 +1,16 @@
+# NexusPanel hinter Caddy. Auf dem bestehenden Caddy-LXC eintragen.
+panel.brogameryt.de {
+    reverse_proxy 10.0.0.51:8080 {
+        header_up X-Real-IP {remote_host}
+    }
+
+    # Panel ist oeffentlich erreichbar: Anmeldeversuche begrenzen.
+    # Ratelimit und 2FA gehoeren zusaetzlich ins Panel selbst.
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}

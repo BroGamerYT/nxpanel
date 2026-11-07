@@ -1,0 +1,149 @@
+{
+  "_comment": "NexusPanel-Egg fuer den TeamSpeak-6-Server (offizielles Image, Beta). TS3-Lizenzen gelten nicht. Der Datei-Port muss innen und aussen gleich sein - das Panel vergibt Ports ohnehin immer 1:1.",
+  "name": "TeamSpeak 6",
+  "author": "nxpanel",
+  "nest": "Sprachserver",
+  "docker_images": {
+    "Offiziell (Beta)": "teamspeaksystems/teamspeak6-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "run_as": "1000:1000",
+  "data_dir": "/var/tsserver",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 30
+  },
+  "ready_check": {
+    "kind": "tcp_port",
+    "port_ref": "files",
+    "timeout_seconds": 180
+  },
+  "ports": {
+    "primary": {
+      "ref": "voice",
+      "name": "Sprache",
+      "start": 9987,
+      "end": 10086,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "files",
+        "name": "Dateiuebertragung",
+        "start": 30033,
+        "end": 30132,
+        "protocol": "tcp"
+      },
+      {
+        "ref": "query",
+        "name": "Web-Query",
+        "start": 10080,
+        "end": 10179,
+        "protocol": "tcp",
+        "optional": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 512,
+    "ram_per_player_mb": 5,
+    "min_cpu_percent": 50,
+    "disk_mb": 2000
+  },
+  "variables": [
+    {
+      "name": "Lizenz akzeptiert",
+      "name_locales": { "de": "Lizenz akzeptiert", "en": "Accept License" },
+      "env_variable": "TSSERVER_LICENSE_ACCEPTED",
+      "description": "Die TeamSpeak-Serverlizenz muss akzeptiert werden, sonst startet der Server nicht.",
+      "description_locales": { "de": "Die TeamSpeak-Serverlizenz muss akzeptiert werden, sonst startet der Server nicht.", "en": "The TeamSpeak server license must be accepted, otherwise the server will not start." },
+      "default_value": "accept",
+      "rules": "required|in:accept,deny"
+    },
+    {
+      "name": "Web-Query einschalten",
+      "name_locales": { "de": "Web-Query einschalten", "en": "Enable Web Query" },
+      "env_variable": "TSSERVER_QUERY_HTTP_ENABLED",
+      "description": "HTTP-Schnittstelle fuer Bots und Werkzeuge.",
+      "description_locales": { "de": "HTTP-Schnittstelle für Bots und Werkzeuge.", "en": "HTTP interface for bots and management tools." },
+      "default_value": "0",
+      "rules": "required|in:0,1"
+    },
+    {
+      "name": "Query-Admin-Passwort",
+      "name_locales": { "de": "Query-Admin-Passwort", "en": "Query Admin Password" },
+      "env_variable": "TSSERVER_QUERY_ADMIN_PASSWORD",
+      "description": "Leer lassen: wird beim ersten Start erzeugt und steht in der Konsole.",
+      "description_locales": { "de": "Leer lassen: wird beim ersten Start erzeugt und steht in der Konsole.", "en": "Leave blank: generated on first start and printed to the console." },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Sprach-Port",
+      "name_locales": { "de": "Sprach-Port", "en": "Voice Port" },
+      "env_variable": "TSSERVER_DEFAULT_PORT",
+      "default_value": "{{SERVER_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "Datei-Port",
+      "name_locales": { "de": "Datei-Port", "en": "File Transfer Port" },
+      "env_variable": "TSSERVER_FILE_TRANSFER_PORT",
+      "default_value": "{{FILES_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "Query-Port",
+      "name_locales": { "de": "Query-Port", "en": "Query Port" },
+      "env_variable": "TSSERVER_QUERY_HTTP_PORT",
+      "default_value": "{{QUERY_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Datenbank (Kanaele, Rechte, Nutzer) und hochgeladene Dateien. Die Adresse aendert sich: Clients muessen sich mit dem neuen Port verbinden.",
+    "rules": [
+      {
+        "match": "tsserver.sqlitedb",
+        "to": "tsserver.sqlitedb"
+      },
+      {
+        "match": "tsserver.sqlitedb-wal",
+        "to": "tsserver.sqlitedb-wal"
+      },
+      {
+        "match": "tsserver.sqlitedb-shm",
+        "to": "tsserver.sqlitedb-shm"
+      },
+      {
+        "match": "files",
+        "to": "files"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "tsserver.sqlitedb"
+      ]
+    }
+  },
+  "config_files": {
+    "tsserver.sqlitedb": {
+      "parser": "sqlite",
+      "find": {
+        "servers.server_port": "{{SERVER_PORT}}"
+      },
+      "_comment": "Sprach-Port steht je virtuellem Server in der Datenbank. Nach Import oder Port-Neuvergabe sonst falsch."
+    }
+  },
+  "log_dirs": [
+    "logs"
+  ]
+}

@@ -1,0 +1,427 @@
+{
+  "_comment": "NexusPanel-Egg fuer ARK: Survival Ascended. Der Server existiert nur fuer Windows; das Image mschnitzer/asa-linux-server laedt SteamCMD, Proton und die Serverdateien (~13 GB) beim ersten Start selbst und startet ArkAscendedServer.exe unter Proton.",
+  "name": "ARK: Survival Ascended",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "docker_images": {
+    "Proton (mschnitzer/asa-linux-server)": "mschnitzer/asa-linux-server:latest"
+  },
+  "entrypoint": [
+    "/usr/bin/start_server"
+  ],
+  "startup": "/usr/bin/start_server",
+  "data_dir": "/home/gameserver/server-files",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 180
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "advertising for join|Server has completed startup|Starting the ARK: Survival Ascended dedicated server",
+    "timeout_seconds": 3600,
+    "_comment": "Erst bereit, wenn der Server sich bei Epic (EOS) angemeldet hat - steht in ShooterGame.log. Erster Start laedt rund 13 GB und Proton, daher eine Stunde."
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel",
+      "start": 7777,
+      "end": 7876,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "rcon",
+        "name": "RCON",
+        "start": 27020,
+        "end": 27119,
+        "protocol": "tcp",
+        "internal": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 12288,
+    "ram_per_player_mb": 150,
+    "min_cpu_percent": 300,
+    "disk_mb": 40000,
+    "notes": "ASA braucht viel RAM: 12-16 GB fuer eine Karte mit wenigen Spielern. BattlEye ist unter Proton abgeschaltet."
+  },
+  "config_files": {
+    "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini": {
+      "parser": "ini",
+      "find": {
+        "SessionSettings.SessionName": "{{SESSION_NAME}}",
+        "ServerSettings.ServerAdminPassword": "{{ADMIN_PASSWORD}}",
+        "ServerSettings.ServerPassword": "{{SERVER_PASSWORD}}",
+        "ServerSettings.ServerPVE": "{{PVE_MODE}}",
+        "ServerSettings.XPMultiplier": "{{XP_MULTIPLIER}}",
+        "ServerSettings.TamingSpeedMultiplier": "{{TAMING_SPEED}}",
+        "ServerSettings.HarvestAmountMultiplier": "{{HARVEST_AMOUNT}}",
+        "ServerSettings.DinoDamageMultiplier": "{{DINO_DAMAGE}}",
+        "ServerSettings.ActiveMods": "{{ACTIVE_MODS}}",
+        "ServerSettings.RCONEnabled": "True",
+        "ServerSettings.RCONPort": "{{RCON_PORT}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "SESSION_NAME",
+      "description": "So erscheint der Server in der Serverliste.",
+      "description_locales": {
+        "de": "So erscheint der Server in der Serverliste.",
+        "en": "How the server appears in the server browser."
+      },
+      "default_value": "NexusPanel ARK",
+      "rules": "required|string|max:60"
+    },
+    {
+      "name": "Admin-Passwort",
+      "name_locales": {
+        "de": "Admin-Passwort",
+        "en": "Admin Password"
+      },
+      "env_variable": "ADMIN_PASSWORD",
+      "description": "Fuer Admin-Befehle im Spiel und fuer RCON.",
+      "description_locales": {
+        "de": "Fuer Admin-Befehle im Spiel und fuer RCON.",
+        "en": "For in-game admin commands and RCON."
+      },
+      "default_value": "{{GENERATE_PASSWORD}}",
+      "rules": "required|string|min:8|max:64",
+      "secret": true
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "SERVER_PASSWORD",
+      "description": "Passwort fuer den Serverbeitritt (leer fuer oeffentlichen Server).",
+      "description_locales": {
+        "de": "Passwort fuer den Serverbeitritt (leer fuer oeffentlichen Server).",
+        "en": "Password to join the server (leave blank for public)."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "PvE-Modus",
+      "name_locales": {
+        "de": "PvE-Modus (kein Spielerkampf)",
+        "en": "PvE Mode"
+      },
+      "env_variable": "PVE_MODE",
+      "description": "True = PvE (friedlich unter Spielern), False = PvP.",
+      "description_locales": {
+        "de": "True = PvE (friedlich unter Spielern), False = PvP.",
+        "en": "True = PvE, False = PvP."
+      },
+      "default_value": "True",
+      "rules": "required|in:True,False"
+    },
+    {
+      "name": "Erfahrungs-Multiplikator",
+      "name_locales": {
+        "de": "XP-Multiplikator",
+        "en": "XP Multiplier"
+      },
+      "env_variable": "XP_MULTIPLIER",
+      "description": "1.0 = Standard, 2.0 = doppelte Erfahrung.",
+      "description_locales": {
+        "de": "1.0 = Standard, 2.0 = doppelte Erfahrung.",
+        "en": "1.0 = default, 2.0 = double XP."
+      },
+      "default_value": "1.0",
+      "rules": "required|string|max:10"
+    },
+    {
+      "name": "Zähm-Geschwindigkeit",
+      "name_locales": {
+        "de": "Zähmgeschwindigkeit (Taming)",
+        "en": "Taming Speed"
+      },
+      "env_variable": "TAMING_SPEED",
+      "description": "Multiplikator fuer das Zaehmen von Dinosauriern (z. B. 3.0 fuer dreifach schneller).",
+      "description_locales": {
+        "de": "Multiplikator fuer das Zaehmen.",
+        "en": "Taming speed multiplier."
+      },
+      "default_value": "3.0",
+      "rules": "required|string|max:10"
+    },
+    {
+      "name": "Sammelmenge (Harvesting)",
+      "name_locales": {
+        "de": "Sammel-Multiplikator",
+        "en": "Harvest Multiplier"
+      },
+      "env_variable": "HARVEST_AMOUNT",
+      "description": "Multiplikator fuer gesammelte Ressourcen (Beeren, Holz, Erz etc.).",
+      "description_locales": {
+        "de": "Multiplikator fuer gesammelte Ressourcen.",
+        "en": "Multiplier for harvested resources."
+      },
+      "default_value": "2.0",
+      "rules": "required|string|max:10"
+    },
+    {
+      "name": "Dino-Schaden",
+      "name_locales": {
+        "de": "Dino-Schaden Multiplikator",
+        "en": "Dino Damage Multiplier"
+      },
+      "env_variable": "DINO_DAMAGE",
+      "description": "Schadens-Multiplikator fuer wilde und gezaehmte Dinos.",
+      "description_locales": {
+        "de": "Schadens-Multiplikator fuer Dinos.",
+        "en": "Dino damage multiplier."
+      },
+      "default_value": "1.0",
+      "rules": "required|string|max:10"
+    },
+    {
+      "name": "Aktive Mods (CurseForge)",
+      "name_locales": {
+        "de": "CurseForge Mod-IDs",
+        "en": "CurseForge Mod IDs"
+      },
+      "env_variable": "ACTIVE_MODS",
+      "description": "Kommagetrennte Liste von CurseForge Mod-IDs (z. B. 928621,929868).",
+      "description_locales": {
+        "de": "Kommagetrennte Liste von CurseForge Mod-IDs.",
+        "en": "Comma-separated list of CurseForge Mod IDs."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:256"
+    },
+    {
+      "name": "Karte",
+      "name_locales": {
+        "de": "Karte",
+        "en": "Map"
+      },
+      "env_variable": "MAP",
+      "description": "Interner Kartenname, z. B. TheIsland_WP, ScorchedEarth_WP, TheCenter_WP, Aberration_WP, Extinction_WP, Ragnarok_WP.",
+      "description_locales": {
+        "de": "Interner Kartenname, z. B. TheIsland_WP, ScorchedEarth_WP, TheCenter_WP, Aberration_WP, Extinction_WP, Ragnarok_WP.",
+        "en": "Internal map name, e.g. TheIsland_WP, ScorchedEarth_WP, TheCenter_WP, Aberration_WP, Extinction_WP, Ragnarok_WP."
+      },
+      "default_value": "TheIsland_WP",
+      "rules": "required|string|max:40"
+    },
+    {
+      "name": "Maximale Spielerzahl",
+      "name_locales": {
+        "de": "Maximale Spielerzahl",
+        "en": "Maximum Players"
+      },
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "50",
+      "rules": "required|numeric|between:1,100"
+    },
+    {
+      "name": "Plattformen",
+      "name_locales": {
+        "de": "Plattformen",
+        "en": "Platforms"
+      },
+      "description": "PC = nur PC-Spieler (Steam und Epic). ALL = Crossplay mit Xbox und PlayStation – Konsolen spielen dann ohne Mods.",
+      "description_locales": {
+        "de": "PC = nur PC-Spieler (Steam und Epic). ALL = Crossplay mit Xbox und PlayStation – Konsolen spielen dann ohne Mods.",
+        "en": "PC = PC players only (Steam and Epic). ALL = Crossplay with Xbox and PlayStation (consoles play without mods)."
+      },
+      "env_variable": "SERVER_PLATFORM",
+      "default_value": "PC",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|in:PC,ALL"
+    },
+    {
+      "name": "Zusaetzliche Startparameter",
+      "name_locales": {
+        "de": "Zusätzliche Startparameter",
+        "en": "Additional Startup Parameters"
+      },
+      "env_variable": "EXTRA_PARAMS",
+      "description": "Optional, z. B. -mods=928102,931874 fuer CurseForge-Mods oder -clusterid=meincluster.",
+      "description_locales": {
+        "de": "Optional, z. B. -mods=928102,931874 fuer CurseForge-Mods oder -clusterid=meincluster.",
+        "en": "Optional, e.g. -mods=928102,931874 for CurseForge mods or -clusterid=mycluster."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:500"
+    },
+    {
+      "name": "Startparameter",
+      "name_locales": {
+        "de": "Startparameter",
+        "en": "Startup Parameters"
+      },
+      "env_variable": "ASA_START_PARAMS",
+      "description": "Vom Panel aus Karte, Ports und Spielerzahl zusammengesetzt.",
+      "description_locales": {
+        "de": "Vom Panel aus Karte, Ports und Spielerzahl zusammengesetzt.",
+        "en": "Assembled by the panel from map, ports, and player count."
+      },
+      "default_value": "{{MAP}}?listen?Port={{SERVER_PORT}}?RCONPort={{RCON_PORT}}?RCONEnabled=True -WinLiveMaxPlayers={{MAX_PLAYERS}} -ServerPlatform={{SERVER_PLATFORM}} -NoBattlEye {{EXTRA_PARAMS}}",
+      "rules": "nullable|string",
+      "user_editable": false
+    },
+    {
+      "name": "Debug-Modus",
+      "name_locales": {
+        "de": "Debug-Modus",
+        "en": "Debug Mode"
+      },
+      "env_variable": "ENABLE_DEBUG",
+      "default_value": "0",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Spielstaende, Spieler, Stammes-Daten und die Konfiguration (GameUserSettings.ini, Game.ini). Servername und Admin-Passwort im Panel so setzen wie in AMP, sonst werden sie beim Start ueberschrieben.",
+    "rules": [
+      {
+        "match": "ShooterGame/Saved",
+        "to": "ShooterGame/Saved",
+        "exclude": [
+          "Logs",
+          "Crashes"
+        ]
+      }
+    ],
+    "detect": {
+      "markers": [
+        "ShooterGame/Saved/SavedArks",
+        "GameUserSettings.ini"
+      ],
+      "vars": [
+        {
+          "var": "MAP",
+          "from": "dir_child",
+          "path": "ShooterGame/Saved/SavedArks"
+        },
+        {
+          "var": "SESSION_NAME",
+          "from": "ini",
+          "file": "GameUserSettings.ini",
+          "section": "SessionSettings",
+          "key": "SessionName"
+        },
+        {
+          "var": "ADMIN_PASSWORD",
+          "from": "ini",
+          "file": "GameUserSettings.ini",
+          "section": "ServerSettings",
+          "key": "ServerAdminPassword"
+        },
+        {
+          "var": "MAX_PLAYERS",
+          "from": "ini",
+          "file": "GameUserSettings.ini",
+          "section": "/Script/Engine.GameSession",
+          "key": "MaxPlayers"
+        }
+      ]
+    }
+  },
+  "tmp": "disk",
+  "_comment_tmp": "Proton laedt sich beim ersten Start nach /tmp (500+ MB) - die 256-MB-RAM-Disk reicht dafuer nicht.",
+  "log_file": "ShooterGame/Saved/Logs/ShooterGame.log",
+  "_comment_log_file": "Das eigentliche Spiel-Log (auch alle EOS-Meldungen) steht nicht auf der Konsole, sondern in dieser Datei - das Panel liest sie mit.",
+  "hints": [
+    {
+      "match": "ProtonFixes\\[\\d+\\] WARN|ILocalize::AddFile|steambootstrapper_|fsync: up and running|wine: RLIMIT",
+      "flags": "",
+      "level": "ignore",
+      "text": "Harmlose Meldung von Proton/Steam – kann ignoriert werden.",
+      "text_locales": {
+        "de": "Harmlose Meldung von Proton/Steam – kann ignoriert werden.",
+        "en": "Harmless message from Proton/Steam – safe to ignore."
+      }
+    },
+    {
+      "match": "advertising for join",
+      "flags": "i",
+      "level": "ok",
+      "text": "Bei Epic (EOS) angemeldet. In 2–5 Minuten erscheint der Server im Spiel unter „Inoffiziell“ – dort „Spielerserver-Einstellungen anzeigen“ aktivieren und nach dem Namen suchen.",
+      "text_locales": {
+        "de": "Bei Epic (EOS) angemeldet. In 2–5 Minuten erscheint der Server im Spiel unter „Inoffiziell“ – dort „Spielerserver-Einstellungen anzeigen“ aktivieren und nach dem Namen suchen.",
+        "en": "Signed into Epic (EOS). The server will appear in-game under 'Unofficial' within 2-5 minutes – enable 'Show Player Servers' and search for your server name."
+      }
+    },
+    {
+      "match": "LogEOS.*(SSL|certificate|CURL|curl error)",
+      "flags": "i",
+      "level": "error",
+      "text": "Verbindung zu Epic scheitert an HTTPS/Zertifikat. Unter Netzwerk → Verbindungstest prüfen, ob die VM api.epicgames.dev erreicht.",
+      "text_locales": {
+        "de": "Verbindung zu Epic scheitert an HTTPS/Zertifikat. Unter Netzwerk → Verbindungstest prüfen, ob die VM api.epicgames.dev erreicht.",
+        "en": "Connection to Epic failed due to HTTPS/certificate issue. Check Network → Connection Test to verify api.epicgames.dev reachability."
+      }
+    },
+    {
+      "match": "LogEOS.*(timed? ?out|could not resolve|failed to connect|NoConnection|Network.*unavailable)",
+      "flags": "i",
+      "level": "error",
+      "text": "Epic nicht erreichbar – DNS oder Internet der VM. Unter Netzwerk → Verbindungstest prüfen.",
+      "text_locales": {
+        "de": "Epic nicht erreichbar – DNS oder Internet der VM. Unter Netzwerk → Verbindungstest prüfen.",
+        "en": "Epic unreachable – check VM DNS or Internet connection in Network → Connection Test."
+      }
+    },
+    {
+      "match": "LogEOS.*(InvalidAuth|AccessDenied|InvalidCredentials|InvalidUser|expired|clock|time ?skew)",
+      "flags": "i",
+      "level": "error",
+      "text": "Epic lehnt die Anmeldung ab. Häufigste Ursache: falsche Uhrzeit der VM (Netzwerk → Verbindungstest zeigt die Abweichung; auf der VM chrony/systemd-timesyncd aktivieren).",
+      "text_locales": {
+        "de": "Epic lehnt die Anmeldung ab. Häufigste Ursache: falsche Uhrzeit der VM (Netzwerk → Verbindungstest zeigt die Abweichung; auf der VM chrony/systemd-timesyncd aktivieren).",
+        "en": "Epic rejected sign-in. Most common reason: clock offset on VM (check Network → Connection Test; enable time synchronization on VM)."
+      }
+    },
+    {
+      "match": "LogEOS.*Session.*(fail|error|unable)",
+      "flags": "i",
+      "level": "error",
+      "text": "Epic-Sitzung konnte nicht angelegt werden – der Server fehlt dann in der Liste. Direkt verbinden geht trotzdem: im Spiel mit Tab die Konsole öffnen und „open 193.34.69.60:PORT“ eingeben.",
+      "text_locales": {
+        "de": "Epic-Sitzung konnte nicht angelegt werden – der Server fehlt dann in der Liste. Direkt verbinden geht trotzdem: im Spiel mit Tab die Konsole öffnen und „open 193.34.69.60:PORT“ eingeben.",
+        "en": "Could not register Epic session – server may not show in the browser. Direct connect still works: open in-game console with Tab and type 'open IP:PORT'."
+      }
+    },
+    {
+      "match": "No sessions? found",
+      "flags": "i",
+      "level": "warn",
+      "text": "Kein Treffer in der Epic-Liste – meist nur zu früh gesucht (2–5 Minuten nach dem Start) oder Filter „Spielerserver“ aus.",
+      "text_locales": {
+        "de": "Kein Treffer in der Epic-Liste – meist nur zu früh gesucht (2–5 Minuten nach dem Start) oder Filter „Spielerserver“ aus.",
+        "en": "No result in Epic list – usually searched too soon (takes 2-5 minutes) or 'Player Servers' filter is toggled off."
+      }
+    }
+  ],
+  "log_dirs": [
+    "ShooterGame/Saved/Logs"
+  ],
+  "query": {
+    "kind": "ark",
+    "rcon": {
+      "port_ref": "rcon",
+      "password_var": "ADMIN_PASSWORD"
+    },
+    "_comment": "Spielerliste und Kicken/Bannen ueber RCON (ListPlayers, KickPlayer/BanPlayer mit EOS-ID)."
+  }
+}

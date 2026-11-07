@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          npm --prefix web ci
+
+      - name: Build Backend & Frontend
+        run: |
+          npm run build
+          npm --prefix web run build
+
+      - name: Create Release Archive
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          tar -czf "nxpanel-${VERSION}.tar.gz" \
+            --exclude='node_modules' \
+            --exclude='web/node_modules' \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='data' \
+            dist web/dist migrations eggs install deploy docs package.json package-lock.json Dockerfile LICENSE README.md CHANGELOG.md .env.example
+
+      - name: Generate Release Notes & Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "NexusPanel ${{ github.ref_name }} (Alpha Preview)"
+          prerelease: true
+          draft: false
+          generate_release_notes: true
+          files: |
+            nxpanel-${{ github.ref_name }}.tar.gz
+          body: |
+            > [!CAUTION]
+            > ### ⚠️ In aktiver Entwicklung (Alpha / Pre-Release)
+            > Diese Version ist eine frühe Alpha-Vorschau. Es kann zu Fehlern oder unvollständigen Features kommen.
+            > Bitte vor dem Einsatz Backups erstellen!
+            
+            Vollständige Release-Notes und Changelog: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)

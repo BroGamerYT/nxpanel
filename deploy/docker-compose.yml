@@ -1,0 +1,78 @@
+# NexusPanel - Laufzeit-Stack
+# Start:  docker compose up -d
+# Logs:   docker compose logs -f panel
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nxp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-panel}
+      POSTGRES_USER: ${POSTGRES_USER:-panel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-panel} -d ${POSTGRES_DB:-panel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [nxp-internal]
+
+  redis:
+    image: redis:7-alpine
+    container_name: nxp-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "900", "1"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [nxp-internal]
+
+  panel:
+    image: ${PANEL_IMAGE:-ghcr.io/brogameryt/nxpanel:latest}
+    container_name: nxp-panel
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis:    {condition: service_healthy}
+    environment:
+      PANEL_URL: ${PANEL_URL:-http://localhost:8080}
+      DATABASE_URL: postgres://${POSTGRES_USER:-panel}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-panel}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET fehlt in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY fehlt in .env}
+      VOLUME_ROOT: /var/lib/panel/volumes
+      BACKUP_ROOT: /var/lib/panel/backups
+      PORT_RANGE: ${PORT_RANGE:-25500-25600}
+      TZ: ${TZ:-Europe/Berlin}
+    ports:
+      - "${PANEL_PORT:-8080}:8080"
+    volumes:
+      # Der Panel-Dienst steuert Docker - das ist Root-gleichwertig auf dem Host.
+      # Deshalb gehoert dieser Stack auf eine eigene VM oder einen eigenen CT.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Bewusst ein Bind-Mount mit DEMSELBEN Pfad innen und aussen - kein
+      # benanntes Volume. Das Panel gibt Docker beim Anlegen eines Spiel-
+      # containers den Pfad /var/lib/panel/volumes/<id> mit, und Docker liest
+      # den als Pfad auf dem HOST. Schriebe das Panel selbst in ein benanntes
+      # Volume, saehen Panel und Spiel zwei verschiedene Ordner:
+      # Konfigurationsdateien und Backups gingen ins Leere.
+      - /var/lib/panel:/var/lib/panel
+      - /mnt/ugreen-backups:/mnt/ugreen-backups
+    networks: [nxp-internal, nxp-public]
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  nxp-internal:
+    internal: true
+  nxp-public:

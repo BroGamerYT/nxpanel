@@ -1,0 +1,273 @@
+{
+  "_comment": "NexusPanel-Egg fuer Palworld Dedicated Server. Nutzt das bewaehrte thijsvanloef/palworld-server-docker Image mit automatischem SteamCMD-Update, REST-RCON und PalWorldSettings.ini Verwaltung.",
+  "name": "Palworld",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "docker_images": {
+    "Palworld (thijsvanloef/palworld-server-docker)": "thijsvanloef/palworld-server-docker:latest"
+  },
+  "startup": "./start.sh",
+  "data_dir": "/palworld",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Running PalWorld dedicated server|REST API.*started|REST API.*port is open|App [0-9]+ state is 1, full update: 0|Server started|Listening on",
+    "timeout_seconds": 1200
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 8211,
+      "end": 8310,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Query",
+        "start": 27015,
+        "end": 27114,
+        "protocol": "udp",
+        "optional": true
+      },
+      {
+        "ref": "rcon",
+        "name": "RCON",
+        "start": 25575,
+        "end": 25674,
+        "protocol": "tcp",
+        "optional": false,
+        "internal": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 8192,
+    "ram_per_player_mb": 250,
+    "min_cpu_percent": 300,
+    "disk_mb": 30000,
+    "notes": "Palworld benoetigt mindestens 8 GB RAM (besser 16 GB fuer laengere Spielsitzungen wegen Speicherlecks)."
+  },
+  "config_files": {
+    "Pal/Saved/Config/LinuxServer/PalWorldSettings.ini": {
+      "parser": "ini",
+      "find": {
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.ServerName": "\"{{SERVER_NAME}}\"",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.ServerDescription": "\"{{SERVER_DESCRIPTION}}\"",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.ServerPassword": "\"{{SERVER_PASSWORD}}\"",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.AdminPassword": "\"{{ADMIN_PASSWORD}}\"",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.ServerPlayerMaxNum": "{{MAX_PLAYERS}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.PublicPort": "{{SERVER_PORT}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.RCONPort": "{{RCON_PORT}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.RCONEnabled": "{{RCON_ENABLED}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.Difficulty": "{{DIFFICULTY}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.ExpRate": "{{EXP_RATE}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.PalCaptureRate": "{{PAL_CAPTURE_RATE}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.PalSpawnNumRate": "{{PAL_SPAWN_NUM_RATE}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.PalDamageRateAttack": "{{PAL_DAMAGE_ATTACK}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.PalDamageRateDefense": "{{PAL_DAMAGE_DEFENSE}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.PlayerDamageRateAttack": "{{PLAYER_DAMAGE_ATTACK}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.PlayerDamageRateDefense": "{{PLAYER_DAMAGE_DEFENSE}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.DeathPenalty": "{{DEATH_PENALTY}}",
+        "/Script/Pal.PalGameWorldSettings.OptionSettings.bIsPvP": "{{PVP_ENABLED}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "SERVER_NAME",
+      "description": "Name des Palworld-Servers in der Serverliste.",
+      "description_locales": {
+        "de": "Name des Palworld-Servers in der Serverliste.",
+        "en": "Palworld server display name in server browser."
+      },
+      "default_value": "Germany LanGame Palworld",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Serverbeschreibung",
+      "name_locales": {
+        "de": "Server-Beschreibung",
+        "en": "Server Description"
+      },
+      "env_variable": "SERVER_DESCRIPTION",
+      "description": "Beschreibung oder Willkommenstext.",
+      "description_locales": {
+        "de": "Beschreibung oder Willkommenstext.",
+        "en": "Description or welcome message."
+      },
+      "default_value": "Willkommen auf unserem Palworld Server!",
+      "rules": "nullable|string|max:256"
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "SERVER_PASSWORD",
+      "description": "Passwort fuer den Beitritt (leer lassen fuer oeffentlich).",
+      "description_locales": {
+        "de": "Passwort fuer den Beitritt (leer lassen fuer oeffentlich).",
+        "en": "Password required to join (leave empty for public)."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Admin-Passwort",
+      "name_locales": {
+        "de": "Admin-Passwort",
+        "en": "Admin Password"
+      },
+      "env_variable": "ADMIN_PASSWORD",
+      "description": "Passwort fuer RCON und In-Game-Admin-Befehle.",
+      "description_locales": {
+        "de": "Passwort fuer RCON und In-Game-Admin-Befehle.",
+        "en": "Password for RCON and in-game admin rights."
+      },
+      "default_value": "AdminPass1234!",
+      "rules": "required|string|min:6|max:64",
+      "secret": true
+    },
+    {
+      "name": "Maximale Spieler",
+      "name_locales": {
+        "de": "Maximale Spieler",
+        "en": "Maximum Players"
+      },
+      "env_variable": "MAX_PLAYERS",
+      "description": "Maximale Anzahl gleichzeitiger Spieler.",
+      "description_locales": {
+        "de": "Maximale Anzahl gleichzeitiger Spieler.",
+        "en": "Maximum concurrent players."
+      },
+      "default_value": "32",
+      "rules": "required|numeric|between:1,128"
+    },
+    {
+      "name": "Schwierigkeitsgrad",
+      "name_locales": {
+        "de": "Schwierigkeit",
+        "en": "Difficulty"
+      },
+      "env_variable": "DIFFICULTY",
+      "description": "Allgemeiner Schwierigkeitsgrad.",
+      "description_locales": {
+        "de": "Allgemeiner Schwierigkeitsgrad.",
+        "en": "General game difficulty."
+      },
+      "default_value": "None",
+      "rules": "required|in:None,Normal,Hard"
+    },
+    {
+      "name": "Erfahrungs-Multiplikator",
+      "name_locales": {
+        "de": "XP-Multiplikator",
+        "en": "EXP Rate"
+      },
+      "env_variable": "EXP_RATE",
+      "description": "1.0 = normal, 2.0 = doppelte Erfahrung.",
+      "description_locales": {
+        "de": "1.0 = normal, 2.0 = doppelte Erfahrung.",
+        "en": "1.0 = default, 2.0 = double EXP."
+      },
+      "default_value": "1.000000",
+      "rules": "required|string|max:10"
+    },
+    {
+      "name": "Pal-Fangrate",
+      "name_locales": {
+        "de": "Fangrate (Pal Capture)",
+        "en": "Pal Capture Rate"
+      },
+      "env_variable": "PAL_CAPTURE_RATE",
+      "description": "Multiplikator fuer Fangchancen.",
+      "description_locales": {
+        "de": "Multiplikator fuer Fangchancen.",
+        "en": "Multiplier for capturing success."
+      },
+      "default_value": "1.000000",
+      "rules": "required|string|max:10"
+    },
+    {
+      "name": "Pal-Spawnrate",
+      "name_locales": {
+        "de": "Pal-Spawnrate",
+        "en": "Pal Spawn Rate"
+      },
+      "env_variable": "PAL_SPAWN_NUM_RATE",
+      "description": "1.0 = normal, hoeher erzeugt mehr Pals in der Welt.",
+      "description_locales": {
+        "de": "1.0 = normal, hoeher erzeugt mehr Pals in der Welt.",
+        "en": "1.0 = normal, higher spawns more Pals in the wild."
+      },
+      "default_value": "1.000000",
+      "rules": "required|string|max:10"
+    },
+    {
+      "name": "Todestrafe",
+      "name_locales": {
+        "de": "Todesstrafe",
+        "en": "Death Penalty"
+      },
+      "env_variable": "DEATH_PENALTY",
+      "description": "Was man beim Tod verliert.",
+      "description_locales": {
+        "de": "Was man beim Tod verliert.",
+        "en": "Item drop rule on death."
+      },
+      "default_value": "Item",
+      "rules": "required|in:None,Item,ItemAndEquipment,All"
+    },
+    {
+      "name": "PvP aktivieren",
+      "name_locales": {
+        "de": "PvP aktivieren",
+        "en": "Enable PvP"
+      },
+      "env_variable": "PVP_ENABLED",
+      "description": "Kampf zwischen Spielern erlauben.",
+      "description_locales": {
+        "de": "Kampf zwischen Spielern erlauben.",
+        "en": "Allow combat between players."
+      },
+      "default_value": "False",
+      "rules": "required|in:True,False"
+    },
+    {
+      "name": "RCON aktivieren",
+      "name_locales": {
+        "de": "RCON aktivieren",
+        "en": "Enable RCON"
+      },
+      "env_variable": "RCON_ENABLED",
+      "description": "Fernsteuerung fuer Serverbefehle und Neustarts aktivieren.",
+      "description_locales": {
+        "de": "Fernsteuerung fuer Serverbefehle und Neustarts aktivieren.",
+        "en": "Enable remote console for commands."
+      },
+      "default_value": "True",
+      "rules": "required|in:True,False"
+    }
+  ],
+  "query": {
+    "kind": "palworld",
+    "rcon": {
+      "port_ref": "rcon",
+      "password_var": "ADMIN_PASSWORD"
+    },
+    "_comment": "Spielerliste und Kicken/Bannen ueber RCON (ShowPlayers, Steam-ID). RCON muss in den Spiel-Einstellungen an sein."
+  }
+}

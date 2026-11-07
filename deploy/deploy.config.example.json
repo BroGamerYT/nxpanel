@@ -1,0 +1,7 @@
+{
+  "host": "10.0.0.51",
+  "user": "root",
+  "port": 22,
+  "key": "C:\Users\domin\.ssh\id_ct103",
+  "path": "/opt/nxpanel"
+}

@@ -1,0 +1,130 @@
+{
+  "_comment": "NexusPanel-Egg fuer Mumble (Sprachserver). Offizielles Image mumblevoip/mumble-server, Einstellungen ueber MUMBLE_CONFIG_*-Variablen, Daten unter /data. UNGETESTET.",
+  "name": "Mumble",
+  "author": "nxpanel",
+  "nest": "Sprachserver",
+  "docker_images": {
+    "Offiziell (mumblevoip/mumble-server)": "mumblevoip/mumble-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/data",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 20
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Server listening on|Started successfully|Bonjour: Registered",
+    "timeout_seconds": 120
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Sprache (TCP+UDP)",
+      "start": 64738,
+      "end": 64837,
+      "protocol": "both"
+    }
+  },
+  "resources": {
+    "base_ram_mb": 256,
+    "ram_per_player_mb": 4,
+    "min_cpu_percent": 50,
+    "disk_mb": 500,
+    "notes": "Sehr sparsam."
+  },
+  "variables": [
+    {
+      "name": "MUMBLE_CONFIG_PORT",
+      "name_locales": {
+        "de": "MUMBLE_CONFIG_PORT",
+        "en": "MUMBLE_CONFIG_PORT"
+      },
+      "env_variable": "MUMBLE_CONFIG_PORT",
+      "default_value": "{{SERVER_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "SuperUser-Passwort",
+      "name_locales": {
+        "de": "SuperUser-Passwort",
+        "en": "SuperUser Password"
+      },
+      "env_variable": "MUMBLE_SUPERUSER_PASSWORD",
+      "description": "Anmeldung als „SuperUser“ zum Verwalten von Kanälen. Leer = wird erzeugt und steht im Log.",
+      "description_locales": {
+        "de": "Anmeldung als „SuperUser“ zum Verwalten von Kanälen. Leer = wird erzeugt und steht im Log.",
+        "en": "Log in as \"SuperUser\" to manage channels. Empty = generated and printed to the log."
+      },
+      "default_value": "",
+      "rules": "nullable|string|min:8|max:64",
+      "secret": true
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "MUMBLE_CONFIG_SERVERPASSWORD",
+      "description": "Leer = jeder darf beitreten.",
+      "description_locales": {
+        "de": "Leer = jeder darf beitreten.",
+        "en": "Empty = anyone may join."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Maximale Nutzer",
+      "name_locales": {
+        "de": "Maximale Nutzer",
+        "en": "Maximum Users"
+      },
+      "env_variable": "MUMBLE_CONFIG_USERS",
+      "default_value": "50",
+      "rules": "required|numeric|between:1,1000"
+    },
+    {
+      "name": "Willkommenstext",
+      "name_locales": {
+        "de": "Willkommenstext",
+        "en": "Welcome Text"
+      },
+      "env_variable": "MUMBLE_CONFIG_WELCOMETEXT",
+      "default_value": "Willkommen auf unserem Mumble-Server!",
+      "rules": "nullable|string|max:500"
+    },
+    {
+      "name": "Bandbreite je Nutzer (bit/s)",
+      "name_locales": {
+        "de": "Bandbreite je Nutzer (bit/s)",
+        "en": "Bandwidth per User (bit/s)"
+      },
+      "env_variable": "MUMBLE_CONFIG_BANDWIDTH",
+      "description": "72000 reicht für gute Sprache, 128000 für sehr gute.",
+      "description_locales": {
+        "de": "72000 reicht für gute Sprache, 128000 für sehr gute.",
+        "en": "72000 is fine for good voice, 128000 for very good."
+      },
+      "default_value": "72000",
+      "rules": "required|numeric|between:8000,320000"
+    }
+  ],
+  "hints": [
+    {
+      "match": "SuperUser password set to|Password for 'SuperUser' set to",
+      "flags": "i",
+      "level": "ok",
+      "text": "Das erzeugte SuperUser-Passwort steht in dieser Zeile – notieren oder in den Einstellungen ein eigenes setzen.",
+      "text_locales": {
+        "de": "Das erzeugte SuperUser-Passwort steht in dieser Zeile – notieren oder in den Einstellungen ein eigenes setzen.",
+        "en": "The generated SuperUser password is in this line – note it or set your own in the settings."
+      }
+    }
+  ]
+}

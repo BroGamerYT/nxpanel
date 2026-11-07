@@ -1,0 +1,127 @@
+{
+  "_comment": "NexusPanel-Egg fuer Valheim Dedicated Server. Nutzt das lloesche/valheim-server Docker-Image mit BepInEx/Mod-Unterstuetzung, automatischen Backups und Crossplay.",
+  "name": "Valheim",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "docker_images": {
+    "Valheim (lloesche/valheim-server)": "lloesche/valheim-server:latest"
+  },
+  "startup": "./start_valheim.sh",
+  "data_dir": "/config",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Game server connected|Load world",
+    "timeout_seconds": 600
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 2456,
+      "end": 2465,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Query",
+        "offset": 1,
+        "protocol": "udp"
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 4096,
+    "ram_per_player_mb": 150,
+    "min_cpu_percent": 200,
+    "disk_mb": 10000,
+    "notes": "Valheim laeuft ressourcenschonend mit 4 GB RAM."
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "SERVER_NAME",
+      "description": "Name des Valheim-Servers in der Liste.",
+      "description_locales": {
+        "de": "Name des Valheim-Servers in der Liste.",
+        "en": "Valheim server browser name."
+      },
+      "default_value": "Germany LanGame Valheim",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Weltname",
+      "name_locales": {
+        "de": "Weltname",
+        "en": "World Name"
+      },
+      "env_variable": "WORLD_NAME",
+      "description": "Name der Spielwelt (wird im Speicherordner abgelegt).",
+      "description_locales": {
+        "de": "Name der Spielwelt (wird im Speicherordner abgelegt).",
+        "en": "Name of the savegame world."
+      },
+      "default_value": "DedicatedWorld",
+      "rules": "required|string|max:32"
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "SERVER_PASS",
+      "description": "Passwort fuer den Beitritt (mindestens 5 Zeichen).",
+      "description_locales": {
+        "de": "Passwort fuer den Beitritt (mindestens 5 Zeichen).",
+        "en": "Password required to join (at least 5 characters)."
+      },
+      "default_value": "ValheimPass123",
+      "rules": "required|string|min:5|max:64",
+      "secret": true
+    },
+    {
+      "name": "Server öffentlich sichtbar",
+      "name_locales": {
+        "de": "Öffentlich sichtbar",
+        "en": "Public Server"
+      },
+      "env_variable": "SERVER_PUBLIC",
+      "description": "In der offiziellen Valheim-Serverliste anzeigen.",
+      "description_locales": {
+        "de": "In der offiziellen Valheim-Serverliste anzeigen.",
+        "en": "Show in the public server list."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Crossplay aktivieren",
+      "name_locales": {
+        "de": "Crossplay (PlayFab)",
+        "en": "Crossplay"
+      },
+      "env_variable": "CROSSPLAY",
+      "description": "Ermoeglicht Spielern auf Xbox und PC gemeinsamen Beitritt.",
+      "description_locales": {
+        "de": "Ermoeglicht Spielern auf Xbox und PC gemeinsamen Beitritt.",
+        "en": "Allows crossplay between Xbox and PC."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    }
+  ],
+  "query": {
+    "kind": "source",
+    "port_ref": "query"
+  }
+}

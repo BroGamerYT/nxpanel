@@ -1,0 +1,9 @@
+# Baut das Panel-Image aus dem Quellcode, statt es aus einer Registry zu holen.
+# Wird vom Updater genutzt - damit braucht es keinen Registry-Zugang.
+
+services:
+  panel:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: nxpanel:local

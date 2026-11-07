@@ -1,0 +1,76 @@
+{
+  "_comment": "NexusPanel-Egg fuer TeamSpeak 3 Server (Classic). Nutzt das offizielle Docker-Image teamspeak:latest mit ServerQuery, Dateitransfer und Lizenzverwaltung.",
+  "name": "TeamSpeak 3",
+  "author": "nxpanel",
+  "nest": "Voice",
+  "docker_images": {
+    "TeamSpeak 3 (offiziell)": "teamspeak:latest"
+  },
+  "startup": "ts3server",
+  "data_dir": "/var/ts3server",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 30
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "ServerQuery listening on|listening on 0.0.0.0:9987",
+    "timeout_seconds": 120
+  },
+  "ports": {
+    "primary": {
+      "ref": "voice",
+      "name": "Sprache / UDP",
+      "start": 9987,
+      "end": 9997,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "filetransfer",
+        "name": "Dateitransfer",
+        "start": 30033,
+        "end": 30043,
+        "protocol": "tcp",
+        "optional": true
+      },
+      {
+        "ref": "query",
+        "name": "ServerQuery",
+        "start": 10011,
+        "end": 10021,
+        "protocol": "tcp",
+        "optional": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 512,
+    "ram_per_player_mb": 2,
+    "min_cpu_percent": 50,
+    "disk_mb": 2048,
+    "notes": "TeamSpeak 3 ist extrem ressourcenschonend und benoetigt unter 500 MB RAM."
+  },
+  "variables": [
+    {
+      "name": "Lizenzvereinbarung akzeptiert",
+      "name_locales": { "de": "Lizenz akzeptiert (TS3SERVER_LICENSE)", "en": "Accept License" },
+      "env_variable": "TS3SERVER_LICENSE",
+      "description": "TeamSpeak Endbenutzer-Lizenz (EULA) annehmen.",
+      "description_locales": { "de": "TeamSpeak Endbenutzer-Lizenz (EULA) annehmen.", "en": "Accept TeamSpeak End User License Agreement." },
+      "default_value": "accept",
+      "rules": "required|in:accept"
+    },
+    {
+      "name": "ServerAdmin Passwort",
+      "name_locales": { "de": "ServerQuery Admin Passwort", "en": "ServerQuery Admin Password" },
+      "env_variable": "TS3SERVER_SERVERADMIN_PASSWORD",
+      "description": "Passwort fuer den ServerQuery-Benutzer serveradmin.",
+      "description_locales": { "de": "Passwort fuer den ServerQuery-Benutzer serveradmin.", "en": "Password for ServerQuery administrator." },
+      "default_value": "TS3AdminSecret!",
+      "rules": "required|string|min:6|max:64",
+      "secret": true
+    }
+  ]
+}

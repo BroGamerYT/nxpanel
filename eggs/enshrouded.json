@@ -1,0 +1,169 @@
+{
+  "_comment": "NexusPanel-Egg fuer Enshrouded. Nur Windows-Server; das Image sknnr/enshrouded-dedicated-server laedt ihn per SteamCMD und startet ihn unter Proton. Laeuft als Benutzer 10000.",
+  "name": "Enshrouded",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "docker_images": {
+    "Proton (sknnr/enshrouded-dedicated-server)": "sknnr/enshrouded-dedicated-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "run_as": "10000:10000",
+  "data_dir": "/home/steam/enshrouded",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 90
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "HostOnline",
+    "timeout_seconds": 1800,
+    "_comment": "Enshrouded schreibt [Session] 'HostOnline' (up)! sobald man beitreten kann. Erster Start laedt das Spiel - daher grosszuegig."
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel/Query",
+      "start": 15637,
+      "end": 15736,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "steam",
+        "name": "Steam",
+        "start": 27015,
+        "end": 27114,
+        "protocol": "udp",
+        "optional": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 6144,
+    "ram_per_player_mb": 300,
+    "min_cpu_percent": 300,
+    "disk_mb": 30000,
+    "notes": "Rund 6 GB fuer 16 Spieler laut Hersteller, dazu Proton."
+  },
+  "config_files": {
+    "enshrouded_server.json": {
+      "parser": "json",
+      "find": {
+        "name": "{{SERVER_NAME}}",
+        "password": "{{SERVER_PASSWORD}}",
+        "slotCount": "{{SERVER_SLOTS}}",
+        "queryPort": "{{SERVER_PORT}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": { "de": "Servername", "en": "Server Name" },
+      "env_variable": "SERVER_NAME",
+      "default_value": "NexusPanel Enshrouded",
+      "rules": "required|string|max:60"
+    },
+    {
+      "name": "Passwort",
+      "name_locales": { "de": "Passwort", "en": "Password" },
+      "env_variable": "SERVER_PASSWORD",
+      "description": "Leer lassen fuer einen offenen Server.",
+      "description_locales": { "de": "Leer lassen für einen offenen Server.", "en": "Leave blank for an open server." },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Spielerplaetze",
+      "name_locales": { "de": "Spielerplätze", "en": "Player Slots" },
+      "env_variable": "SERVER_SLOTS",
+      "default_value": "16",
+      "rules": "required|numeric|between:1,16"
+    },
+    {
+      "name": "Eigene Konfigurationsdatei",
+      "name_locales": { "de": "Eigene Konfigurationsdatei", "en": "Custom Configuration File" },
+      "env_variable": "EXTERNAL_CONFIG",
+      "description": "Ein: enshrouded_server.json wird nicht aus den Feldern hier erzeugt, sondern so genommen, wie sie ist (z. B. nach dem Import aus AMP mit Benutzergruppen und Spieleinstellungen).",
+      "description_locales": { "de": "Ein: enshrouded_server.json wird nicht aus den Feldern hier erzeugt, sondern so genommen, wie sie ist (z. B. nach dem Import aus AMP mit Benutzergruppen und Spieleinstellungen).", "en": "On: enshrouded_server.json is not generated from these fields, but preserved as-is (e.g. after import from AMP with user groups and custom settings)." },
+      "default_value": "0",
+      "rules": "required|in:0,1"
+    },
+    {
+      "name": "Port",
+      "name_locales": { "de": "Port", "en": "Port" },
+      "env_variable": "PORT",
+      "default_value": "{{SERVER_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "Steam-Port",
+      "name_locales": { "de": "Steam-Port", "en": "Steam Port" },
+      "env_variable": "STEAM_PORT",
+      "default_value": "{{STEAM_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Spielstaende und enshrouded_server.json. Danach in den Spiel-Einstellungen \"Eigene Konfigurationsdatei\" auf 1 setzen, damit Benutzergruppen und Spieleinstellungen aus AMP erhalten bleiben.",
+    "rules": [
+      {
+        "match": "savegame",
+        "to": "savegame"
+      },
+      {
+        "match": "enshrouded_server.json",
+        "to": "enshrouded_server.json"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "enshrouded_server.json"
+      ],
+      "vars": [
+        {
+          "var": "SERVER_NAME",
+          "from": "json",
+          "file": "enshrouded_server.json",
+          "key": "name"
+        },
+        {
+          "var": "SERVER_SLOTS",
+          "from": "json",
+          "file": "enshrouded_server.json",
+          "key": "slotCount"
+        },
+        {
+          "var": "SERVER_PASSWORD",
+          "from": "json",
+          "file": "enshrouded_server.json",
+          "key": "password"
+        },
+        {
+          "var": "EXTERNAL_CONFIG",
+          "from": "set",
+          "value": "1"
+        }
+      ]
+    }
+  },
+  "tmp": "disk",
+  "_comment_tmp": "Proton laedt sich beim ersten Start nach /tmp (500+ MB) - die 256-MB-RAM-Disk reicht dafuer nicht.",
+  "log_dirs": [
+    "logs"
+  ],
+  "hints": [
+    {
+      "match": "ProtonFixes\\[\\d+\\] WARN|fsync: up and running",
+      "flags": "",
+      "level": "ignore",
+      "text": "Harmlose Meldung von Proton – kann ignoriert werden."
+    }
+  ]
+}

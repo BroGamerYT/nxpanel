@@ -1,0 +1,252 @@
+{
+  "_comment": "NexusPanel-Egg fuer Minecraft Bedrock Edition (Handy, Konsole, Windows-App). Image itzg/minecraft-bedrock-server laedt den offiziellen Bedrock Dedicated Server und aktualisiert ihn bei jedem Start. UNGETESTET.",
+  "name": "Minecraft Bedrock",
+  "author": "nxpanel",
+  "nest": "Minecraft",
+  "docker_images": {
+    "Bedrock Dedicated Server (itzg)": "itzg/minecraft-bedrock-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/data",
+  "console": "full",
+  "stop": "stop",
+  "ready_check": {
+    "kind": "done",
+    "regex": "Server started\\.",
+    "timeout_seconds": 600
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 19132,
+      "end": 19231,
+      "protocol": "udp"
+    }
+  },
+  "resources": {
+    "base_ram_mb": 1024,
+    "ram_per_player_mb": 60,
+    "min_cpu_percent": 100,
+    "disk_mb": 3000,
+    "notes": "Bedrock ist sparsam: 1-2 GB reichen fuer kleine Gruppen."
+  },
+  "variables": [
+    {
+      "name": "EULA zugestimmt",
+      "name_locales": {
+        "de": "EULA zugestimmt",
+        "en": "Agree to EULA"
+      },
+      "env_variable": "EULA",
+      "description": "Mojangs Nutzungsbedingungen müssen angenommen werden.",
+      "description_locales": {
+        "de": "Mojangs Nutzungsbedingungen müssen angenommen werden.",
+        "en": "Mojang's terms of service must be accepted."
+      },
+      "default_value": "TRUE",
+      "rules": "required|in:TRUE,FALSE"
+    },
+    {
+      "name": "Version",
+      "name_locales": {
+        "de": "Version",
+        "en": "Version"
+      },
+      "env_variable": "VERSION",
+      "description": "LATEST, PREVIEW oder eine feste Version wie 1.21.50.07. Muss zur Version der Spieler passen.",
+      "description_locales": {
+        "de": "LATEST, PREVIEW oder eine feste Version wie 1.21.50.07. Muss zur Version der Spieler passen.",
+        "en": "LATEST, PREVIEW or a fixed version like 1.21.50.07. Must match the players' version."
+      },
+      "default_value": "LATEST",
+      "rules": "required|string|max:32"
+    },
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "SERVER_NAME",
+      "default_value": "Germany LanGame Bedrock",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Spielmodus",
+      "name_locales": {
+        "de": "Spielmodus",
+        "en": "Game Mode"
+      },
+      "env_variable": "GAMEMODE",
+      "default_value": "survival",
+      "rules": "required|in:survival,creative,adventure"
+    },
+    {
+      "name": "Schwierigkeit",
+      "name_locales": {
+        "de": "Schwierigkeit",
+        "en": "Difficulty"
+      },
+      "env_variable": "DIFFICULTY",
+      "default_value": "normal",
+      "rules": "required|in:peaceful,easy,normal,hard"
+    },
+    {
+      "name": "Maximale Spielerzahl",
+      "name_locales": {
+        "de": "Maximale Spielerzahl",
+        "en": "Maximum Players"
+      },
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "10",
+      "rules": "required|numeric|between:1,100"
+    },
+    {
+      "name": "Cheats erlauben",
+      "name_locales": {
+        "de": "Cheats erlauben",
+        "en": "Allow Cheats"
+      },
+      "env_variable": "ALLOW_CHEATS",
+      "default_value": "false",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Xbox-Konto prüfen",
+      "name_locales": {
+        "de": "Xbox-Konto prüfen",
+        "en": "Online Mode"
+      },
+      "env_variable": "ONLINE_MODE",
+      "description": "Nur Spieler mit Xbox-/Microsoft-Konto dürfen beitreten.",
+      "description_locales": {
+        "de": "Nur Spieler mit Xbox-/Microsoft-Konto dürfen beitreten.",
+        "en": "Only players with an Xbox/Microsoft account may join."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Erlaubte Spieler",
+      "name_locales": {
+        "de": "Erlaubte Spieler",
+        "en": "Allow List"
+      },
+      "env_variable": "ALLOW_LIST_USERS",
+      "description": "Gamertags mit Komma getrennt. Leer = jeder darf beitreten.",
+      "description_locales": {
+        "de": "Gamertags mit Komma getrennt. Leer = jeder darf beitreten.",
+        "en": "Comma-separated gamertags. Empty = everyone may join."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:2000"
+    },
+    {
+      "name": "Weltname",
+      "name_locales": {
+        "de": "Weltname",
+        "en": "World Name"
+      },
+      "env_variable": "LEVEL_NAME",
+      "default_value": "Bedrock level",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Weltsaat",
+      "name_locales": {
+        "de": "Weltsaat",
+        "en": "World Seed"
+      },
+      "env_variable": "LEVEL_SEED",
+      "description": "Nur für neue Welten.",
+      "description_locales": {
+        "de": "Nur für neue Welten.",
+        "en": "Only for new worlds."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64"
+    },
+    {
+      "name": "Sichtweite",
+      "name_locales": {
+        "de": "Sichtweite",
+        "en": "View Distance"
+      },
+      "env_variable": "VIEW_DISTANCE",
+      "default_value": "10",
+      "rules": "required|numeric|between:5,32"
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Welten, server.properties und die Erlaubnisliste.",
+    "rules": [
+      {
+        "match": "worlds",
+        "to": "worlds"
+      },
+      {
+        "match": "server.properties",
+        "to": "server.properties"
+      },
+      {
+        "match": "allowlist.json",
+        "to": "allowlist.json"
+      },
+      {
+        "match": "permissions.json",
+        "to": "permissions.json"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "bedrock_server",
+        "worlds"
+      ],
+      "vars": [
+        {
+          "var": "SERVER_NAME",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "server-name"
+        },
+        {
+          "var": "LEVEL_NAME",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "level-name"
+        },
+        {
+          "var": "GAMEMODE",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "gamemode"
+        },
+        {
+          "var": "DIFFICULTY",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "difficulty"
+        },
+        {
+          "var": "MAX_PLAYERS",
+          "from": "properties",
+          "file": "server.properties",
+          "key": "max-players"
+        }
+      ]
+    }
+  },
+  "hints": [
+    {
+      "match": "Version mismatch|Outdated client|Outdated server",
+      "flags": "i",
+      "level": "warn",
+      "text": "Server- und Spielerversion passen nicht. VERSION auf LATEST stellen und neu starten - oder die Spieler aktualisieren.",
+      "text_locales": {
+        "de": "Server- und Spielerversion passen nicht. VERSION auf LATEST stellen und neu starten - oder die Spieler aktualisieren.",
+        "en": "Server and client versions differ. Set VERSION to LATEST and restart, or update the players."
+      }
+    }
+  ]
+}

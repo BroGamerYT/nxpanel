@@ -1,0 +1,223 @@
+{
+  "_comment": "NexusPanel-Egg fuer 7 Days to Die Dedicated Server. Nutzt das vinanrra/7dtd-server Docker-Image mit Web-Dashboard, Telnet und serverconfig.xml Unterstuetzung.",
+  "name": "7 Days to Die",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "docker_images": {
+    "7 Days to Die (vinanrra/7dtd-server)": "vinanrra/7dtd-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/home/sdtdserver/serverfiles",
+  "environment": {
+    "START_MODE": "1",
+    "BACKUP": "no",
+    "MONITOR": "no",
+    "ALLOC_FIXES": "no"
+  },
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "GameServer.LogOn successful|StartGame done|Starting sdtdserver|The server have been installed",
+    "timeout_seconds": 1200
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 26900,
+      "end": 26910,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Steam Query",
+        "offset": 1,
+        "protocol": "udp"
+      },
+      {
+        "ref": "web",
+        "name": "Web Dashboard",
+        "start": 8080,
+        "end": 8090,
+        "protocol": "tcp",
+        "optional": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 8192,
+    "ram_per_player_mb": 200,
+    "min_cpu_percent": 300,
+    "disk_mb": 30000,
+    "notes": "7 Days to Die benoetigt fuer Zufallskarten (RWG) mindestens 8-12 GB RAM."
+  },
+  "config_files": {
+    "serverconfig.xml": {
+      "parser": "xml",
+      "find": {
+        "property[name=ServerName]@value": "{{SERVER_NAME}}",
+        "property[name=ServerDescription]@value": "{{SERVER_DESCRIPTION}}",
+        "property[name=ServerPassword]@value": "{{SERVER_PASSWORD}}",
+        "property[name=ServerMaxPlayerCount]@value": "{{SERVER_MAX_PLAYERS}}",
+        "property[name=GameWorld]@value": "{{GAME_WORLD}}",
+        "property[name=GameDifficulty]@value": "{{GAME_DIFFICULTY}}",
+        "property[name=DropOnDeath]@value": "{{DROP_ON_DEATH}}",
+        "property[name=BloodMoonEnemyCount]@value": "{{BLOOD_MOON_ENEMY_COUNT}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "SERVER_NAME",
+      "description": "Angezeigter Name in der Serverliste.",
+      "description_locales": {
+        "de": "Angezeigter Name in der Serverliste.",
+        "en": "Server name shown in public browser."
+      },
+      "default_value": "Germany LanGame 7 Days to Die",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Server-Beschreibung",
+      "name_locales": {
+        "de": "Server-Beschreibung",
+        "en": "Server Description"
+      },
+      "env_variable": "SERVER_DESCRIPTION",
+      "description": "Infotext beim Verbinden.",
+      "description_locales": {
+        "de": "Infotext beim Verbinden.",
+        "en": "Information text shown on connect."
+      },
+      "default_value": "Willkommen auf unserem 7 Days to Die Server!",
+      "rules": "nullable|string|max:256"
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "SERVER_PASSWORD",
+      "description": "Passwort fuer den Beitritt (leer fuer oeffentlich).",
+      "description_locales": {
+        "de": "Passwort fuer den Beitritt (leer fuer oeffentlich).",
+        "en": "Password required to join (empty for public)."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Maximale Spieler",
+      "name_locales": {
+        "de": "Maximale Spieler",
+        "en": "Maximum Players"
+      },
+      "env_variable": "SERVER_MAX_PLAYERS",
+      "description": "Maximale Spieleranzahl.",
+      "description_locales": {
+        "de": "Maximale Spieleranzahl.",
+        "en": "Max player limit."
+      },
+      "default_value": "8",
+      "rules": "required|numeric|between:1,32"
+    },
+    {
+      "name": "Spielwelt",
+      "name_locales": {
+        "de": "Spielwelt (GameWorld)",
+        "en": "Game World"
+      },
+      "env_variable": "GAME_WORLD",
+      "description": "Navezgane oder prozedurale Zufallswelt.",
+      "description_locales": {
+        "de": "Navezgane oder prozedurale Zufallswelt.",
+        "en": "Navezgane or RWG procedural map."
+      },
+      "default_value": "Navezgane",
+      "rules": "required|string|max:32"
+    },
+    {
+      "name": "Schwierigkeit",
+      "name_locales": {
+        "de": "Schwierigkeitsgrad (1-5)",
+        "en": "Game Difficulty (1-5)"
+      },
+      "env_variable": "GAME_DIFFICULTY",
+      "description": "1 = Schnitzeljagd (einfach) bis 5 = Irrenhaus (schwer).",
+      "description_locales": {
+        "de": "1 = Schnitzeljagd bis 5 = Irrenhaus.",
+        "en": "1 = Scavenger to 5 = Insane."
+      },
+      "default_value": "2",
+      "rules": "required|in:1,2,3,4,5"
+    },
+    {
+      "name": "Verlust beim Tod",
+      "name_locales": {
+        "de": "Verlust beim Tod",
+        "en": "Drop on Death"
+      },
+      "env_variable": "DROP_ON_DEATH",
+      "description": "0 = nichts, 1 = alles, 2 = nur Werkzeuggürtel, 3 = nur Rucksack.",
+      "description_locales": {
+        "de": "0 = nichts, 1 = alles, 2 = nur Guertel, 3 = nur Rucksack.",
+        "en": "0 = nothing, 1 = all, 2 = toolbelt only, 3 = backpack only."
+      },
+      "default_value": "1",
+      "rules": "required|in:0,1,2,3"
+    },
+    {
+      "name": "Blutmond Zombie-Anzahl",
+      "name_locales": {
+        "de": "Blutmond Zombie-Menge",
+        "en": "Blood Moon Enemy Count"
+      },
+      "env_variable": "BLOOD_MOON_ENEMY_COUNT",
+      "description": "Anzahl gleichzeitiger Zombies je Spieler in der Blutmond-Nacht.",
+      "description_locales": {
+        "de": "Zombies je Spieler beim Blutmond.",
+        "en": "Zombies per player during Blood Moon."
+      },
+      "default_value": "8",
+      "rules": "required|numeric|between:4,64"
+    }
+  ],
+  "query": {
+    "kind": "source",
+    "port_ref": "query"
+  },
+  "hints": [
+    {
+      "match": "No space left on device|state is 0x202|Not enough disk space|Disk write failure",
+      "flags": "i",
+      "level": "error",
+      "text": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+      "text_locales": {
+        "de": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+        "en": "Disk full: the host does not have enough free space for the game files. Check with \"df -h\" and free up space or enlarge the disk."
+      }
+    },
+    {
+      "match": "Killed|OutOfMemory|out of memory",
+      "flags": "i",
+      "level": "error",
+      "text": "Zu wenig Arbeitsspeicher. 7 Days to Die braucht für Zufallskarten 8–12 GB RAM.",
+      "text_locales": {
+        "de": "Zu wenig Arbeitsspeicher. 7 Days to Die braucht für Zufallskarten 8–12 GB RAM.",
+        "en": "Not enough memory. 7 Days to Die needs 8–12 GB RAM for random-generated maps."
+      }
+    }
+  ]
+}

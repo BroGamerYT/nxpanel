@@ -1,0 +1,145 @@
+{
+  "_comment": "NexusPanel-Egg fuer Rust Dedicated Server. Nutzt das didstopia/rust-server Docker-Image mit automatischem Update, RCON und Oxide/uMod-Unterstuetzung.",
+  "name": "Rust",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "docker_images": {
+    "Rust (didstopia/rust-server)": "didstopia/rust-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/steamcmd/rust",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Server startup complete|SteamServer Connected",
+    "timeout_seconds": 1200
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 28015,
+      "end": 28025,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "rcon",
+        "name": "RCON Web",
+        "offset": 1,
+        "protocol": "tcp",
+        "optional": true
+      },
+      {
+        "ref": "app",
+        "name": "Rust+ Companion App",
+        "offset": 67,
+        "protocol": "tcp",
+        "optional": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 8192,
+    "ram_per_player_mb": 100,
+    "min_cpu_percent": 300,
+    "disk_mb": 25000,
+    "notes": "Rust braucht fuer Kartengroessen ab 3500 mindestens 8-12 GB RAM."
+  },
+  "config_files": {
+    "server/rust/cfg/server.cfg": {
+      "parser": "properties",
+      "find": {
+        "server.hostname": "\"{{RUST_SERVER_NAME}}\"",
+        "server.description": "\"{{RUST_SERVER_DESCRIPTION}}\"",
+        "server.url": "\"{{RUST_SERVER_URL}}\"",
+        "server.headerimage": "\"{{RUST_SERVER_BANNER_URL}}\"",
+        "server.maxplayers": "{{RUST_MAXPLAYERS}}",
+        "server.worldsize": "{{RUST_SERVER_WORLDSIZE}}",
+        "server.seed": "{{RUST_SERVER_SEED}}",
+        "rcon.password": "\"{{RUST_RCON_PASSWORD}}\"",
+        "rcon.port": "{{RCON_PORT}}",
+        "rcon.web": "1"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": { "de": "Servername", "en": "Server Name" },
+      "env_variable": "RUST_SERVER_NAME",
+      "description": "Name des Rust-Servers in der Serverliste.",
+      "description_locales": { "de": "Name des Rust-Servers in der Serverliste.", "en": "Rust server name in server list." },
+      "default_value": "Germany LanGame Rust Server",
+      "rules": "required|string|max:100"
+    },
+    {
+      "name": "Serverbeschreibung",
+      "name_locales": { "de": "Server-Beschreibung", "en": "Server Description" },
+      "env_variable": "RUST_SERVER_DESCRIPTION",
+      "description": "Text in den Server-Details beim Verbinden.",
+      "description_locales": { "de": "Text in den Server-Details beim Verbinden.", "en": "Server description in connect window." },
+      "default_value": "Willkommen auf unserem Rust Community Server! Keine Cheats, respektvoller Umgang.",
+      "rules": "nullable|string|max:500"
+    },
+    {
+      "name": "RCON-Passwort",
+      "name_locales": { "de": "RCON-Passwort", "en": "RCON Password" },
+      "env_variable": "RUST_RCON_PASSWORD",
+      "description": "Passwort fuer RustAdmin / WebRCON.",
+      "description_locales": { "de": "Passwort fuer RustAdmin / WebRCON.", "en": "RCON administration password." },
+      "default_value": "RustAdminPass!",
+      "rules": "required|string|min:6|max:64",
+      "secret": true
+    },
+    {
+      "name": "Maximale Spieler",
+      "name_locales": { "de": "Maximale Spieler", "en": "Maximum Players" },
+      "env_variable": "RUST_MAXPLAYERS",
+      "description": "Maximale Anzahl gleichzeitiger Spieler.",
+      "description_locales": { "de": "Maximale Anzahl gleichzeitiger Spieler.", "en": "Maximum concurrent players." },
+      "default_value": "50",
+      "rules": "required|numeric|between:1,500"
+    },
+    {
+      "name": "Kartengroesse (Worldsize)",
+      "name_locales": { "de": "Kartengröße", "en": "World Size" },
+      "env_variable": "RUST_SERVER_WORLDSIZE",
+      "description": "Kartengroesse in Metern (Standard 3500-4500).",
+      "description_locales": { "de": "Kartengroesse in Metern (Standard 3500-4500).", "en": "Map size in meters (default 3500-4500)." },
+      "default_value": "3500",
+      "rules": "required|numeric|between:1000,6000"
+    },
+    {
+      "name": "Karten-Seed",
+      "name_locales": { "de": "Karten-Seed", "en": "Map Seed" },
+      "env_variable": "RUST_SERVER_SEED",
+      "description": "Zufallswert zur Kartengenerierung (Zahl).",
+      "description_locales": { "de": "Zufallswert zur Kartengenerierung (Zahl).", "en": "Seed number for procedural generation." },
+      "default_value": "133742",
+      "rules": "required|numeric|between:1,2147483647"
+    },
+    {
+      "name": "Webseite / Discord URL",
+      "name_locales": { "de": "Webseite / Discord URL", "en": "Website / Discord URL" },
+      "env_variable": "RUST_SERVER_URL",
+      "description": "Link zur Community oder Discord.",
+      "description_locales": { "de": "Link zur Community oder Discord.", "en": "Community or Discord invite link." },
+      "default_value": "https://discord.gg/germanylangame",
+      "rules": "nullable|string|max:128"
+    },
+    {
+      "name": "Header-Banner Bild-URL",
+      "name_locales": { "de": "Banner Bild-URL (512x256)", "en": "Banner Image URL (512x256)" },
+      "env_variable": "RUST_SERVER_BANNER_URL",
+      "description": "Direktlink zu einem 512x256 PNG- oder JPG-Bild.",
+      "description_locales": { "de": "Direktlink zu einem 512x256 PNG- oder JPG-Bild.", "en": "Direct URL to 512x256 PNG/JPG banner." },
+      "default_value": "",
+      "rules": "nullable|string|max:256"
+    }
+  ]
+}

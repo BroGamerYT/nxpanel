@@ -1,0 +1,229 @@
+{
+  "_comment": "NexusPanel-Egg fuer Project Zomboid. Image danixu86/project-zomboid-dedicated-server (Server im Image, Update per FORCEUPDATE), Daten und Einstellungen unter /home/steam/Zomboid. UNGETESTET.",
+  "name": "Project Zomboid",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "cover": {
+    "steam": 108600
+  },
+  "docker_images": {
+    "Stabil (danixu86/project-zomboid-dedicated-server)": "danixu86/project-zomboid-dedicated-server:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/home/steam/Zomboid",
+  "console": "full",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 120
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "SERVER STARTED",
+    "timeout_seconds": 1800
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 16261,
+      "end": 16360,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "udp",
+        "name": "Direktverbindung / UDP",
+        "offset": 1,
+        "protocol": "udp"
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 6144,
+    "ram_per_player_mb": 200,
+    "min_cpu_percent": 200,
+    "disk_mb": 10000,
+    "notes": "4-8 GB je nach Spielerzahl und Mods. Der Server bekommt 85 % des RAM als Java-Speicher."
+  },
+  "variables": [
+    {
+      "name": "PORT",
+      "name_locales": {
+        "de": "PORT",
+        "en": "PORT"
+      },
+      "env_variable": "PORT",
+      "default_value": "{{SERVER_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "UDPPORT",
+      "name_locales": {
+        "de": "UDPPORT",
+        "en": "UDPPORT"
+      },
+      "env_variable": "UDPPORT",
+      "default_value": "{{UDP_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "MEMORY",
+      "name_locales": {
+        "de": "MEMORY",
+        "en": "MEMORY"
+      },
+      "env_variable": "MEMORY",
+      "default_value": "{{SERVER_MEMORY_HEAP}}m",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "Interner Servername",
+      "name_locales": {
+        "de": "Interner Servername",
+        "en": "Internal Server Name"
+      },
+      "env_variable": "SERVERNAME",
+      "description": "Bestimmt die Dateinamen der Einstellungen. Ändern = neuer Spielstand (der alte bleibt erhalten).",
+      "description_locales": {
+        "de": "Bestimmt die Dateinamen der Einstellungen. Ändern = neuer Spielstand (der alte bleibt erhalten).",
+        "en": "Determines the config file names. Changing it starts a new save (the old one is kept)."
+      },
+      "default_value": "servertest",
+      "rules": "required|string|max:32|regex:/^[A-Za-z0-9_-]+$/"
+    },
+    {
+      "name": "Admin-Name",
+      "name_locales": {
+        "de": "Admin-Name",
+        "en": "Admin Name"
+      },
+      "env_variable": "ADMINUSERNAME",
+      "default_value": "admin",
+      "rules": "required|string|max:32"
+    },
+    {
+      "name": "Admin-Passwort",
+      "name_locales": {
+        "de": "Admin-Passwort",
+        "en": "Admin Password"
+      },
+      "env_variable": "ADMINPASSWORD",
+      "description": "Pflicht beim ersten Start. Leer lassen: das Panel erzeugt ein sicheres Passwort (danach in den Einstellungen sichtbar).",
+      "description_locales": {
+        "de": "Pflicht beim ersten Start. Leer lassen: das Panel erzeugt ein sicheres Passwort (danach in den Einstellungen sichtbar).",
+        "en": "Required on first start. Leave empty: the panel generates a secure password (visible in settings afterwards)."
+      },
+      "default_value": "{{GENERATE_PASSWORD}}",
+      "rules": "required|string|min:6|max:64",
+      "secret": true
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "env_variable": "PASSWORD",
+      "description": "Leer = ohne Passwort.",
+      "description_locales": {
+        "de": "Leer = ohne Passwort.",
+        "en": "Empty = no password."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Steam-VAC",
+      "name_locales": {
+        "de": "Steam-VAC",
+        "en": "Steam VAC"
+      },
+      "env_variable": "STEAMVAC",
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Workshop-IDs (Mods)",
+      "name_locales": {
+        "de": "Workshop-IDs (Mods)",
+        "en": "Workshop IDs (mods)"
+      },
+      "env_variable": "WORKSHOP_IDS",
+      "description": "Mit Semikolon getrennt. Mods kommen beim zweiten Start, Karten beim dritten.",
+      "description_locales": {
+        "de": "Mit Semikolon getrennt. Mods kommen beim zweiten Start, Karten beim dritten.",
+        "en": "Semicolon separated. Mods are added on the second start, maps on the third."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:2000"
+    },
+    {
+      "name": "Beim Start aktualisieren",
+      "name_locales": {
+        "de": "Beim Start aktualisieren",
+        "en": "Update on Start"
+      },
+      "env_variable": "FORCEUPDATE",
+      "description": "Holt bei jedem Start die neueste Serverversion (dauert etwas).",
+      "description_locales": {
+        "de": "Holt bei jedem Start die neueste Serverversion (dauert etwas).",
+        "en": "Fetches the latest server version on every start (takes a while)."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Spielstaende und Servereinstellungen (Ordner Saves und Server).",
+    "rules": [
+      {
+        "match": "Saves",
+        "to": "Saves"
+      },
+      {
+        "match": "Server",
+        "to": "Server"
+      },
+      {
+        "match": "db",
+        "to": "db"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "Server",
+        "Saves"
+      ],
+      "vars": []
+    }
+  },
+  "hints": [
+    {
+      "match": "OutOfMemoryError|Could not reserve enough space",
+      "flags": "i",
+      "level": "error",
+      "text": "Zu wenig Arbeitsspeicher für Java. RAM des Servers erhöhen.",
+      "text_locales": {
+        "de": "Zu wenig Arbeitsspeicher für Java. RAM des Servers erhöhen.",
+        "en": "Not enough memory for Java. Increase the server RAM."
+      }
+    },
+    {
+      "match": "No space left on device|state is 0x202|Not enough disk space|Disk write failure",
+      "flags": "i",
+      "level": "error",
+      "text": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+      "text_locales": {
+        "de": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+        "en": "Disk full: the host does not have enough free space for the game files. Check with \"df -h\" and free up space or enlarge the disk."
+      }
+    }
+  ]
+}

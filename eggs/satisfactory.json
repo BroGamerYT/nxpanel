@@ -1,0 +1,75 @@
+{
+  "_comment": "NexusPanel-Egg fuer Satisfactory Dedicated Server. Nutzt das wolveix/satisfactory-server Docker-Image mit nativer Linux-Unterstuetzung und automatischer Update-Pruefung.",
+  "name": "Satisfactory",
+  "author": "nxpanel",
+  "nest": "Simulation",
+  "docker_images": {
+    "Satisfactory (wolveix/satisfactory-server)": "wolveix/satisfactory-server:latest"
+  },
+  "startup": "bash -c 'while [ ! -f /config/gamefiles/FactoryServer.sh ]; do /init.sh || sleep 2; done; exec /init.sh'",
+  "data_dir": "/config",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Server API listening on|Game Engine Initialized|OnPostEngineInit has been broadcasted|Starting Game|Started Server|Listening for client connections",
+    "timeout_seconds": 1200
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 7777,
+      "end": 7787,
+      "protocol": "udp"
+    }
+  },
+  "resources": {
+    "base_ram_mb": 8192,
+    "ram_per_player_mb": 300,
+    "min_cpu_percent": 300,
+    "disk_mb": 25000,
+    "notes": "Satisfactory benoetigt bei groesseren Fabriken mindestens 8-12 GB RAM."
+  },
+  "variables": [
+    {
+      "name": "Maximale Spieler",
+      "name_locales": { "de": "Maximale Spieler", "en": "Maximum Players" },
+      "env_variable": "MAXPLAYERS",
+      "description": "Empfohlen 4 bis 8 Spieler.",
+      "description_locales": { "de": "Empfohlen 4 bis 8 Spieler.", "en": "Recommended 4 to 8 players." },
+      "default_value": "4",
+      "rules": "required|numeric|between:1,32"
+    },
+    {
+      "name": "Autosave Intervall (Sekunden)",
+      "name_locales": { "de": "Autosave-Intervall (Sekunden)", "en": "Autosave Interval (Seconds)" },
+      "env_variable": "AUTOSAVEINTERVAL",
+      "description": "Zeitabstand fuer automatische Weltspeicherung (Standard: 300 Sekunden / 5 Minuten).",
+      "description_locales": { "de": "Zeitabstand fuer automatische Weltspeicherung.", "en": "Interval between world autosaves." },
+      "default_value": "300",
+      "rules": "required|numeric|between:60,3600"
+    },
+    {
+      "name": "Anzahl rotierender Autosaves",
+      "name_locales": { "de": "Anzahl Autosaves", "en": "Number of Autosaves" },
+      "env_variable": "AUTOSAVENUM",
+      "description": "Wie viele automatische Spielstaende aufbewahrt werden.",
+      "description_locales": { "de": "Wie viele automatische Spielstaende aufbewahrt werden.", "en": "How many rolling autosave slots to keep." },
+      "default_value": "5",
+      "rules": "required|numeric|between:1,20"
+    },
+    {
+      "name": "Automatischer Neustart bei Absturz",
+      "name_locales": { "de": "Auto-Restart", "en": "Auto Restart" },
+      "env_variable": "AUTORESTART",
+      "description": "Startet den Serverprozess bei Abstuerzen sofort neu.",
+      "description_locales": { "de": "Startet den Serverprozess bei Abstuerzen sofort neu.", "en": "Automatically restarts server on crash." },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    }
+  ]
+}

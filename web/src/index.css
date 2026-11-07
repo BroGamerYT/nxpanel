@@ -1,0 +1,185 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@xterm/xterm/css/xterm.css";
+
+/*
+ * NexusPanel - Gestaltung
+ * Grundidee: ein Serverraum bei Nacht. Kuehles Schiefer-Blau statt Schwarz,
+ * Farbe kommt fast nur ueber die Status-LEDs ins Bild. Bernstein ist die
+ * eine Handlungsfarbe (wie die Aktivitaets-LED eines Laufwerks) - gruen
+ * bleibt fuer "laeuft" reserviert, damit Status und Knoepfe nie verwechselt werden.
+ */
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-night: #121822;      /* Seitengrund */
+  --color-rack: #19212E;       /* Flaechen */
+  --color-rack-2: #212B3B;     /* Hervorgehobene Flaechen, Eingabefelder */
+  --color-seam: #2C3749;       /* Linien */
+  --color-ink: #E4E8EF;        /* Text */
+  --color-dim: #8C97AB;        /* Nebentext */
+  --color-amber: #F2A93B;      /* Handlung */
+  --color-amber-ink: #1F1606;  /* Text auf Bernstein */
+
+  --color-led-run: #3CCB8C;
+  --color-led-start: #F2C94C;
+  --color-led-stop: #6B7689;
+  --color-led-crash: #E5484D;
+  --color-led-install: #5B9DF5;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--color-night);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Die LED pulsiert nur, solange etwas im Gange ist - Bewegung heisst "warte". */
+@keyframes led-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+.led-busy { animation: led-pulse 1.2s ease-in-out infinite; }
+
+.xterm .xterm-viewport { background: transparent !important; }
+.xterm { padding: 10px 12px; }
+
+/* Markdown Rendering */
+.markdown-content {
+  color: var(--color-ink);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.markdown-content h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #fff;
+  border-bottom: 1px solid var(--color-seam);
+  padding-bottom: 0.5rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  letter-spacing: -0.02em;
+}
+.markdown-content h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+  border-bottom: 1px solid rgba(44, 55, 73, 0.6);
+  padding-bottom: 0.35rem;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.01em;
+}
+.markdown-content h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-amber);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.markdown-content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-top: 1rem;
+  margin-bottom: 0.4rem;
+}
+.markdown-content p {
+  margin-bottom: 0.85rem;
+  color: rgba(228, 232, 239, 0.9);
+}
+.markdown-content strong {
+  color: #fff;
+  font-weight: 600;
+}
+.markdown-content a {
+  color: var(--color-amber);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-content a:hover {
+  color: #ffd073;
+}
+.markdown-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.85rem;
+}
+.markdown-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.85rem;
+}
+.markdown-content li {
+  margin-bottom: 0.35rem;
+}
+.markdown-content blockquote {
+  border-left: 3px solid var(--color-amber);
+  background: rgba(242, 169, 59, 0.08);
+  padding: 0.6rem 1rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+  margin: 1rem 0;
+  color: var(--color-dim);
+}
+.markdown-content code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  background: var(--color-rack-2);
+  color: var(--color-amber);
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  border: 1px solid rgba(44, 55, 73, 0.7);
+}
+.markdown-content pre {
+  background: #0c1017;
+  border: 1px solid var(--color-seam);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+.markdown-content pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-ink);
+  font-size: 0.8125rem;
+}
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid var(--color-seam);
+  margin: 1.75rem 0;
+}
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.8125rem;
+}
+.markdown-content th {
+  background: rgba(33, 43, 59, 0.8);
+  padding: 0.6rem 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  border: 1px solid var(--color-seam);
+  color: #fff;
+}
+.markdown-content td {
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--color-seam);
+  color: rgba(228, 232, 239, 0.85);
+}
+.markdown-content tr:nth-child(even) td {
+  background: rgba(25, 33, 46, 0.4);
+}

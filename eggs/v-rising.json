@@ -1,0 +1,175 @@
+{
+  "_comment": "NexusPanel-Egg fuer V Rising. Image trueosiris/vrising (Windows-Server unter Wine, Download per SteamCMD). Server unter /mnt/vrising/server, Welt unter /mnt/vrising/persistentdata. UNGETESTET.",
+  "name": "V Rising",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "cover": {
+    "steam": 1604030
+  },
+  "docker_images": {
+    "Wine (trueosiris/vrising)": "trueosiris/vrising:latest",
+    "Wine mit Xvfb (trueosiris/vrising:display)": "trueosiris/vrising:display"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/mnt/vrising",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 90
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Startup Completed|Server Setup Complete|Started Server Network|Steam Server.*connected",
+    "timeout_seconds": 1800
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 9876,
+      "end": 9975,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Query",
+        "offset": 100,
+        "protocol": "udp"
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 6144,
+    "ram_per_player_mb": 150,
+    "min_cpu_percent": 200,
+    "disk_mb": 15000,
+    "notes": "4-8 GB je nach Weltgroesse und Spielerzahl, Wine kostet etwas extra."
+  },
+  "variables": [
+    {
+      "name": "GAMEPORT",
+      "name_locales": {
+        "de": "GAMEPORT",
+        "en": "GAMEPORT"
+      },
+      "env_variable": "GAMEPORT",
+      "default_value": "{{SERVER_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "QUERYPORT",
+      "name_locales": {
+        "de": "QUERYPORT",
+        "en": "QUERYPORT"
+      },
+      "env_variable": "QUERYPORT",
+      "default_value": "{{QUERY_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "env_variable": "SERVERNAME",
+      "default_value": "Germany LanGame V Rising",
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Weltname",
+      "name_locales": {
+        "de": "Weltname",
+        "en": "World Name"
+      },
+      "env_variable": "WORLDNAME",
+      "description": "Ordner des Spielstands unter persistentdata/Saves.",
+      "description_locales": {
+        "de": "Ordner des Spielstands unter persistentdata/Saves.",
+        "en": "Save folder under persistentdata/Saves."
+      },
+      "default_value": "world1",
+      "rules": "required|string|max:32|regex:/^[A-Za-z0-9_-]+$/"
+    },
+    {
+      "name": "Logs aufheben (Tage)",
+      "name_locales": {
+        "de": "Logs aufheben (Tage)",
+        "en": "Keep Logs (days)"
+      },
+      "env_variable": "LOGDAYS",
+      "default_value": "14",
+      "rules": "required|numeric|between:1,365"
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Spielstaende und Einstellungen (ServerHostSettings.json, ServerGameSettings.json).",
+    "rules": [
+      {
+        "match": "Saves",
+        "to": "persistentdata/Saves"
+      },
+      {
+        "match": "Settings",
+        "to": "persistentdata/Settings"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "ServerHostSettings.json"
+      ],
+      "vars": [
+        {
+          "var": "SERVERNAME",
+          "from": "json",
+          "file": "ServerHostSettings.json",
+          "key": "Name"
+        },
+        {
+          "var": "WORLDNAME",
+          "from": "json",
+          "file": "ServerHostSettings.json",
+          "key": "SaveName"
+        }
+      ]
+    }
+  },
+  "tmp": "disk",
+  "hints": [
+    {
+      "match": "HTTP status 403",
+      "flags": "i",
+      "level": "warn",
+      "text": "Bekanntes Wine-Problem des Images. Hilft meist: Image auf trueosiris/vrising:display umstellen.",
+      "text_locales": {
+        "de": "Bekanntes Wine-Problem des Images. Hilft meist: Image auf trueosiris/vrising:display umstellen.",
+        "en": "Known Wine issue of the image. Usually fixed by switching to trueosiris/vrising:display."
+      }
+    },
+    {
+      "match": "Missing configuration|cannot find L\".*VRisingServer.exe\"",
+      "flags": "i",
+      "level": "warn",
+      "text": "SteamCMD konnte V Rising nicht herunterladen („Missing configuration“). Das ist meist ein vorübergehender Steam-Fehler direkt nach dem Selbst-Update von SteamCMD. Server einfach erneut starten; hilft das nicht, Image auf „trueosiris/vrising:display“ umstellen.",
+      "text_locales": {
+        "de": "SteamCMD konnte V Rising nicht herunterladen („Missing configuration“). Das ist meist ein vorübergehender Steam-Fehler direkt nach dem Selbst-Update von SteamCMD. Server einfach erneut starten; hilft das nicht, Image auf „trueosiris/vrising:display“ umstellen.",
+        "en": "SteamCMD could not download V Rising (\"Missing configuration\"). Usually a temporary Steam error right after SteamCMD updated itself. Just start the server again; if that does not help, switch the image to \"trueosiris/vrising:display\"."
+      }
+    },
+    {
+      "match": "No space left on device|state is 0x202|Not enough disk space|Disk write failure",
+      "flags": "i",
+      "level": "error",
+      "text": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+      "text_locales": {
+        "de": "Festplatte voll: Auf der VM ist nicht genug freier Speicher für die Spieldateien. Mit „df -h“ auf der VM prüfen und Platz schaffen oder die Platte vergrößern.",
+        "en": "Disk full: the host does not have enough free space for the game files. Check with \"df -h\" and free up space or enlarge the disk."
+      }
+    }
+  ]
+}

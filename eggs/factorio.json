@@ -1,0 +1,237 @@
+{
+  "_comment": "NexusPanel-Egg fuer Factorio (Headless-Server, kostenlos, kein Steam-Login noetig). Image factoriotools/factorio, alle Daten unter /factorio. UNGETESTET.",
+  "name": "Factorio",
+  "author": "nxpanel",
+  "nest": "Aufbau",
+  "cover": {
+    "steam": 427520
+  },
+  "docker_images": {
+    "Stabil (factoriotools/factorio:stable)": "factoriotools/factorio:stable",
+    "Neueste (factoriotools/factorio:latest)": "factoriotools/factorio:latest"
+  },
+  "startup": "(Einstiegspunkt des Images)",
+  "data_dir": "/factorio",
+  "console": "readonly",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Hosting game at|changing state from\\(CreatingGame\\) to\\(InGame\\)|Starting RCON interface|Factorio initialised",
+    "timeout_seconds": 900
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 34197,
+      "end": 34296,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "rcon",
+        "name": "RCON",
+        "offset": 1,
+        "protocol": "tcp"
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 1536,
+    "ram_per_player_mb": 100,
+    "min_cpu_percent": 100,
+    "disk_mb": 3000,
+    "notes": "Kleine Fabriken brauchen 1-2 GB, Megabasen deutlich mehr. Factorio nutzt vor allem einen Kern."
+  },
+  "variables": [
+    {
+      "name": "PORT",
+      "name_locales": {
+        "de": "PORT",
+        "en": "PORT"
+      },
+      "env_variable": "PORT",
+      "default_value": "{{SERVER_PORT}}",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "RCON_PORT",
+      "name_locales": {
+        "de": "RCON_PORT",
+        "en": "RCON_PORT"
+      },
+      "env_variable": "RCON_PORT",
+      "default_value": "27015",
+      "rules": "nullable|string",
+      "user_editable": false,
+      "user_viewable": false
+    },
+    {
+      "name": "Spielstand",
+      "name_locales": {
+        "de": "Spielstand",
+        "en": "Save Name"
+      },
+      "env_variable": "SAVE_NAME",
+      "description": "Name der Spielstand-Datei in saves/ (ohne .zip).",
+      "description_locales": {
+        "de": "Name der Spielstand-Datei in saves/ (ohne .zip).",
+        "en": "Name of the save file in saves/ (without .zip)."
+      },
+      "default_value": "panel",
+      "rules": "required|string|max:64|regex:/^[A-Za-z0-9_-]+$/"
+    },
+    {
+      "name": "Neue Karte erzeugen",
+      "name_locales": {
+        "de": "Neue Karte erzeugen",
+        "en": "Generate New Map"
+      },
+      "env_variable": "GENERATE_NEW_SAVE",
+      "description": "Legt die Karte an, wenn es den Spielstand noch nicht gibt.",
+      "description_locales": {
+        "de": "Legt die Karte an, wenn es den Spielstand noch nicht gibt.",
+        "en": "Creates the map if the save does not exist yet."
+      },
+      "default_value": "true",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Neuesten Spielstand laden",
+      "name_locales": {
+        "de": "Neuesten Spielstand laden",
+        "en": "Load Latest Save"
+      },
+      "env_variable": "LOAD_LATEST_SAVE",
+      "description": "An = immer den zuletzt gespeicherten Stand laden statt SAVE_NAME.",
+      "description_locales": {
+        "de": "An = immer den zuletzt gespeicherten Stand laden statt SAVE_NAME.",
+        "en": "On = always load the most recent save instead of SAVE_NAME."
+      },
+      "default_value": "false",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Karten-Vorlage",
+      "name_locales": {
+        "de": "Karten-Vorlage",
+        "en": "Map Preset"
+      },
+      "env_variable": "PRESET",
+      "description": "Nur für neue Karten.",
+      "description_locales": {
+        "de": "Nur für neue Karten.",
+        "en": "Only for new maps."
+      },
+      "default_value": "",
+      "rules": "nullable|in:,default,rich-resources,marathon,dangerous,death-world,death-world-marathon,rail-world,ribbon-world,island"
+    },
+    {
+      "name": "Mods beim Start aktualisieren",
+      "name_locales": {
+        "de": "Mods beim Start aktualisieren",
+        "en": "Update Mods on Start"
+      },
+      "env_variable": "UPDATE_MODS_ON_START",
+      "description": "Braucht USERNAME und TOKEN eines Factorio-Kontos.",
+      "description_locales": {
+        "de": "Braucht USERNAME und TOKEN eines Factorio-Kontos.",
+        "en": "Needs USERNAME and TOKEN of a Factorio account."
+      },
+      "default_value": "false",
+      "rules": "required|in:true,false"
+    },
+    {
+      "name": "Factorio-Benutzername",
+      "name_locales": {
+        "de": "Factorio-Benutzername",
+        "en": "Factorio Username"
+      },
+      "env_variable": "USERNAME",
+      "description": "Nur für Mod-Updates und öffentliche Spiele.",
+      "description_locales": {
+        "de": "Nur für Mod-Updates und öffentliche Spiele.",
+        "en": "Only for mod updates and public games."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:64"
+    },
+    {
+      "name": "Factorio-Token",
+      "name_locales": {
+        "de": "Factorio-Token",
+        "en": "Factorio Token"
+      },
+      "env_variable": "TOKEN",
+      "description": "Von factorio.com/profile.",
+      "description_locales": {
+        "de": "Von factorio.com/profile.",
+        "en": "From factorio.com/profile."
+      },
+      "default_value": "",
+      "rules": "nullable|string|max:128",
+      "secret": true
+    }
+  ],
+  "import": {
+    "notes": "Uebernimmt Spielstaende, Mods und die Konfiguration (server-settings.json).",
+    "rules": [
+      {
+        "match": "saves",
+        "to": "saves"
+      },
+      {
+        "match": "mods",
+        "to": "mods"
+      },
+      {
+        "match": "config",
+        "to": "config"
+      },
+      {
+        "match": "scenarios",
+        "to": "scenarios"
+      }
+    ],
+    "detect": {
+      "markers": [
+        "saves",
+        "server-settings.json"
+      ],
+      "vars": [
+        {
+          "var": "LOAD_LATEST_SAVE",
+          "from": "set",
+          "value": "true"
+        }
+      ]
+    }
+  },
+  "hints": [
+    {
+      "match": "Permission denied",
+      "flags": "i",
+      "level": "error",
+      "text": "Factorio laeuft als Benutzer 845 und darf den Datenordner nicht beschreiben.",
+      "text_locales": {
+        "de": "Factorio laeuft als Benutzer 845 und darf den Datenordner nicht beschreiben.",
+        "en": "Factorio runs as user 845 and cannot write to the data folder."
+      }
+    },
+    {
+      "match": "Map version .* cannot be loaded",
+      "flags": "i",
+      "level": "error",
+      "text": "Der Spielstand ist neuer als der Server. Image auf 'Neueste' umstellen.",
+      "text_locales": {
+        "de": "Der Spielstand ist neuer als der Server. Image auf 'Neueste' umstellen.",
+        "en": "The save is newer than the server. Switch the image to 'latest'."
+      }
+    }
+  ]
+}

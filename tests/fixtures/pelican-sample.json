@@ -1,0 +1,20 @@
+{
+  "_comment": "Testvorlage im Pelican/Pterodactyl-Format (PTDL_v2), angelehnt an die Steam-Eggs von github.com/pelican-eggs (MIT)",
+  "meta": { "version": "PTDL_v2" },
+  "name": "Beispielspiel (Pelican)",
+  "author": "test@example.org",
+  "docker_images": { "SteamCMD Debian": "ghcr.io/parkervcp/steamcmd:debian" },
+  "startup": "./server -port {{SERVER_PORT}} -queryport {{QUERY_PORT}} -name \"{{SRV_NAME}}\"",
+  "config": {
+    "files": "{\n  \"server.cfg\": { \"parser\": \"file\", \"find\": { \"port=\": \"port={{server.build.default.port}}\", \"queryport=\": \"queryport={{server.build.env.QUERY_PORT}}\" } }\n}",
+    "startup": "{\n  \"done\": \"Server is ready (\"\n}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": { "installation": { "script": "#!/bin/bash\necho install", "container": "ghcr.io/parkervcp/installers:debian", "entrypoint": "bash" } },
+  "variables": [
+    { "name": "Server Name", "env_variable": "SRV_NAME", "default_value": "Test", "user_viewable": true, "user_editable": true, "rules": "required|string|max:64" },
+    { "name": "Query Port", "env_variable": "QUERY_PORT", "default_value": "27016", "user_viewable": true, "user_editable": true, "rules": "required|numeric|between:1024,65535" },
+    { "name": "RCON Port", "env_variable": "RCON_PORT", "default_value": "27020", "user_viewable": true, "user_editable": true, "rules": "required|numeric" }
+  ]
+}
