@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <b>🇩🇪 Deutsch</b> &nbsp;•&nbsp; <a href="README.en.md"><b>🇬🇧 English</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/brogameryt/nxpanel/releases"><img src="https://img.shields.io/badge/version-v0.22.0--alpha-F2A93B?style=for-the-badge&logo=git&logoColor=black" alt="Version"></a>
   <img src="https://img.shields.io/badge/status-In%20Entwicklung%20(Alpha)-E5484D?style=for-the-badge" alt="Status">
   <a href="https://ko-fi.com/brogameryt" target="_blank"><img src="https://img.shields.io/badge/Ko--fi-Unterst%C3%BCtzen-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
@@ -33,6 +37,7 @@
 | 📐 **Architektur** | Technischer Aufbau, Host-Schicht & NexusCore | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
 | 🎮 **Egg-Katalog** | 263 analysierte Spielvorlagen & 25 integrierte Eggs | [docs/EGG-KATALOG.md](docs/EGG-KATALOG.md) |
 | 🧪 **Testberichte** | Automatisierte Installations- und Start-Tests | [docs/GAME-INSTALL-TESTS.md](docs/GAME-INSTALL-TESTS.md) |
+| 🌍 **Übersetzungen** | Sprachen & Anleitung zum Mitübersetzen | [#sprachstatus](#-sprachen--übersetzung-localization) |
 | ☕ **Projekt unterstützen** | Unterstütze die Entwicklung & Serverkosten | [👉 Ko-fi / brogameryt](https://ko-fi.com/brogameryt) |
 
 ---
@@ -122,6 +127,39 @@ npm --prefix web run build
 
 - **Sicherheitsmeldungen:** Bitte Sicherheitslücken **nicht** öffentlich in den Issues posten. Siehe [SECURITY.md](SECURITY.md) für den Meldekontakt.
 - **Docker-Socket:** Der Panel-Dienst steuert die Docker Engine des Hosts. Aus Sicherheitsgründen sollte NexusPanel immer in einer dedizierten virtuellen Maschine (VM) oder einem isolierten Server betrieben werden.
+
+---
+
+## 🌍 Sprachen & Übersetzung (Localization)
+
+NexusPanel ist von Grund auf mehrsprachig aufgebaut. Die Weboberfläche passt sich automatisch der Browsersprache an oder kann vom Nutzer direkt im Panel flexibel umgestellt werden.
+
+### Sprachstatus
+
+| Sprache | Code | Status | Übersetzungsdatei |
+|---|:---:|:---:|---|
+| 🇩🇪 **Deutsch** | `de` | ✅ **100%** (Native / Vollständig) | [`web/src/locales/de.json`](web/src/locales/de.json) |
+| 🇬🇧 **English** | `en` | ✅ **100%** (Referenzsprache) | [`web/src/locales/en.json`](web/src/locales/en.json) |
+| 🇫🇷 **Français** | `fr` | ⏳ Suche Übersetzer | `web/src/locales/fr.json` |
+| 🇪🇸 **Español** | `es` | ⏳ Suche Übersetzer | `web/src/locales/es.json` |
+| 🇵🇱 **Polski** | `pl` | ⏳ Suche Übersetzer | `web/src/locales/pl.json` |
+| 🇮🇹 **Italiano** | `it` | ⏳ Suche Übersetzer | `web/src/locales/it.json` |
+| 🌍 **Weitere Sprachen** | `...` | 💡 Jederzeit willkommen! | – |
+
+### 🤝 Bei Übersetzungen mitmachen (So geht's!)
+
+Möchtest du NexusPanel in deine Muttersprache übersetzen oder bestehende Übersetzungen verfeinern? **Jeder Beitrag ist herzlich willkommen!**
+
+1. **Beispiel-/Referenzdatei öffnen:**
+   Nimm als Vorlage die englische Referenzdatei:
+   👉 **[`web/src/locales/en.json`](web/src/locales/en.json)** *(oder alternativ [`web/src/locales/de.json`](web/src/locales/de.json))*.
+2. **Kopieren & Übersetzen:**
+   Kopiere die Datei und benenne sie nach dem ISO-Sprachcode (z.&nbsp;B. `fr.json`, `es.json`, `tr.json`). Übersetze darin nur die **Werte** – die Schlüssel links sowie Variablen wie `{name}`, `{count}` oder `{file}` bleiben unverändert.
+3. **Einreichen:**
+   - **Per Pull Request:** Reiche die neue `.json`-Datei im Ordner `web/src/locales/` ein.
+   - **Oder per GitHub Issue:** Erstelle ein [GitHub Issue](https://github.com/brogameryt/nxpanel/issues) und hänge deine übersetzte JSON-Datei einfach an!
+
+*Ausführliche Dokumentation zur Lokalisierung:* 📖 **[`web/src/locales/README.md`](web/src/locales/README.md)**
 
 ---
 
