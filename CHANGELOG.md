@@ -1,5 +1,9 @@
 # Änderungen
 
+<p align="center">
+  <b>🇩🇪 Deutsch</b> &nbsp;•&nbsp; <a href="CHANGELOG.en.md"><b>🇬🇧 English</b></a>
+</p>
+
 Alle Versionen von NexusPanel, neueste oben. Das Panel zeigt diese Datei
 unter „Was ist neu“ an (Klick auf die Versionsnummer unten links).
 

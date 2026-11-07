@@ -32,7 +32,7 @@
 | Area | Description | Link |
 |---|---|---|
 | 📦 **Downloads & Releases** | Latest versions, packages, and release assets | [👉 To Releases (Right Sidebar)](https://github.com/brogameryt/nxpanel/releases) |
-| 📜 **Changelog** | Complete history of all releases and changes | [CHANGELOG.md](CHANGELOG.md) |
+| 📜 **Changelog** | Complete history of all releases and changes | [CHANGELOG.en.md](CHANGELOG.en.md) |
 | 📋 **Roadmap & Tasks** | Open tasks, milestones, and criteria for v1.0 | [docs/TODO.md](docs/TODO.md) |
 | 📐 **Architecture** | Technical structure, host layer & NexusCore | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
 | 🎮 **Egg Catalog** | 263 analyzed game templates & 25 built-in eggs | [docs/EGG-KATALOG.md](docs/EGG-KATALOG.md) |
