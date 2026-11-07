@@ -186,3 +186,9 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [ ] Freien Speicher der VM prüfen (`df -h`) – CS2 (0x202) und vermutlich 7 Days to Die sind an voller Platte gescheitert
 - [ ] Spieletest für CS2, 7 Days to Die, V Rising, Project Zomboid wiederholen
 - [ ] V Rising: falls „Missing configuration“ bleibt, auf Pelican-Egg (Installer + Wine-Yolk) umstellen
+
+## Admin-Dateimanager (0.22.0)
+- [x] Dateimanager für die Panel-Ordner auf der VM, nur Admins
+- [x] Speicherbelegung je Ordner
+- [ ] Optional: Panel-Installation (/opt/nxpanel) read-only einbinden und per `ADMIN_FILE_ROOTS` zeigen
+- [ ] Docker-Belegung (Images, Container-Schichten) je Server anzeigen – große Container-Schichten = Spieldaten außerhalb des Datenordners

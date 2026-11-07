@@ -24,6 +24,7 @@ import { logRoutes } from './routes/logs.js';
 import { gameRoutes } from './routes/game.js';
 import { steamRoutes } from './routes/steam.js';
 import { fileRoutes } from './routes/files.js';
+import { adminFileRoutes } from './routes/admin-files.js';
 import { backupRoutes } from './routes/backups.js';
 import { scheduleRoutes } from './routes/schedules.js';
 import { storageTargetRoutes } from './routes/storage-targets.js';
@@ -147,6 +148,7 @@ export async function buildServer(opts: BuildOptions = {}) {
       await api.register(gameRoutes);
       await api.register(steamRoutes);
       await api.register(fileRoutes);
+      await api.register(adminFileRoutes);
       await api.register(backupRoutes);
       await api.register(scheduleRoutes);
       await api.register(storageTargetRoutes);

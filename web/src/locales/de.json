@@ -312,7 +312,8 @@
     "logout": "Abmelden",
     "network": "Netzwerk",
     "search": "Suchen...",
-    "servers": "Server"
+    "servers": "Server",
+    "adminFiles": "Dateien (VM)"
   },
   "netcheck": {
     "clock": "Uhrzeit",
@@ -714,5 +715,19 @@
     "done": "„{name}“ ist jetzt in der Auswahl.",
     "hint": "Eigene Vorlage oder Egg von Pterodactyl/Pelican – Ports, Startmuster und Rechte passt der Import an.",
     "notJson": "Die Datei ist kein gültiges JSON."
+  },
+  "adminFiles": {
+    "title": "Dateien auf der VM",
+    "intro": "Alle Ordner des Panels: Spieldaten aller Server, Backups und NAS – wie der Instanz-Ordner bei AMP. Nur für Administratoren, jede Änderung landet im Audit-Log.",
+    "notMounted": "Nicht eingebunden: {path}",
+    "warning": "Änderungen wirken sofort auf der VM. Dateien laufender Server nicht löschen oder umbenennen, und Backups nur löschen, wenn du sicher bist.",
+    "showUsage": "Speicherbelegung anzeigen",
+    "hideUsage": "Ausblenden",
+    "usageTitle": "Speicherbelegung",
+    "measuring": "Messe Ordnergrößen …",
+    "usageTotal": "Unterordner zusammen: {size}",
+    "partial": "Messung abgebrochen (zu groß), Werte unvollständig",
+    "noFolders": "Keine Unterordner.",
+    "serversHint": "Die Dateien der installierten Server liegen unter „volumes“ – jeder Server hat dort einen Ordner, daneben steht sein Name."
   }
 }

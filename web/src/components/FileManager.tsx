@@ -90,10 +90,14 @@ function getFileIcon(name: string, isDir: boolean) {
 export function FileManager({
   serverId,
   permissions,
+  apiBase,
 }: {
   serverId: string;
   permissions: string[];
+  /** Andere Datei-API, z. B. /admin/files/panel-daten (Admin-Dateimanager). Ohne: Dateien des Servers. */
+  apiBase?: string;
 }) {
+  const filesBase = apiBase ?? `/servers/${serverId}/files`;
   const qc = useQueryClient();
   const [currentPath, setCurrentPath] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
@@ -122,7 +126,7 @@ export function FileManager({
     queryKey: ['files', serverId, currentPath],
     queryFn: () =>
       api<DirectoryListing>(
-        `/servers/${serverId}/files?path=${encodeURIComponent(currentPath)}`
+        `${filesBase}?path=${encodeURIComponent(currentPath)}`
       ),
     enabled: canRead,
   });
@@ -162,7 +166,7 @@ export function FileManager({
   // Datei-Aktionen Mutations
   const createFolderMut = useMutation({
     mutationFn: (name: string) =>
-      api(`/servers/${serverId}/files/directory`, {
+      api(`${filesBase}/directory`, {
         method: 'POST',
         body: { path: currentPath ? `${currentPath}/${name}` : name },
       }),
@@ -176,7 +180,7 @@ export function FileManager({
 
   const renameMut = useMutation({
     mutationFn: ({ from, to }: { from: string; to: string }) =>
-      api(`/servers/${serverId}/files/rename`, {
+      api(`${filesBase}/rename`, {
         method: 'POST',
         body: { from, to },
       }),
@@ -190,7 +194,7 @@ export function FileManager({
 
   const deleteMut = useMutation({
     mutationFn: (path: string) =>
-      api(`/servers/${serverId}/files`, {
+      api(`${filesBase}`, {
         method: 'DELETE',
         body: { path },
       }),
@@ -203,7 +207,7 @@ export function FileManager({
 
   const decompressMut = useMutation({
     mutationFn: (path: string) =>
-      api(`/servers/${serverId}/files/decompress`, {
+      api(`${filesBase}/decompress`, {
         method: 'POST',
         body: { path, destination: currentPath },
       }),
@@ -228,7 +232,7 @@ export function FileManager({
         fd.append('file', file);
 
         const res = await fetch(
-          `/api/v1/servers/${serverId}/files/upload?path=${encodeURIComponent(
+          `/api/v1${filesBase}/upload?path=${encodeURIComponent(
             currentPath
           )}`,
           {
@@ -257,7 +261,7 @@ export function FileManager({
     try {
       await refreshSession();
       const res = await fetch(
-        `/api/v1/servers/${serverId}/files/download?path=${encodeURIComponent(path)}`,
+        `/api/v1${filesBase}/download?path=${encodeURIComponent(path)}`,
         { headers: { Authorization: `Bearer ${currentToken()}` } }
       );
       if (!res.ok) throw new Error('Download fehlgeschlagen');
@@ -317,6 +321,8 @@ export function FileManager({
       {editingFile && (
         <FileEditorModal
           serverId={serverId}
+          filesBase={filesBase}
+          revisions={!apiBase}
           relPath={editingFile}
           canWrite={canWrite}
           onClose={() => {
@@ -470,6 +476,7 @@ export function FileManager({
                             className="font-mono text-sm text-ink hover:text-amber font-medium truncate text-left"
                           >
                             {entry.name}
+                            {entry.label && <span className={`ml-2 font-sans font-normal text-xs ${entry.orphan ? 'text-dim italic' : 'text-amber/90'}`}>{entry.label}</span>}
                           </button>
                         ) : (
                           <button
@@ -640,11 +647,16 @@ function getFileLanguage(path: string): string {
  */
 function FileEditorModal({
   serverId,
+  filesBase,
+  revisions = true,
   relPath,
   canWrite,
   onClose,
 }: {
   serverId: string;
+  filesBase: string;
+  /** Versionshistorie gibt es nur fuer Server-Dateien */
+  revisions?: boolean;
   relPath: string;
   canWrite: boolean;
   onClose: () => void;
@@ -687,7 +699,7 @@ function FileEditorModal({
     queryKey: ['fileContent', serverId, relPath],
     queryFn: () =>
       api<{ content: string; size: number }>(
-        `/servers/${serverId}/files/content?path=${encodeURIComponent(relPath)}`
+        `${filesBase}/content?path=${encodeURIComponent(relPath)}`
       ),
     staleTime: 0,
   });
@@ -708,7 +720,7 @@ function FileEditorModal({
 
   const saveMut = useMutation({
     mutationFn: () =>
-      api(`/servers/${serverId}/files/content`, {
+      api(`${filesBase}/content`, {
         method: 'PUT',
         body: { path: relPath, content },
       }),
@@ -825,6 +837,7 @@ function FileEditorModal({
               <Search className="size-3.5 mr-1" />
               Suchen
             </Button>
+            {revisions && (
             <Button
               variant="quiet"
               className="h-7 text-xs px-2"
@@ -834,6 +847,7 @@ function FileEditorModal({
               <History className="size-3.5 mr-1" />
               Revisionen
             </Button>
+            )}
             {canWrite && (
               <Button
                 variant="primary"

@@ -186,6 +186,7 @@ export async function provisionServer(serverId: string, opts: ProvisionOptions =
       const [row] = await sql<{ container_id: string | null }[]>`SELECT container_id FROM servers WHERE id = ${serverId}`;
       if (row?.container_id) await engine.remove(row.container_id, true).catch(() => {});
       await releasePorts(serverId, 0);
+      if (server?.short_id) await engine.removeVolume(server.short_id).catch(() => {});
       await sql`DELETE FROM servers WHERE id = ${serverId}`;
     } else {
       await setStatus(serverId, 'install_failed', { reason: message });

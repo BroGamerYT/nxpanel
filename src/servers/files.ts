@@ -16,6 +16,12 @@ import yauzl from 'yauzl';
 import yazl from 'yazl';
 import { volumePath } from '../docker/client.js';
 
+/**
+ * Wurzel fuer Dateioperationen: die Kurz-ID eines Servers (dessen Volume)
+ * oder ein fester Ordner, z. B. fuer den Admin-Dateimanager.
+ */
+export type FileRoot = string | { root: string };
+
 export class FilePathSecurityError extends Error {
   constructor(message = 'Ungültiger oder unzulässiger Pfad') {
     super(message);
@@ -37,8 +43,8 @@ export interface FileEntry {
  * Normalisiert und sichert Pfade ab:
  * Verhindert Directory Traversal (../, null bytes, Symlink-Ausbrüche aus dem Server-Volume).
  */
-export async function safePath(shortId: string, relPath: string): Promise<{ root: string; fullPath: string; relPath: string }> {
-  const root = resolve(volumePath(shortId));
+export async function safePath(shortId: FileRoot, relPath: string): Promise<{ root: string; fullPath: string; relPath: string }> {
+  const root = resolve(typeof shortId === 'string' ? volumePath(shortId) : shortId.root);
 
   // Null-Bytes abfangen
   if (relPath.includes('\0')) {
@@ -56,6 +62,8 @@ export async function safePath(shortId: string, relPath: string): Promise<{ root
 
   // Sicherstellen, dass das Wurzelverzeichnis auf der Festplatte existiert
   if (!existsSync(root)) {
+    // Server-Volumes legt das Panel bei Bedarf an, feste Ordner (Admin) nicht.
+    if (typeof shortId !== 'string') throw new FilePathSecurityError('Ordner ist nicht vorhanden oder nicht eingebunden');
     await mkdir(root, { recursive: true, mode: 0o750 });
   }
 
@@ -100,7 +108,7 @@ export async function safePath(shortId: string, relPath: string): Promise<{ root
 /**
  * Ordnerinhalt auflisten
  */
-export async function listDirectory(shortId: string, relPath = ''): Promise<{ current: string; entries: FileEntry[] }> {
+export async function listDirectory(shortId: FileRoot, relPath = ''): Promise<{ current: string; entries: FileEntry[] }> {
   const { fullPath, relPath: resolvedRel } = await safePath(shortId, relPath);
 
   const st = await stat(fullPath);
@@ -166,7 +174,7 @@ export async function listDirectory(shortId: string, relPath = ''): Promise<{ cu
  * Dateiinhalt als Text lesen
  */
 export async function readFileContent(
-  shortId: string,
+  shortId: FileRoot,
   relPath: string,
   maxBytes = 5 * 1024 * 1024
 ): Promise<{ content: string; size: number }> {
@@ -188,7 +196,7 @@ export async function readFileContent(
 /**
  * Dateiinhalt schreiben
  */
-export async function writeFileContent(shortId: string, relPath: string, content: string): Promise<void> {
+export async function writeFileContent(shortId: FileRoot, relPath: string, content: string): Promise<void> {
   const { fullPath } = await safePath(shortId, relPath);
   await mkdir(dirname(fullPath), { recursive: true });
   await writeFile(fullPath, content, 'utf-8');
@@ -197,7 +205,7 @@ export async function writeFileContent(shortId: string, relPath: string, content
 /**
  * Neuen Ordner anlegen
  */
-export async function createDirectory(shortId: string, relPath: string): Promise<void> {
+export async function createDirectory(shortId: FileRoot, relPath: string): Promise<void> {
   const { fullPath } = await safePath(shortId, relPath);
   await mkdir(fullPath, { recursive: true });
 }
@@ -205,7 +213,7 @@ export async function createDirectory(shortId: string, relPath: string): Promise
 /**
  * Datei oder Ordner umbenennen / verschieben
  */
-export async function renamePath(shortId: string, fromRel: string, toRel: string): Promise<void> {
+export async function renamePath(shortId: FileRoot, fromRel: string, toRel: string): Promise<void> {
   const src = await safePath(shortId, fromRel);
   const dst = await safePath(shortId, toRel);
 
@@ -223,7 +231,7 @@ export async function renamePath(shortId: string, fromRel: string, toRel: string
 /**
  * Datei oder Verzeichnis löschen
  */
-export async function deletePath(shortId: string, relPath: string): Promise<void> {
+export async function deletePath(shortId: FileRoot, relPath: string): Promise<void> {
   const { root, fullPath } = await safePath(shortId, relPath);
 
   if (fullPath === root) {
@@ -241,7 +249,7 @@ export async function deletePath(shortId: string, relPath: string): Promise<void
  * Stream für Dateidownload
  */
 export async function getDownloadStream(
-  shortId: string,
+  shortId: FileRoot,
   relPath: string
 ): Promise<{ stream: NodeJS.ReadableStream; filename: string; size: number }> {
   const { fullPath } = await safePath(shortId, relPath);
@@ -262,7 +270,7 @@ export async function getDownloadStream(
  * Dateien/Ordner als Zip-Archiv komprimieren
  */
 export async function compressToZip(
-  shortId: string,
+  shortId: FileRoot,
   sourceRels: string[],
   archiveRelPath: string
 ): Promise<{ path: string; size: number }> {
@@ -313,7 +321,7 @@ export async function compressToZip(
  * Archiv entpacken (unterstützt .zip sowie .tar / .tar.gz / .tar.zst)
  */
 export async function decompressArchive(
-  shortId: string,
+  shortId: FileRoot,
   archiveRelPath: string,
   targetRelDir = ''
 ): Promise<{ filesCount: number }> {

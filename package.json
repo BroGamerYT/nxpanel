@@ -1,6 +1,6 @@
 {
   "name": "nxpanel",
-  "version": "0.21.2",
+  "version": "0.22.1",
   "description": "NexusPanel - Gameserver-Verwaltung ueber Docker",
   "license": "AGPL-3.0-or-later",
   "type": "module",

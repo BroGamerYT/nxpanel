@@ -55,6 +55,12 @@ const schema = z.object({
   VOLUME_ROOT: z.string().default('/var/lib/panel/volumes'),
   BACKUP_ROOT: z.string().default('/var/lib/panel/backups'),
   NAS_BACKUP_ROOT: z.string().default('/mnt/ugreen-backups/nexuspanel'),
+  /**
+   * Zusaetzliche Ordner fuer den Admin-Dateimanager, z. B.
+   * "Panel-Installation=/opt/nxpanel;Logs=/var/log". Sie muessen im
+   * Panel-Container eingebunden sein (deploy/docker-compose.yml).
+   */
+  ADMIN_FILE_ROOTS: z.string().default(''),
 
   PORT_RANGE: z.string().regex(/^\d+-\d+$/, 'PORT_RANGE muss z. B. 25500-25600 sein').default('25500-25600'),
   TZ: z.string().default('Europe/Berlin'),

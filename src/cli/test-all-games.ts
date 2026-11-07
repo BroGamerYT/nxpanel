@@ -20,7 +20,7 @@ import { prepareServer, provisionServer, deleteServer } from '../servers/create.
 import { startServer } from '../servers/lifecycle.js';
 import { engine } from '../docker/client.js';
 import { log } from '../log.js';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { config } from '../config.js';
@@ -160,6 +160,37 @@ interface EggItem {
   resources?: { base_ram_mb?: number; disk_mb?: number } | null;
 }
 
+let activeCleanupTarget: { serverId: string; shortId: string; dockerImage: string | null; ownerId: string } | null = null;
+
+async function cleanupActiveTarget() {
+  if (!activeCleanupTarget) return;
+  const target = activeCleanupTarget;
+  activeCleanupTarget = null;
+  try {
+    console.log(`\n🛑 Test-Prozess unterbrochen: Räume Test-Server auf (${target.shortId})...`);
+    await deleteServer(target.serverId, target.ownerId).catch(() => {});
+    await rm(join(config.VOLUME_ROOT, target.shortId), { recursive: true, force: true }).catch(() => {});
+    if (target.dockerImage) {
+      const [inUse] = await sql<{ count: number }[]>`
+        SELECT COUNT(*)::int as count FROM servers WHERE docker_image = ${target.dockerImage}
+      `;
+      if (!inUse || inUse.count === 0) {
+        await engine.removeImage(target.dockerImage).catch(() => {});
+      }
+    }
+    console.log(`✓ Bereinigung bei Abbruch abgeschlossen.`);
+  } catch {}
+}
+
+process.on('SIGINT', async () => {
+  await cleanupActiveTarget();
+  process.exit(130);
+});
+process.on('SIGTERM', async () => {
+  await cleanupActiveTarget();
+  process.exit(143);
+});
+
 async function testSingleEgg(
   egg: EggItem,
   nodeId: string,
@@ -184,6 +215,7 @@ async function testSingleEgg(
 
   let serverId: string | null = null;
   let shortId: string | null = null;
+  let dockerImage: string | null = null;
   let containerId: string | null = null;
 
   let installDurationSec = 0;
@@ -209,6 +241,8 @@ async function testSingleEgg(
     });
     serverId = s.id;
     shortId = s.short_id;
+    dockerImage = s.docker_image;
+    activeCleanupTarget = { serverId, shortId, dockerImage, ownerId };
 
     // 2. Installation / Provisioning mit Timeout
     console.log(`[2/4] Führe Installation / Provisioning aus (Max. ${timeoutMinutes} min)...`);
@@ -345,7 +379,8 @@ async function testSingleEgg(
       testedAt: new Date().toISOString(),
     };
   } finally {
-    // 4. CLEANUP: Instanz restlos entfernen, damit Speicherplatz frei bleibt
+    activeCleanupTarget = null;
+    // 4. CLEANUP: Instanz restlos entfernen, damit kein Speicherplatz belegt bleibt
     if (serverId) {
       console.log(`[4/4] Räume Test-Instanz auf (Container & Volume löschen)...`);
       try {
@@ -354,6 +389,23 @@ async function testSingleEgg(
       } catch (cleanErr) {
         console.warn(`  ⚠ Warnung beim Aufräumen:`, cleanErr);
       }
+    }
+    // Verzeichnis zusätzlich forcieren, falls noch Restdateien existieren
+    if (shortId) {
+      const volDir = join(config.VOLUME_ROOT, shortId);
+      await rm(volDir, { recursive: true, force: true }).catch(() => {});
+    }
+    // Docker-Image wieder entfernen, falls es kein anderer Server benötigt
+    if (dockerImage) {
+      try {
+        const [inUse] = await sql<{ count: number }[]>`
+          SELECT COUNT(*)::int as count FROM servers WHERE docker_image = ${dockerImage}
+        `;
+        if (!inUse || inUse.count === 0) {
+          console.log(`  🗑 Entferne ungenutztes Test-Image ${dockerImage}...`);
+          await engine.removeImage(dockerImage).catch(() => {});
+        }
+      } catch {}
     }
   }
 }
@@ -394,6 +446,20 @@ async function main() {
   for (const s of abandoned) {
     console.log(`Räume alten Test-Server auf: ${s.name}...`);
     await deleteServer(s.id, ownerId).catch(() => {});
+  }
+
+  // Verwaiste Test-Verzeichnisse auf dem Host aufräumen, die zu keinem registrierten Server gehören
+  try {
+    const existingFolders = await readdir(config.VOLUME_ROOT);
+    const validServers = await sql<{ short_id: string }[]>`SELECT short_id FROM servers`;
+    const validIds = new Set(validServers.map((s) => s.short_id));
+    for (const f of existingFolders) {
+      if (f.startsWith('.') || validIds.has(f)) continue;
+      console.log(`Räume verwaistes Test-Verzeichnis auf: ${f}...`);
+      await rm(join(config.VOLUME_ROOT, f), { recursive: true, force: true }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('Verwaiste Verzeichnisse konnten nicht geprüft werden:', err);
   }
 
   // Alle Eggs laden

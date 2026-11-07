@@ -2,7 +2,7 @@ import Docker from 'dockerode';
 import { platform, hostname } from 'node:os';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { mkdir, chown, chmod } from 'node:fs/promises';
+import { mkdir, chown, chmod, rm } from 'node:fs/promises';
 import { config, containerDns } from '../config.js';
 import { log } from '../log.js';
 import type { PortBinding } from '../types.js';
@@ -21,6 +21,7 @@ export interface ContainerEngine {
   listPanelContainers(): Promise<PanelContainer[]>;
   hasImage(image: string): Promise<boolean>;
   pullImage(image: string, onProgress?: (line: string) => void): Promise<void>;
+  removeImage(image: string): Promise<void>;
   create(spec: ContainerSpec): Promise<string>;
   start(containerId: string): Promise<void>;
   stopGraceful(containerId: string, timeoutSeconds: number): Promise<void>;
@@ -307,11 +308,27 @@ class LocalDockerEngine implements ContainerEngine {
   }
 
   async removeVolume(shortId: string): Promise<void> {
-    if (!isWindows) return; // Verzeichnisse raeumt der Aufrufer bewusst selbst auf
+    if (isWindows) {
+      try {
+        await this.docker.getVolume(volumeName(shortId)).remove({ force: true });
+      } catch (err) {
+        log.warn({ err, shortId }, 'Volume konnte nicht entfernt werden');
+      }
+      return;
+    }
+    const dir = volumePath(shortId);
     try {
-      await this.docker.getVolume(volumeName(shortId)).remove({ force: true });
+      await rm(dir, { recursive: true, force: true });
     } catch (err) {
-      log.warn({ err, shortId }, 'Volume konnte nicht entfernt werden');
+      log.warn({ err, shortId, dir }, 'Datenordner konnte nicht entfernt werden');
+    }
+  }
+
+  async removeImage(image: string): Promise<void> {
+    try {
+      await this.docker.getImage(image).remove({ force: false });
+    } catch (err) {
+      log.debug({ err, image }, 'Image konnte nicht entfernt werden oder wird noch genutzt');
     }
   }
 

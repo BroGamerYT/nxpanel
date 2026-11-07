@@ -3,8 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/brogameryt/nxpanel/releases"><img src="https://img.shields.io/badge/version-v0.21.0--alpha-F2A93B?style=for-the-badge&logo=git&logoColor=black" alt="Version"></a>
+  <a href="https://github.com/brogameryt/nxpanel/releases"><img src="https://img.shields.io/badge/version-v0.22.0--alpha-F2A93B?style=for-the-badge&logo=git&logoColor=black" alt="Version"></a>
   <img src="https://img.shields.io/badge/status-In%20Entwicklung%20(Alpha)-E5484D?style=for-the-badge" alt="Status">
+  <a href="https://ko-fi.com/brogameryt" target="_blank"><img src="https://img.shields.io/badge/Ko--fi-Unterst%C3%BCtzen-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3CCB8C?style=for-the-badge" alt="Lizenz"></a>
   <img src="https://img.shields.io/badge/node->=22-5B9DF5?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js">
   <img src="https://img.shields.io/badge/docker-OCI%20Container-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker">
@@ -32,6 +33,7 @@
 | 📐 **Architektur** | Technischer Aufbau, Host-Schicht & NexusCore | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
 | 🎮 **Egg-Katalog** | 263 analysierte Spielvorlagen & 25 integrierte Eggs | [docs/EGG-KATALOG.md](docs/EGG-KATALOG.md) |
 | 🧪 **Testberichte** | Automatisierte Installations- und Start-Tests | [docs/GAME-INSTALL-TESTS.md](docs/GAME-INSTALL-TESTS.md) |
+| ☕ **Projekt unterstützen** | Unterstütze die Entwicklung & Serverkosten | [👉 Ko-fi / brogameryt](https://ko-fi.com/brogameryt) |
 
 ---
 
@@ -120,6 +122,29 @@ npm --prefix web run build
 
 - **Sicherheitsmeldungen:** Bitte Sicherheitslücken **nicht** öffentlich in den Issues posten. Siehe [SECURITY.md](SECURITY.md) für den Meldekontakt.
 - **Docker-Socket:** Der Panel-Dienst steuert die Docker Engine des Hosts. Aus Sicherheitsgründen sollte NexusPanel immer in einer dedizierten virtuellen Maschine (VM) oder einem isolierten Server betrieben werden.
+
+---
+
+## ☕ Unterstützung & Spenden
+
+Wenn dir NexusPanel gefällt und du die Weiterentwicklung, Test-Server und Hardware unterstützen möchtest, freue ich mich riesig über deine Unterstützung auf **Ko-fi**! Jeder Beitrag hilft direkt bei der Realisierung neuer Funktionen und der Wartung von Vorlagen.
+
+<p align="center">
+  <a href="https://ko-fi.com/brogameryt" target="_blank">
+    <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Buy Me A Coffee at ko-fi.com" height="42">
+  </a>
+</p>
+
+👉 **[Hier auf Ko-fi unterstützen (ko-fi.com/brogameryt)](https://ko-fi.com/brogameryt)**
+
+---
+
+## 🤖 Entwicklung & KI-Transparenz (Entwicklungsprozess)
+
+NexusPanel wird von **[BroGamerYT](https://github.com/brogameryt)** konzipiert, programmiert und auf dedizierter Bare-Metal- und Proxmox-Hardware auf Herz und Nieren getestet.
+
+> [!NOTE]
+> **Transparenz:** Die Entwicklung erfolgt im agilen Pair-Programming mit moderner KI-Unterstützung – maßgeblich durch **Claude** und **Google Antigravity**. Die technische Vision, Architektur, praktische Erprobung im Live-Betrieb auf echten Linux-Systemen und manueller Code-Feinschliff liegen dabei stets in eigener Hand.
 
 ---
 

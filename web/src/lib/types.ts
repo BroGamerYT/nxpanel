@@ -80,6 +80,10 @@ export interface FileEntry {
   size: number;
   modified_at: string;
   mode: string;
+  /** Lesbarer Name, z. B. Servername fuer einen Volume-Ordner (Admin-Dateimanager) */
+  label?: string;
+  /** Ordner ohne zugehoerigen Server (Rest eines geloeschten Servers) */
+  orphan?: boolean;
 }
 
 export interface DirectoryListing {

@@ -139,13 +139,26 @@ export function About() {
           </div>
         </div>
 
-        {/* Schnellsuche-Hinweis mit Tooltip */}
-        <Tooltip content="Drücke jederzeit Strg+K auf der Tastatur, um die universelle Schnellsuche zu öffnen.">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rack-2/60 border border-seam text-xs text-dim">
-            <span>Schnellsuche:</span>
-            <kbd className="px-1.5 py-0.5 rounded bg-rack border border-seam font-mono text-ink">Strg K</kbd>
-          </div>
-        </Tooltip>
+        <div className="flex items-center gap-2">
+          <a
+            href="https://ko-fi.com/brogameryt"
+            target="_blank"
+            rel="noreferrer"
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF5E5B]/15 border border-[#FF5E5B]/40 text-xs font-medium text-[#FF5E5B] hover:bg-[#FF5E5B]/25 transition-colors"
+            title="Projekt auf Ko-fi unterstützen"
+          >
+            ☕ Ko-fi
+            <ExternalLink className="size-3" />
+          </a>
+
+          {/* Schnellsuche-Hinweis mit Tooltip */}
+          <Tooltip content="Drücke jederzeit Strg+K auf der Tastatur, um die universelle Schnellsuche zu öffnen.">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rack-2/60 border border-seam text-xs text-dim">
+              <span>Schnellsuche:</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-rack border border-seam font-mono text-ink">Strg K</kbd>
+            </div>
+          </Tooltip>
+        </div>
       </div>
 
       {/* GitHub Update Benachrichtigung */}
@@ -585,6 +598,27 @@ export function About() {
                 <FileCode className="size-3.5" />
                 OpenAPI 3.1 JSON Spezifikation
                 <ExternalLink className="size-3 ml-1" />
+              </a>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-seam bg-rack p-5 space-y-3">
+            <h3 className="font-semibold text-ink flex items-center gap-2">
+              <Sparkles className="size-4 text-amber" />
+              Entwicklung, Test-Hardware & Unterstützung
+            </h3>
+            <p className="text-dim text-xs leading-relaxed">
+              NexusPanel wird von <strong>BroGamerYT</strong> entwickelt und auf Bare-Metal- und Proxmox-Hardware getestet – mit tatkräftiger KI-Unterstützung durch <strong>Claude</strong> und <strong>Google Antigravity</strong> im Pair-Programming, während Konzeption, Architektur und Handarbeit im Live-Betrieb in eigener Hand liegen.
+            </p>
+            <div className="pt-1">
+              <a
+                href="https://ko-fi.com/brogameryt"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md bg-[#FF5E5B]/15 border border-[#FF5E5B]/40 text-xs font-medium text-[#FF5E5B] hover:bg-[#FF5E5B]/25 transition-colors"
+              >
+                ☕ NexusPanel auf Ko-fi unterstützen (ko-fi.com/brogameryt)
+                <ExternalLink className="size-3.5" />
               </a>
             </div>
           </div>

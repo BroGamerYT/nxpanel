@@ -17,6 +17,21 @@ Bis 0.4.x wurden Nachträge ohne eigene Nummer ausgespielt; sie sind hier
 nachträglich anhand des Entwicklungslogs eingeordnet. Ab 0.5.0 bekommt
 jede Auslieferung eine eigene Nummer.
 
+## [0.22.1] - 2026-11-07
+
+### Geändert
+- **Dateien (VM): Server-Ordner mit Namen.** Unter `volumes` steht neben jedem Ordner (Kurz-ID) der Servername und das Spiel, z. B. „Simon Ark · ARK: Survival Ascended“, auch in der Speicherbelegung. Die Ordner selbst behalten ihre Kurz-ID, weil Docker und das Panel sie darüber ansprechen.
+- Ordner ohne zugehörigen Server werden als „kein Server mehr – Rest eines gelöschten Servers“ markiert. Die kann man löschen, um Platz zu schaffen.
+
+## [0.22.0] - 2026-11-07
+
+### Hinzugefügt
+- **Dateimanager für die VM (nur Admins)**: neuer Menüpunkt „Dateien (VM)“ (`/admin/dateien`). Zeigt alle Ordner des Panels auf der VM – Spieldaten aller Server, Backups, Testberichte (`/var/lib/panel`) und die NAS-Backups – wie der Instanz-Ordner bei AMP. Gleicher Funktionsumfang wie der Server-Dateimanager: Ordner durchsuchen, Dateien bearbeiten, hoch- und herunterladen, umbenennen, löschen, packen, entpacken.
+- **Speicherbelegung**: „Speicherbelegung anzeigen“ misst die Größe der Unterordner (größte zuerst, per Klick tiefer). Hilft beim Aufräumen voller Platten.
+- Weitere Ordner lassen sich mit `ADMIN_FILE_ROOTS` ergänzen (z. B. `Panel-Installation=/opt/nxpanel`), sie müssen im Panel-Container eingebunden sein. Zugriff auf `/` des Hosts ist bewusst ausgeschlossen.
+- Jede ändernde Aktion steht im Audit-Log (`admin.file.*`). Gleiche Pfadprüfung wie beim Server-Dateimanager (kein `..`, keine Symlinks nach außen).
+- API `/api/v1/admin/files/...` dokumentiert, Test `admin-files.test.ts`.
+
 ## [0.21.2] - 2026-11-07
 
 ### Behoben (aus dem automatischen Spieletest)

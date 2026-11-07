@@ -62,7 +62,7 @@ export const decompressBody = z.object({
   destination: z.string().optional().default(''),
 });
 
-function wrapFileErrors(err: unknown): never {
+export function wrapFileErrors(err: unknown): never {
   if (err instanceof FilePathSecurityError) {
     throw new HttpError(400, err.message, 'invalid_path');
   }

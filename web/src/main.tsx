@@ -21,6 +21,7 @@ const AdminUsers = page(() => import('./pages/AdminUsers'), 'AdminUsers');
 const AdminAudit = page(() => import('./pages/AdminAudit'), 'AdminAudit');
 const GameTestReport = page(() => import('./pages/GameTestReport'), 'GameTestReport');
 const Integrations = page(() => import('./pages/Integrations'), 'Integrations');
+const AdminFiles = page(() => import('./pages/AdminFiles'), 'AdminFiles');
 import { Spinner } from './components/ui';
 import { I18nProvider, t } from './lib/i18n';
 
@@ -48,6 +49,7 @@ function App() {
         {me.permissions['admin.audit'] && <Route path="admin/audit" element={<AdminAudit />} />}
         {me.user.role === 'admin' && <Route path="admin/testbericht" element={<GameTestReport />} />}
         {me.user.role === 'admin' && <Route path="admin/integrationen" element={<Integrations />} />}
+        {me.user.role === 'admin' && <Route path="admin/dateien" element={<AdminFiles />} />}
         <Route path="*" element={<p className="text-dim">{t('common.notFound')}</p>} />
       </Route>
     </Routes>

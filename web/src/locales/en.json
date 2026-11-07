@@ -312,7 +312,8 @@
     "logout": "Sign out",
     "network": "Network",
     "search": "Search...",
-    "servers": "Servers"
+    "servers": "Servers",
+    "adminFiles": "Files (VM)"
   },
   "netcheck": {
     "clock": "Clock",
@@ -714,5 +715,19 @@
     "done": "\"{name}\" is now available.",
     "hint": "Own template or egg from Pterodactyl/Pelican – ports, ready pattern and permissions are adapted on import.",
     "notJson": "The file is not valid JSON."
+  },
+  "adminFiles": {
+    "title": "Files on the VM",
+    "intro": "All panel folders: game data of every server, backups and NAS – like the instance folder in AMP. Administrators only, every change is written to the audit log.",
+    "notMounted": "Not mounted: {path}",
+    "warning": "Changes take effect on the VM immediately. Do not delete or rename files of running servers, and only delete backups when you are sure.",
+    "showUsage": "Show disk usage",
+    "hideUsage": "Hide",
+    "usageTitle": "Disk usage",
+    "measuring": "Measuring folder sizes …",
+    "usageTotal": "Subfolders total: {size}",
+    "partial": "Measurement aborted (too large), values incomplete",
+    "noFolders": "No subfolders.",
+    "serversHint": "Files of installed servers are under \"volumes\" – one folder per server, labelled with its name."
   }
 }

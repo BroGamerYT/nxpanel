@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { Server, LogOut, Plus, Network as NetIcon, Users, Search, Shield, History, FlaskConical, Blocks, HelpCircle } from 'lucide-react';
+import { Server, LogOut, Plus, Network as NetIcon, Users, Search, Shield, History, FlaskConical, Blocks, HelpCircle, FolderTree } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import { seenVersion, type About } from '../lib/version';
@@ -93,6 +93,7 @@ export function Shell() {
           {me?.permissions['admin.nodes'] && <NavLink to="/netzwerk" className={link}><NetIcon className="size-4" /> <span className="hidden sm:inline">{t('nav.network')}</span></NavLink>}
           {me?.permissions['admin.users'] && <NavLink to="/admin/users" className={link}><Shield className="size-4" /> <span className="hidden sm:inline">Nutzer</span></NavLink>}
           {me?.permissions['admin.audit'] && <NavLink to="/admin/audit" className={link}><History className="size-4" /> <span className="hidden sm:inline">Audit-Log</span></NavLink>}
+          {me?.user.role === 'admin' && <NavLink to="/admin/dateien" className={link}><FolderTree className="size-4" /> <span className="hidden sm:inline">{t('nav.adminFiles')}</span></NavLink>}
           {me?.user.role === 'admin' && <NavLink to="/admin/testbericht" className={link}><FlaskConical className="size-4 text-amber" /> <span className="hidden sm:inline">Testbericht</span></NavLink>}
           {me?.user.role === 'admin' && <NavLink to="/admin/integrationen" className={link}><Blocks className="size-4 text-sky-400" /> <span className="hidden sm:inline">Integrationen</span></NavLink>}
           <NavLink to="/hilfe" className={link}><HelpCircle className="size-4 text-amber" /> <span className="hidden sm:inline">{t('nav.help')}</span></NavLink>
