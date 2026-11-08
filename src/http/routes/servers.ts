@@ -19,6 +19,15 @@ import { engine } from '../../docker/client.js';
 
 export type PowerAction = 'start' | 'stop' | 'restart' | 'kill';
 
+export interface ActiveGameUpdate {
+  serverId: string;
+  step: 'stopping' | 'backup' | 'pulling' | 'rebuilding' | 'starting' | 'done' | 'failed';
+  backupId?: string;
+  startedAt: number;
+  error?: string;
+}
+export const activeGameUpdates = new Map<string, ActiveGameUpdate>();
+
 /** Die Power-Funktionen werden hereingereicht - so laesst sich die API ohne Docker testen. */
 export type PowerFn = (serverId: string, ctx: { actorId: string }) => Promise<void>;
 export type PowerHandlers = Record<PowerAction, PowerFn>;
@@ -292,6 +301,12 @@ export async function serverRoutes(
     const ip = req.ip;
 
     runInBackground(server.id, actor.id, 'update', async () => {
+      activeGameUpdates.set(server.id, {
+        serverId: server.id,
+        step: wasRunning ? 'stopping' : (body.backup ? 'backup' : 'pulling'),
+        startedAt: Date.now(),
+      });
+
       await writeEvent({
         serverId: server.id,
         kind: 'status_change',
@@ -299,29 +314,44 @@ export async function serverRoutes(
         summary: `1-Klick-Update gestartet${body.backup ? ' (mit Sicherheits-Backup)' : ''}`,
       });
 
-      if (wasRunning) {
-        await power.stop(server.id, { actorId: actor.id });
-      }
-
-      if (body.backup) {
-        const b = await createBackup(server.id, { id: actor.id, username: actor.username }, ip, 'Vor Server-Update');
-        const end = Date.now() + 60 * 60_000;
-        let bStatus = 'running';
-        while (Date.now() < end) {
-          bStatus = (await listBackups(server.id)).find((x) => x.id === b.id)?.status ?? 'missing';
-          if (bStatus !== 'running') break;
-          await new Promise((r) => setTimeout(r, 2000));
+      try {
+        if (wasRunning) {
+          activeGameUpdates.set(server.id, { serverId: server.id, step: 'stopping', startedAt: Date.now() });
+          await power.stop(server.id, { actorId: actor.id });
         }
-        if (bStatus !== 'completed') {
-          throw new Error(`Sicherheits-Backup fehlgeschlagen (${bStatus}) – Update abgebrochen`);
+
+        if (body.backup) {
+          const b = await createBackup(server.id, { id: actor.id, username: actor.username }, ip, 'Vor Server-Update');
+          activeGameUpdates.set(server.id, { serverId: server.id, step: 'backup', backupId: b.id, startedAt: Date.now() });
+          const end = Date.now() + 60 * 60_000;
+          let bStatus = 'running';
+          while (Date.now() < end) {
+            bStatus = (await listBackups(server.id)).find((x) => x.id === b.id)?.status ?? 'missing';
+            if (bStatus !== 'running') break;
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+          if (bStatus !== 'completed') {
+            throw new Error(`Sicherheits-Backup fehlgeschlagen (${bStatus}) – Update abgebrochen`);
+          }
         }
-      }
 
-      await engine.pullImage(server.docker_image).catch((err: unknown) => log.warn({ err, image: server.docker_image }, 'Image-Pull beim Update fehlgeschlagen, nutze lokales Image'));
-      await ops.rebuild(server.id, { actorId: actor.id, reason: '1-Klick-Update' });
+        activeGameUpdates.set(server.id, { serverId: server.id, step: 'pulling', startedAt: Date.now() });
+        await engine.pullImage(server.docker_image).catch((err: unknown) => log.warn({ err, image: server.docker_image }, 'Image-Pull beim Update fehlgeschlagen, nutze lokales Image'));
 
-      if (body.startAfter || wasRunning) {
-        await power.start(server.id, { actorId: actor.id });
+        activeGameUpdates.set(server.id, { serverId: server.id, step: 'rebuilding', startedAt: Date.now() });
+        await ops.rebuild(server.id, { actorId: actor.id, reason: '1-Klick-Update' });
+
+        if (body.startAfter || wasRunning) {
+          activeGameUpdates.set(server.id, { serverId: server.id, step: 'starting', startedAt: Date.now() });
+          await power.start(server.id, { actorId: actor.id });
+        }
+
+        activeGameUpdates.set(server.id, { serverId: server.id, step: 'done', startedAt: Date.now() });
+        setTimeout(() => activeGameUpdates.delete(server.id), 15000);
+      } catch (err) {
+        activeGameUpdates.set(server.id, { serverId: server.id, step: 'failed', error: (err as Error).message, startedAt: Date.now() });
+        setTimeout(() => activeGameUpdates.delete(server.id), 30000);
+        throw err;
       }
     });
 

@@ -226,6 +226,21 @@ export interface AuditEntry {
   ip: string | null;
 }
 
+export interface ActiveTask {
+  id: string;
+  type: 'backup' | 'game_update' | 'modpack_update' | 'install' | 'starting' | 'stopping';
+  serverId: string;
+  serverName: string;
+  shortId: string;
+  title: string;
+  subtitle?: string;
+  progressPercent?: number;
+  bytesWritten?: number;
+  totalBytes?: number;
+  step?: string;
+  startedAt: string;
+}
+
 export interface GameTestItem {
   eggId: string;
   eggName: string;

@@ -23,15 +23,16 @@ import {
 } from '../../servers/test-runner.js';
 
 export const auditQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(500).default(100),
+  limit: z.coerce.number().int().min(1).max(2000).default(100),
   before: z.coerce.number().int().positive().optional(),
   action: z.string().max(64).optional(),
+  search: z.string().max(128).optional(),
   userId: z.string().uuid().optional(),
   serverId: z.string().uuid().optional(),
 });
 
 export async function adminRoutes(app: FastifyInstance) {
-  /** Globales Audit-Log. Filter nach Aktion (Praefix, z. B. "auth."), Nutzer und Server. */
+  /** Globales Audit-Log. Filter nach Aktion (Praefix, z. B. "auth."), Suche, Nutzer und Server. */
   app.get('/admin/audit', { preHandler: requireAdmin() }, async (req) => {
     const q = auditQuery.parse(req.query);
     const rows = await sql<{
@@ -46,11 +47,39 @@ export async function adminRoutes(app: FastifyInstance) {
         ${q.action ? sql`AND a.action LIKE ${q.action.replace(/[%_]/g, '') + '%'}` : sql``}
         ${q.userId ? sql`AND a.user_id = ${q.userId}` : sql``}
         ${q.serverId ? sql`AND a.server_id = ${q.serverId}` : sql``}
+        ${q.search ? sql`AND (
+          a.action ILIKE ${'%' + q.search + '%'} OR
+          a.actor_name ILIKE ${'%' + q.search + '%'} OR
+          s.name ILIKE ${'%' + q.search + '%'} OR
+          a.metadata::text ILIKE ${'%' + q.search + '%'}
+        )` : sql``}
       ORDER BY a.id DESC LIMIT ${q.limit}
     `;
+
+    // Statistiken fuer das Dashboard
+    const [[statsToday], [statsTotal]] = await Promise.all([
+      sql<{ total_today: number; unique_actors: number; unique_servers: number }[]>`
+        SELECT
+          COUNT(*)::int AS total_today,
+          COUNT(DISTINCT actor_name)::int AS unique_actors,
+          COUNT(DISTINCT server_id)::int AS unique_servers
+        FROM audit_log
+        WHERE created_at >= current_date
+      `,
+      sql<{ total_all: number }[]>`
+        SELECT COUNT(*)::int AS total_all FROM audit_log
+      `,
+    ]);
+
     return {
       entries: rows.map((r) => ({ ...r, id: Number(r.id) })),
       nextBefore: rows.length === q.limit ? Number(rows[rows.length - 1]!.id) : null,
+      stats: {
+        totalToday: statsToday?.total_today ?? 0,
+        totalAll: statsTotal?.total_all ?? 0,
+        uniqueActorsToday: statsToday?.unique_actors ?? 0,
+        uniqueServersToday: statsToday?.unique_servers ?? 0,
+      },
     };
   });
 

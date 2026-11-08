@@ -11,6 +11,7 @@ import { seenVersion, type About } from '../lib/version';
 import { t, fmtDateTime } from '../lib/i18n';
 import { LanguagePicker } from './LanguagePicker';
 import { CommandPalette } from './CommandPalette';
+import { GlobalTaskProgress } from './GlobalTaskProgress';
 import { Spinner } from './ui';
 
 interface NotificationItem {
@@ -265,6 +266,7 @@ export function Shell() {
           <Outlet />
         </Suspense>
       </main>
+      <GlobalTaskProgress />
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );

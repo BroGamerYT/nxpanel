@@ -26,6 +26,7 @@ import { steamRoutes } from './routes/steam.js';
 import { fileRoutes } from './routes/files.js';
 import { adminFileRoutes } from './routes/admin-files.js';
 import { backupRoutes } from './routes/backups.js';
+import { taskRoutes } from './routes/tasks.js';
 import { scheduleRoutes } from './routes/schedules.js';
 import { storageTargetRoutes } from './routes/storage-targets.js';
 import { statsCollector, diskCollector } from '../servers/stats.js';
@@ -150,6 +151,7 @@ export async function buildServer(opts: BuildOptions = {}) {
       await api.register(fileRoutes);
       await api.register(adminFileRoutes);
       await api.register(backupRoutes);
+      await api.register(taskRoutes);
       await api.register(scheduleRoutes);
       await api.register(storageTargetRoutes);
       await api.register(dashboardRoutes, { stats: opts.stats ?? statsCollector, disk: opts.disk ?? diskCollector });

@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle, Star, Tag, Plus, X, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle, Star, Tag, Plus, X, RefreshCw, Archive } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLive } from '../lib/live';
 import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
 import { POWER_ALLOWED, STATUS, formatMb } from '../lib/status';
-import type { ServerDetail, ServerStatus, TimelineEvent, ServerActivityItem } from '../lib/types';
+import type { ServerDetail, ServerStatus, TimelineEvent, ServerActivityItem, ActiveTask } from '../lib/types';
 import { Console, type ConsoleHandle } from '../components/Console';
 import { ServerSettings } from '../components/ServerSettings';
 import { LogFiles } from '../components/LogFiles';
@@ -102,6 +102,13 @@ function Loaded({ detail }: { detail: ServerDetail }) {
   const canToggleAutoStart = has('startup.update') || has('control.start');
 
   const modpack = useModpack(server.id, has('startup.read'));
+  const activeTasksQuery = useQuery<{ tasks: ActiveTask[] }>({
+    queryKey: ['activeTasks'],
+    queryFn: () => api<{ tasks: ActiveTask[] }>('/tasks/active'),
+    refetchInterval: (q) => (q.state.data?.tasks?.some((t) => t.serverId === server.id) ? 2000 : 8000),
+  });
+  const serverTask = activeTasksQuery.data?.tasks?.find((t) => t.serverId === server.id);
+
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [preUpdateBackup, setPreUpdateBackup] = useState(true);
   const [updateSuccessMsg, setUpdateSuccessMsg] = useState<string | null>(null);
@@ -306,7 +313,40 @@ function Loaded({ detail }: { detail: ServerDetail }) {
               </div>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col items-end gap-2">
+            {serverTask && (
+              <div className="w-full max-w-md rounded-xl border border-amber/40 bg-amber/10 p-3 space-y-1.5 shadow-sm animate-in fade-in">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <div className="flex items-center gap-2 text-amber">
+                    {serverTask.type === 'backup' ? (
+                      <Archive className="size-4 animate-spin text-sky-400" />
+                    ) : (
+                      <ArrowUpCircle className="size-4 animate-bounce text-amber" />
+                    )}
+                    <span>{serverTask.title}</span>
+                  </div>
+                  {serverTask.progressPercent !== undefined && (
+                    <span className="font-mono text-amber font-bold">{serverTask.progressPercent} %</span>
+                  )}
+                </div>
+                {serverTask.subtitle && (
+                  <p className="text-[11px] text-dim leading-snug">{serverTask.subtitle}</p>
+                )}
+                {serverTask.progressPercent !== undefined ? (
+                  <div className="w-full h-1.5 bg-rack rounded-full overflow-hidden border border-seam/80">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber to-amber/80 rounded-full transition-all duration-300"
+                      style={{ width: `${serverTask.progressPercent}%` }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-1 bg-rack rounded-full overflow-hidden">
+                    <div className="h-full w-1/3 bg-amber rounded-full animate-pulse" />
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
             <Tooltip content="Server-Status, Daten und Konsole neu laden" side="bottom">
               <Button
                 variant="quiet"
@@ -367,6 +407,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                 </Button>
               </Tooltip>
             ))}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-seam px-5 py-3">
@@ -434,6 +475,39 @@ function Loaded({ detail }: { detail: ServerDetail }) {
             </div>
 
             {updateErrorMsg && <ErrorBox>{updateErrorMsg}</ErrorBox>}
+
+            {serverTask && (
+              <div className="rounded-xl border border-amber/40 bg-amber/10 p-3 space-y-1.5 shadow-sm">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <div className="flex items-center gap-2 text-amber">
+                    {serverTask.type === 'backup' ? (
+                      <Archive className="size-4 animate-spin text-sky-400" />
+                    ) : (
+                      <ArrowUpCircle className="size-4 animate-bounce text-amber" />
+                    )}
+                    <span>{serverTask.title}</span>
+                  </div>
+                  {serverTask.progressPercent !== undefined && (
+                    <span className="font-mono text-amber font-bold">{serverTask.progressPercent} %</span>
+                  )}
+                </div>
+                {serverTask.subtitle && (
+                  <p className="text-[11px] text-dim">{serverTask.subtitle}</p>
+                )}
+                {serverTask.progressPercent !== undefined ? (
+                  <div className="w-full h-1.5 bg-rack rounded-full overflow-hidden border border-seam/80">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber to-amber/80 rounded-full transition-all duration-300"
+                      style={{ width: `${serverTask.progressPercent}%` }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-1 bg-rack rounded-full overflow-hidden">
+                    <div className="h-full w-1/3 bg-amber rounded-full animate-pulse" />
+                  </div>
+                )}
+              </div>
+            )}
 
             {isModpack ? (
               <div className="space-y-3">
