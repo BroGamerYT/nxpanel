@@ -140,6 +140,9 @@ function formatSummaryDetails(meta: any): string | null {
   if (meta.idleMinutes !== undefined) {
     return `${meta.idleMinutes}m inaktiv (Schwelle: ${meta.autoSleepMinutes ?? 15}m)`;
   }
+  if (meta.autoSleepMinutes !== undefined) {
+    return meta.autoSleepMinutes > 0 ? `Auto-Sleep: ${meta.autoSleepMinutes} Min.` : 'Auto-Sleep deaktiviert';
+  }
   if (meta.bytes !== undefined) {
     const gb = (meta.bytes / (1024 * 1024 * 1024)).toFixed(2);
     return `Größe: ${gb} GB`;
@@ -166,9 +169,12 @@ function formatSummaryDetails(meta: any): string | null {
   if (meta.path) {
     return `Datei: ${meta.path}`;
   }
+  if (meta.backupId) {
+    return `Backup: ${String(meta.backupId).slice(0, 8)}`;
+  }
 
   const str = JSON.stringify(meta);
-  return str.length > 60 ? str.slice(0, 57) + '…' : str;
+  return str.length > 80 ? str.slice(0, 77) + '…' : str;
 }
 
 export function AdminAudit() {
@@ -474,119 +480,121 @@ export function AdminAudit() {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-seam bg-rack shadow-sm">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-seam bg-rack-2/40 text-dim text-xs font-semibold uppercase tracking-wider">
-                <th className="px-5 py-3.5">Zeitpunkt</th>
-                <th className="px-5 py-3.5">Akteur</th>
-                <th className="px-5 py-3.5">Aktion</th>
-                <th className="px-5 py-3.5">Server</th>
-                <th className="px-5 py-3.5">Details</th>
-                <th className="px-5 py-3.5 text-right">Aktion</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-seam">
-              {filteredEntries.map((entry) => {
-                const dateObj = new Date(entry.created_at);
-                const date = dateObj.toLocaleString('de-DE', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                });
-                const meta = getActionMeta(entry.action);
-                const Icon = meta.icon;
-                const detailsSummary = formatSummaryDetails(entry.metadata);
+        <div className="rounded-2xl border border-seam bg-rack shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm min-w-[840px]">
+              <thead>
+                <tr className="border-b border-seam bg-rack-2/40 text-dim text-xs font-semibold uppercase tracking-wider">
+                  <th className="px-4 py-3.5 w-[160px]">Zeitpunkt</th>
+                  <th className="px-4 py-3.5 w-[160px]">Akteur</th>
+                  <th className="px-4 py-3.5 w-[190px]">Aktion</th>
+                  <th className="px-4 py-3.5 w-[170px]">Server</th>
+                  <th className="px-4 py-3.5">Details</th>
+                  <th className="px-4 py-3.5 text-right w-[90px]">
+                    <span className="sr-only">Details</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-seam">
+                {filteredEntries.map((entry) => {
+                  const dateObj = new Date(entry.created_at);
+                  const date = dateObj.toLocaleString('de-DE', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  });
+                  const meta = getActionMeta(entry.action);
+                  const Icon = meta.icon;
+                  const detailsSummary = formatSummaryDetails(entry.metadata);
 
-                return (
-                  <tr
-                    key={entry.id}
-                    onClick={() => setSelectedEntry(entry)}
-                    className="hover:bg-rack-2/40 transition-colors cursor-pointer group"
-                  >
-                    {/* Zeitpunkt */}
-                    <td className="px-5 py-3.5 text-xs text-dim whitespace-nowrap font-mono">
-                      {date}
-                    </td>
+                  return (
+                    <tr
+                      key={entry.id}
+                      onClick={() => setSelectedEntry(entry)}
+                      className="hover:bg-rack-2/40 transition-colors cursor-pointer group"
+                    >
+                      {/* Zeitpunkt */}
+                      <td className="px-4 py-3 text-xs text-dim whitespace-nowrap font-mono">
+                        {date}
+                      </td>
 
-                    {/* Akteur */}
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      <div className="font-medium text-ink flex items-center gap-2.5">
-                        <span className={`size-6 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-                          entry.actor_name === 'system'
-                            ? 'bg-cyan-500/15 text-cyan-400'
-                            : 'bg-amber/15 text-amber'
-                        }`}>
-                          {(entry.actor_name ?? 'Sys').slice(0, 2).toUpperCase()}
-                        </span>
-                        <div>
-                          <div className="text-xs font-semibold text-ink leading-tight">
-                            {entry.actor_name ?? 'System'}
-                          </div>
-                          {entry.ip && (
-                            <div className="text-[10px] font-mono text-dim/70 leading-tight">
-                              {entry.ip}
+                      {/* Akteur */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="font-medium text-ink flex items-center gap-2.5">
+                          <span className={`size-6 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                            entry.actor_name === 'system'
+                              ? 'bg-cyan-500/15 text-cyan-400'
+                              : 'bg-amber/15 text-amber'
+                          }`}>
+                            {(entry.actor_name ?? 'Sys').slice(0, 2).toUpperCase()}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-ink leading-tight truncate">
+                              {entry.actor_name ?? 'System'}
                             </div>
-                          )}
+                            {entry.ip && (
+                              <div className="text-[10px] font-mono text-dim/70 leading-tight">
+                                {entry.ip}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Aktion Badge */}
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
+                      {/* Aktion Badge */}
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${meta.color}`}>
                           <Icon className="size-3.5 shrink-0" />
                           <span>{meta.label}</span>
                         </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Server */}
-                    <td className="px-5 py-3.5 text-xs whitespace-nowrap">
-                      {entry.server_name ? (
-                        <div className="font-medium text-ink flex items-center gap-1.5">
-                          <Server className="size-3.5 text-dim" />
-                          <span>{entry.server_name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-dim">–</span>
-                      )}
-                    </td>
+                      {/* Server */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {entry.server_name ? (
+                          <div className="font-medium text-ink flex items-center gap-1.5 truncate max-w-[170px]" title={entry.server_name}>
+                            <Server className="size-3.5 text-dim shrink-0" />
+                            <span className="truncate">{entry.server_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-dim">–</span>
+                        )}
+                      </td>
 
-                    {/* Details */}
-                    <td className="px-5 py-3.5 text-xs text-dim max-w-sm truncate">
-                      {detailsSummary ? (
-                        <span className="font-mono text-slate-300 bg-rack-2/70 px-2 py-0.5 rounded border border-seam/80 inline-block truncate max-w-xs">
-                          {detailsSummary}
-                        </span>
-                      ) : (
-                        <span className="text-dim/60">–</span>
-                      )}
-                    </td>
+                      {/* Details */}
+                      <td className="px-4 py-3 text-xs text-dim">
+                        {detailsSummary ? (
+                          <span className="font-mono text-slate-300 bg-rack-2/70 px-2 py-0.5 rounded border border-seam/80 inline-block truncate max-w-md">
+                            {detailsSummary}
+                          </span>
+                        ) : (
+                          <span className="text-dim/60">–</span>
+                        )}
+                      </td>
 
-                    {/* Info Button */}
-                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedEntry(entry);
-                        }}
-                        className="px-2.5 py-1 rounded text-xs font-medium bg-rack-2 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center gap-1"
-                      >
-                        <Eye className="size-3.5" />
-                        <span>Details</span>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {/* Info Button */}
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEntry(entry);
+                          }}
+                          className="px-2.5 py-1 rounded text-xs font-medium bg-rack-2 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center gap-1"
+                        >
+                          <Eye className="size-3.5" />
+                          <span>Details</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
