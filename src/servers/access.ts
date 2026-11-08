@@ -1,8 +1,38 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { config } from '../config.js';
 import { coverFor, type CoverInfo } from '../eggs/cover.js';
 import { sql } from '../db/index.js';
 import type { Actor, ServerAccess } from '../auth/permissions.js';
 import { canSee, effectiveFlags } from '../auth/permissions.js';
 import type { ServerRecord } from '../types.js';
+
+const diskVersionCache = new Map<string, { ver: string; mtime: number }>();
+
+function readDiskGameVersion(shortId: string, eggName?: string): string | null {
+  try {
+    const volDir = resolve(config.VOLUME_ROOT, shortId);
+    if (!existsSync(volDir)) return null;
+
+    // 1. ARK: ShooterGame/Saved/Logs/ShooterGame.log
+    if (eggName && /ark/i.test(eggName)) {
+      const arkLog = join(volDir, 'ShooterGame/Saved/Logs/ShooterGame.log');
+      if (existsSync(arkLog)) {
+        const cached = diskVersionCache.get(shortId);
+        const st = statSync(arkLog);
+        if (cached && cached.mtime === st.mtimeMs) return cached.ver;
+        const text = readFileSync(arkLog, 'utf8');
+        const m = [...text.matchAll(/ARK Version:\s*([0-9.]+)/gi)];
+        if (m.length > 0) {
+          const v = m[m.length - 1]![1]!;
+          diskVersionCache.set(shortId, { ver: v, mtime: st.mtimeMs });
+          return v;
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -67,21 +97,21 @@ export function extractGameInfo(
   eggName: string,
   rawEgg: unknown,
   vars: Record<string, string> | null | undefined,
+  shortId?: string,
 ): {
   gameVersion: string | null;
   serverType: string | null;
   modpackName: string | null;
   modpackVersion: string | null;
 } {
-  if (!vars) return { gameVersion: null, serverType: null, modpackName: null, modpackVersion: null };
-
-  let gameVersion: string | null = vars.VERSION || vars.GAME_VERSION || vars.MINECRAFT_VERSION || null;
-  let serverType: string | null = vars.TYPE || null;
+  let gameVersion: string | null = vars?.VERSION || vars?.GAME_VERSION || vars?.MINECRAFT_VERSION || null;
+  let serverType: string | null = vars?.TYPE || null;
   let modpackName: string | null = null;
   let modpackVersion: string | null = null;
 
-  const t = (serverType ?? '').toUpperCase();
-  if (t === 'AUTO_CURSEFORGE' || vars.CF_SLUG) {
+  if (vars) {
+    const t = (serverType ?? '').toUpperCase();
+    if (t === 'AUTO_CURSEFORGE' || vars.CF_SLUG) {
     const slug = (vars.CF_SLUG || '').trim();
     if (slug) {
       modpackName = slug
@@ -121,6 +151,11 @@ export function extractGameInfo(
     };
     serverType = niceTypes[t] || serverType;
   }
+}
+
+  if (!gameVersion && shortId) {
+    gameVersion = readDiskGameVersion(shortId, eggName);
+  }
 
   return { gameVersion, serverType, modpackName, modpackVersion };
 }
@@ -149,7 +184,7 @@ export async function listServersForActor(actor: Actor): Promise<ServerListItem[
     ORDER BY s.is_favorite DESC, s.name
   `;
   return rows.map((r) => {
-    const info = extractGameInfo(r.egg_name, r.egg_raw, r.variables);
+    const info = extractGameInfo(r.egg_name, r.egg_raw, r.variables, r.short_id);
     return {
       id: r.id,
       shortId: r.short_id,

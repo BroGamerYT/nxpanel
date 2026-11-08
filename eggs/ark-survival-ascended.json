@@ -9,9 +9,9 @@
   "entrypoint": [
     "/bin/bash",
     "-c",
-    "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; exec /usr/bin/start_server"
+    "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; sed -i 's|+force_install_dir|+@sSteamCmdForcePlatformType windows +force_install_dir|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|app_update 2430930 validate|app_update 2430930|g' /usr/bin/start_server 2>/dev/null || true; exec /usr/bin/start_server"
   ],
-  "startup": "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; exec /usr/bin/start_server",
+  "startup": "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; sed -i 's|+force_install_dir|+@sSteamCmdForcePlatformType windows +force_install_dir|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|app_update 2430930 validate|app_update 2430930|g' /usr/bin/start_server 2>/dev/null || true; exec /usr/bin/start_server",
   "data_dir": "/home/gameserver/server-files",
   "console": "readonly",
   "stop": {
@@ -243,7 +243,7 @@
         "en": "PC = PC players only (Steam and Epic). ALL = Crossplay with Xbox and PlayStation (consoles play without mods)."
       },
       "env_variable": "SERVER_PLATFORM",
-      "default_value": "PC",
+      "default_value": "ALL",
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|in:PC,ALL"

@@ -347,7 +347,7 @@ export async function serverRoutes(
       SELECT public_host, port_from, port_to FROM nodes WHERE id = ${server.node_id}`;
     const ports = await listPorts(server.id);
     const primaryPort = ports.find((p) => p.is_primary)?.port ?? null;
-    const gameInfo = extractGameInfo(egg?.name ?? '', egg ? egg.raw_egg : null, server.variables);
+    const gameInfo = extractGameInfo(egg?.name ?? '', egg ? egg.raw_egg : null, server.variables, server.short_id);
 
     return {
       server: {

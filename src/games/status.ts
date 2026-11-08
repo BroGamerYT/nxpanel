@@ -149,7 +149,9 @@ export async function gameStatus(server: ServerRecord, spec: QuerySpec): Promise
       if (rcon) { players = parseList(await rcon.command('list')); hasRcon = true; }
     } catch { /* TPS-Teil hat den Fehler schon */ }
   }
+  const liveVersion = (ping && !('error' in ping) ? (typeof ping.version === 'string' ? ping.version : (ping.version as any)?.name ?? null) : null);
   const st: GameStatus = { kind: 'minecraft', at: Date.now(), ping, tps, players, rcon: hasRcon,
+    version: liveVersion,
     people: (players ?? (ping && !('error' in ping) ? ping.players.sample : [])).map((name) => ({ name })),
     actions: hasRcon ? ['kick', 'ban', 'pardon', 'op', 'deop', 'whitelist_add', 'whitelist_remove'] : [] };
   cache.set(server.id, st);
@@ -174,7 +176,24 @@ export async function rconCommand(server: ServerRecord, spec: QuerySpec, cmd: st
 /** Alle Spiele ausser Minecraft: Spielerliste ueber RCON (ARK, Palworld) oder Valve-Abfrage. */
 async function otherStatus(server: ServerRecord, spec: QuerySpec): Promise<GameStatus> {
   const host = await hostFor(server);
+  let detectedVersion: string | null = null;
+
+  // Versionserkennung aus Log-Dateien (z. B. ARK) oder App-Manifest
+  if (spec.kind === 'ark') {
+    try {
+      const logPath = join(resolve(config.VOLUME_ROOT, server.short_id), 'ShooterGame/Saved/Logs/ShooterGame.log');
+      const text = await readFile(logPath, 'utf8').catch(() => null);
+      if (text) {
+        const matches = [...text.matchAll(/ARK Version:\s*([0-9.]+)/gi)];
+        if (matches.length > 0) {
+          detectedVersion = matches[matches.length - 1]![1]!;
+        }
+      }
+    } catch {}
+  }
+
   const base: GameStatus = { kind: spec.kind, at: Date.now(), ping: null, tps: null, players: null, rcon: false, people: [], actions: [],
+    version: detectedVersion,
     max: Number(server.variables?.MAX_PLAYERS ?? server.variables?.SERVER_SLOTS ?? server.variables?.PLAYERS ?? 0) || null };
   if (spec.kind === 'source') {
     const ports = await listPorts(server.id);
@@ -183,7 +202,7 @@ async function otherStatus(server: ServerRecord, spec: QuerySpec): Promise<GameS
     try {
       const info = await a2sInfo(host, port);
       const players = await a2sPlayers(host, port).catch(() => null);
-      return { ...base, max: info.maxPlayers, version: info.version, latencyMs: info.latencyMs, map: info.map,
+      return { ...base, max: info.maxPlayers, version: info.version || detectedVersion, latencyMs: info.latencyMs, map: info.map,
         players: players?.map((p) => p.name) ?? null, people: players?.map((p) => ({ name: p.name })) ?? [] };
     } catch (e) {
       return { ...base, ping: { error: e instanceof Error ? e.message : String(e) } };
@@ -196,7 +215,7 @@ async function otherStatus(server: ServerRecord, spec: QuerySpec): Promise<GameS
     if (!rcon) return { ...base, tps: null, ping: { error: 'RCON nicht eingerichtet' } };
     const t0 = Date.now();
     const people = adapter.parseList(await rcon.command(adapter.listCommand)) ?? [];
-    return { ...base, rcon: true, latencyMs: Date.now() - t0, people, players: people.map((p) => p.name), actions: adapter.actions };
+    return { ...base, rcon: true, version: detectedVersion, latencyMs: Date.now() - t0, people, players: people.map((p) => p.name), actions: adapter.actions };
   } catch (e) {
     dropRcon(server.id);
     return { ...base, ping: { error: e instanceof Error ? e.message : String(e) } };

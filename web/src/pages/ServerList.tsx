@@ -261,7 +261,7 @@ export function ServerList() {
                           ) : null}
                           {s.gameVersion ? (
                             <span className="block text-xs text-dim font-mono truncate">
-                              {s.serverType ? `${s.serverType} ` : ''}{s.gameVersion}
+                              {s.serverType ? `${s.serverType} ` : ''}{/^\d+(\.\d+)+$/.test(s.gameVersion) ? `v${s.gameVersion}` : s.gameVersion}
                             </span>
                           ) : null}
                         </div>
@@ -469,7 +469,7 @@ function Tile({
             <span>{s.eggName}</span>
             {s.gameVersion && (
               <span className="font-mono text-[11px] px-1.5 py-0.2 rounded bg-rack-2 text-ink">
-                {s.serverType ? `${s.serverType} ` : ''}{s.gameVersion}
+                {s.serverType ? `${s.serverType} ` : ''}{/^\d+(\.\d+)+$/.test(s.gameVersion) ? `v${s.gameVersion}` : s.gameVersion}
               </span>
             )}
           </div>

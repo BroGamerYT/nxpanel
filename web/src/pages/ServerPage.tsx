@@ -224,7 +224,8 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                 (gameDisplayVersion || serverTypeDisplay) && (
                   <Tooltip content="Spiel- / Server-Version" side="bottom">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-rack-2 text-ink font-mono border border-seam cursor-help">
-                      {serverTypeDisplay ? `${serverTypeDisplay} ` : ''}{gameDisplayVersion ?? ''}
+                      {serverTypeDisplay ? `${serverTypeDisplay} ` : ''}
+                      {gameDisplayVersion ? (/^\d+(\.\d+)+$/.test(gameDisplayVersion) ? `v${gameDisplayVersion}` : gameDisplayVersion) : ''}
                     </span>
                   </Tooltip>
                 )
