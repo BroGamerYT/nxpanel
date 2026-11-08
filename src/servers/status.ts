@@ -11,11 +11,11 @@ import type { ServerStatus } from '../types.js';
 const allowed: Record<ServerStatus, ServerStatus[]> = {
   installing:     ['offline', 'install_failed', 'suspended'],
   install_failed: ['installing', 'suspended'],
-  offline:        ['starting', 'installing', 'suspended'],
+  offline:        ['starting', 'running', 'installing', 'suspended'],
   starting:       ['running', 'offline', 'crashed', 'stopping'],
   running:        ['stopping', 'crashed', 'offline'],
   stopping:       ['offline', 'crashed'],
-  crashed:        ['starting', 'offline', 'installing', 'suspended'],
+  crashed:        ['starting', 'running', 'offline', 'installing', 'suspended'],
   suspended:      ['offline'],
 };
 

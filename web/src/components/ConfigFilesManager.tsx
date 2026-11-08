@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Sliders, FileCode, Save, AlertCircle, Check, FileText, FolderCog, Search, X } from 'lucide-react';
+import { Sliders, FileCode, Save, AlertCircle, Check, FileText, FolderCog, Search, X, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { t } from '../lib/i18n';
 import { Button, ErrorBox, Spinner } from './ui';
@@ -195,6 +195,14 @@ export function ConfigFilesManager({ serverId, canWrite, stopped }: ConfigFilesM
             <div className="flex items-center gap-2 text-xs font-semibold text-ink">
               <FolderCog className="size-4 text-amber" />
               <span>Mod- & Plugin-Konfigurationen ({modConfigs.length})</span>
+              <button
+                type="button"
+                onClick={() => void qc.invalidateQueries({ queryKey: ['serverConfigs', serverId] })}
+                title="Konfigurationsdateien neu laden"
+                className="p-1 rounded text-dim hover:text-ink hover:bg-rack-2 transition ml-1"
+              >
+                <RefreshCw className="size-3" />
+              </button>
             </div>
             {modGroups.length > 1 && (
               <div className="flex flex-wrap gap-1">

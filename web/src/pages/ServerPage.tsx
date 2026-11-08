@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle, Star, Tag, Plus, X } from 'lucide-react';
+import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle, Star, Tag, Plus, X, RefreshCw } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLive } from '../lib/live';
@@ -104,18 +104,34 @@ function Loaded({ detail }: { detail: ServerDetail }) {
   const modpack = useModpack(server.id, has('startup.read'));
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [preUpdateBackup, setPreUpdateBackup] = useState(true);
+  const [updateSuccessMsg, setUpdateSuccessMsg] = useState<string | null>(null);
+  const [updateErrorMsg, setUpdateErrorMsg] = useState<string | null>(null);
+
   const updateModpackMutation = useMutation({
-    mutationFn: () => api(`/servers/${server.id}/modpack/update`, { method: 'POST', body: {} }),
+    mutationFn: (force?: boolean) => api(`/servers/${server.id}/modpack/update`, { method: 'POST', body: { force: !!force } }),
     onSuccess: () => {
       setShowUpdateModal(false);
+      setUpdateErrorMsg(null);
+      setUpdateSuccessMsg('Modpack-Update wurde gestartet.');
+      setTimeout(() => setUpdateSuccessMsg(null), 5000);
       void qc.invalidateQueries({ queryKey: ['modpack', server.id] });
     },
+    onError: (err) => {
+      setUpdateErrorMsg((err as Error).message || 'Modpack-Update fehlgeschlagen');
+    },
   });
+
   const updateGameMutation = useMutation({
     mutationFn: () => api(`/servers/${server.id}/update-game`, { method: 'POST', body: { backup: preUpdateBackup, startAfter: true } }),
     onSuccess: () => {
       setShowUpdateModal(false);
+      setUpdateErrorMsg(null);
+      setUpdateSuccessMsg(preUpdateBackup ? '1-Klick-Update mit Sicherheits-Backup wurde gestartet.' : '1-Klick-Update wurde gestartet.');
+      setTimeout(() => setUpdateSuccessMsg(null), 6000);
       invalidateServer();
+    },
+    onError: (err) => {
+      setUpdateErrorMsg((err as Error).message || '1-Klick-Update fehlgeschlagen');
     },
   });
 
@@ -291,13 +307,31 @@ function Loaded({ detail }: { detail: ServerDetail }) {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
+            <Tooltip content="Server-Status, Daten und Konsole neu laden" side="bottom">
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  invalidateServer();
+                  void qc.invalidateQueries({ queryKey: ['server', server.id] });
+                  void qc.invalidateQueries({ queryKey: ['liveStats', server.id] });
+                  void qc.invalidateQueries({ queryKey: ['gameStatus', server.id] });
+                  void modpack.refetch();
+                }}
+              >
+                <RefreshCw className="size-4" />
+                <span className="hidden sm:inline">Neu laden</span>
+              </Button>
+            </Tooltip>
             {canUpdate && status !== 'install_failed' && (
               <Tooltip content={modpackInfo?.updateAvailable ? `Neues Update verfügbar: ${modpackInfo.latest?.name}` : 'Prüft Modpacks und Spielserver auf Updates'} side="bottom">
                 <Button
                   variant={modpackInfo?.updateAvailable ? 'primary' : 'quiet'}
                   disabled={isUpdatingPack || status === 'installing'}
-                  busy={isUpdatingPack || updateModpackMutation.isPending}
-                  onClick={() => setShowUpdateModal(true)}
+                  busy={isUpdatingPack || updateModpackMutation.isPending || updateGameMutation.isPending}
+                  onClick={() => {
+                    setUpdateErrorMsg(null);
+                    setShowUpdateModal(true);
+                  }}
                   className={modpackInfo?.updateAvailable ? 'ring-2 ring-amber/50 animate-pulse' : ''}
                 >
                   <ArrowUpCircle className="size-4" />
@@ -371,6 +405,13 @@ function Loaded({ detail }: { detail: ServerDetail }) {
         </div>
       )}
 
+      {updateSuccessMsg && (
+        <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400 flex items-center gap-2.5">
+          <CheckCircle2 className="size-5 shrink-0" />
+          <span>{updateSuccessMsg}</span>
+        </div>
+      )}
+      {updateErrorMsg && <ErrorBox>{updateErrorMsg}</ErrorBox>}
       {power.error && <ErrorBox>{(power.error as Error).message}</ErrorBox>}
       {reinstall.error && <ErrorBox>{(reinstall.error as Error).message}</ErrorBox>}
       {live.lastError && <ErrorBox>{live.lastError}</ErrorBox>}
@@ -391,6 +432,8 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                 ✕
               </button>
             </div>
+
+            {updateErrorMsg && <ErrorBox>{updateErrorMsg}</ErrorBox>}
 
             {isModpack ? (
               <div className="space-y-3">
@@ -423,7 +466,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                       <Button
                         variant="primary"
                         busy={updateModpackMutation.isPending}
-                        onClick={() => updateModpackMutation.mutate()}
+                        onClick={() => updateModpackMutation.mutate(false)}
                       >
                         <ArrowUpCircle className="size-4" />
                         {t('pack.updateNow')}
@@ -436,8 +479,25 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                       <CheckCircle2 className="size-4" />
                       {t('server.updateUpToDate', { version: modpackDisplayVersion || modpackInfo?.current?.name || 'aktuell' })}
                     </p>
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button onClick={() => { void modpack.refetch(); setShowUpdateModal(false); }}>
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+                      <Button
+                        variant="quiet"
+                        busy={modpack.isFetching}
+                        onClick={() => void modpack.refetch()}
+                      >
+                        <RefreshCw className="size-3.5 mr-1" />
+                        Auf Updates prüfen
+                      </Button>
+                      <Button
+                        variant="quiet"
+                        busy={updateModpackMutation.isPending}
+                        onClick={() => updateModpackMutation.mutate(true)}
+                        title="Modpack-Dateien erneut vom Server laden und synchronisieren"
+                      >
+                        <ArrowUpCircle className="size-3.5 mr-1" />
+                        Neu synchronisieren
+                      </Button>
+                      <Button onClick={() => setShowUpdateModal(false)}>
                         {t('common.close')}
                       </Button>
                     </div>
