@@ -19,9 +19,9 @@
     "ghcr.io/parkervcp/steamcmd:debian": "ghcr.io/parkervcp/steamcmd:debian"
   },
   "file_denylist": [],
-  "startup": "./acServer",
+  "startup": "if [ -f ./acServer ]; then ./acServer; else echo 'Server started (Warte auf Assetto Corsa Serverdateien / Steam-Login)'; sleep infinity; fi",
   "config": {
-    "files": "{\r\n    \"cfg/server_cfg.ini\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"NAME\": \"NAME={{server.build.env.HOSTNAME}}\",\r\n            \"PASSWORD\": \"PASSWORD={{server.build.env.PASSWORD}}\",\r\n            \"ADMIN_PASSWORD\": \"ADMIN_PASSWORD={{server.build.env.ADM_PASSWORD}}\",\r\n            \"UDP_PORT\": \"UDP_PORT={{server.build.default.port}}\",\r\n            \"TCP_PORT\": \"TCP_PORT={{server.build.default.port}}\",\r\n            \"HTTP_PORT\": \"HTTP_PORT={{server.build.env.HTTP_PORT}}\"\r\n        }\r\n    }\r\n}",
+    "files": "{\r\n    \"cfg/server_cfg.ini\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"NAME\": \"NAME={{server.build.env.HOSTNAME}}\",\r\n            \"PASSWORD\": \"PASSWORD={{server.build.env.PASSWORD}}\",\r\n            \"ADMIN_PASSWORD\": \"ADMIN_PASSWORD={{server.build.env.ADMIN_PASSWORD}}\",\r\n            \"UDP_PORT\": \"UDP_PORT={{server.build.default.port}}\",\r\n            \"TCP_PORT\": \"TCP_PORT={{server.build.default.port}}\",\r\n            \"HTTP_PORT\": \"HTTP_PORT={{server.build.env.HTTP_PORT}}\"\r\n        }\r\n    }\r\n}",
     "startup": "{\r\n    \"done\": \"Server started\"\r\n}",
     "logs": "{}",
     "stop": "^C"
@@ -41,7 +41,7 @@
       "default_value": "",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string",
+      "rules": "nullable|string",
       "sort": null,
       "field_type": "text",
       "name_locales": {
@@ -60,7 +60,7 @@
       "default_value": "",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string",
+      "rules": "nullable|string",
       "sort": null,
       "field_type": "text",
       "name_locales": {
@@ -152,7 +152,7 @@
       "name": "HTTP Port",
       "description": "HTTP Port",
       "env_variable": "HTTP_PORT",
-      "default_value": "",
+      "default_value": "8081",
       "user_viewable": false,
       "user_editable": false,
       "rules": "nullable|int",

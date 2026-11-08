@@ -101,15 +101,17 @@ export function CommandPalette({
     for (const s of servers) {
       const eggName = s.eggName ?? 'Gameserver';
       const statusLabel = s.status === 'running' ? 'Läuft' : s.status === 'starting' ? 'Startet' : 'Gestoppt';
+      const tagStr = s.tags && s.tags.length > 0 ? ` · ${s.tags.map((tg) => `#${tg}`).join(' ')}` : '';
+      const favPrefix = s.isFavorite ? '★ ' : '';
 
       // Server-Hauptlink
       items.push({
         id: `server-${s.id}`,
-        title: s.name,
-        subtitle: `${eggName} · ${statusLabel} (${s.shortId})`,
+        title: `${favPrefix}${s.name}`,
+        subtitle: `${eggName} · ${statusLabel} (${s.shortId})${tagStr}`,
         category: 'server',
         icon: Server,
-        keywords: [s.name, eggName, s.shortId, s.status, 'server', 'instanz'],
+        keywords: [s.name, eggName, s.shortId, s.status, 'server', 'instanz', ...(s.tags ?? []), ...(s.isFavorite ? ['favorit', 'favorite', 'stern'] : [])],
         action: () => {
           navigate(`/server/${s.id}`);
           onClose();

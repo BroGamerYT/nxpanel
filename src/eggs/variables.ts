@@ -69,8 +69,11 @@ export function missingPlaceholders(template: string, known: Set<string>): strin
 function normalizeKey(raw: string): string {
   return raw
     .replace(/^server\.build\.env\./, '')
+    .replace(/^server\.environment\./, '')
     .replace(/^server\.build\.default\.port$/, 'SERVER_PORT')
+    .replace(/^server\.allocations\.default\.port$/, 'SERVER_PORT')
     .replace(/^server\.build\.default\.ip$/, 'SERVER_IP')
+    .replace(/^server\.allocations\.default\.ip$/, 'SERVER_IP')
     .replace(/^server\.build\.memory$/, 'SERVER_MEMORY')
     .replace(/^env\./, '');
 }

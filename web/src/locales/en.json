@@ -192,6 +192,8 @@
     "pruned_other": "{mb} MB freed, {count} images deleted"
   },
   "disk": {
+    "containerLayer": "Container layer: {size}",
+    "containerLayerHint": "Data in the writable container layer outside the mounted data folder (/home/container). If this is very large, the game writes files outside the volume.",
     "notMeasured": "being measured …",
     "overLimit": "Using more than assigned – increase disk space in the settings."
   },
@@ -412,7 +414,9 @@
     "updateTitle": "Server Update",
     "updateModpackConfirm": "Do you want to update the modpack to version {version}? A backup will be created automatically before updating.",
     "updateUpToDate": "Server is up to date ({version}).",
-    "updateRestartNote": "On startup or restart, Minecraft and Steam servers automatically check for the latest updates.",
+    "updateRestartNote": "The 1-click update pulls the latest container image, updates the container, and updates the game files on start.",
+    "updatePreBackup": "Automatically create a safety backup before updating (recommended)",
+    "updateManual": "Start 1-Click Update",
     "tab": {
       "console": "Console",
       "files": "Files",
@@ -428,6 +432,11 @@
   "servers": {
     "allGames": "All games",
     "allStates": "All states",
+    "allTags": "All tags",
+    "favAdd": "Pin as favorite",
+    "favRemove": "Remove from favorites",
+    "tagAdd": "Tag",
+    "tagRemove": "Remove tag",
     "col": {
       "address": "Address",
       "game": "Game",
@@ -453,8 +462,8 @@
     "you": "You"
   },
   "settings": {
-    "autoRestart": "Restart automatically after a crash",
-    "autoRestartHint": "At most five times in ten minutes; after that the server stays off and the timeline says why.",
+    "autoRestart": "Auto-Start (Restart automatically up to 5× after a crash)",
+    "autoRestartHint": "Tries to restart the server up to 5 times after a crash. If it still crashes on the 5th attempt, it stays off and is shown as 'Unstartable' on the panel.",
     "game": "Game settings",
     "gameHint": "Same fields as when creating. Applies from the next start.",
     "general": "General",
@@ -470,6 +479,10 @@
     "stopFirst": "Game settings, Java version and ports can only be changed while the server is stopped. Saves are kept."
   },
   "status": {
+    "autoStartAttempt": "Auto-Start ({count}/5)",
+    "autoStartHint": "Automatically restarts the server up to 5 times on crash. After 5 failed attempts, it stays off as 'Unstartable'.",
+    "autoStartOff": "Auto-Start: Off",
+    "autoStartOn": "Auto-Start: On",
     "crashed": "Crashed",
     "install_failed": "Installation failed",
     "installing": "Installing",
@@ -477,7 +490,9 @@
     "running": "Running",
     "starting": "Starting",
     "stopping": "Stopping",
-    "suspended": "Suspended"
+    "suspended": "Suspended",
+    "unstartable": "Unstartable (5/5 crashes)",
+    "unstartableBanner": "Unstartable: This server crashed 5 times in a row and was automatically turned off. Check the console or timeline for errors before starting it again."
   },
   "backups": {
     "checksum": "Checksum",
@@ -561,8 +576,11 @@
     "title": "Steam Accounts"
   },
   "timeline": {
+    "activityEmpty": "No user activity logged for this server yet.",
+    "activityTab": "User Activity (Audit)",
     "by": "by {name}",
     "empty": "No events yet.",
+    "eventsTab": "Events (Timeline)",
     "lastLines": "Last log lines"
   },
   "version": {
@@ -712,6 +730,16 @@
   },
   "eggImport": {
     "button": "Import game (JSON)",
+    "catalogButton": "Search online catalog (260+ games)",
+    "catalogClose": "Close catalog",
+    "catalogTitle": "Online Egg Catalog (Pelican & Pterodactyl)",
+    "catalogSearch": "Search game in online catalog (e.g. Conan, DayZ, FiveM, Bungeecord) …",
+    "catalogAll": "All",
+    "catalogEmpty": "No matching game found in catalog.",
+    "catalogInstall": "Import & adapt",
+    "catalogInstalled": "Installed",
+    "catalogDirectUrl": "Or paste direct GitHub JSON URL …",
+    "catalogDirectBtn": "Import from URL",
     "done": "\"{name}\" is now available.",
     "hint": "Own template or egg from Pterodactyl/Pelican – ports, ready pattern and permissions are adapted on import.",
     "notJson": "The file is not valid JSON."
@@ -728,6 +756,13 @@
     "usageTotal": "Subfolders total: {size}",
     "partial": "Measurement aborted (too large), values incomplete",
     "noFolders": "No subfolders.",
+    "readOnly": "Read-only",
+    "readOnlyHint": "This folder is mounted read-only. Files can be viewed and downloaded, but not modified.",
     "serversHint": "Files of installed servers are under \"volumes\" – one folder per server, labelled with its name."
+  },
+  "notif": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "No recent warnings or events."
   }
 }

@@ -50,6 +50,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY fehlt in .env}
       VOLUME_ROOT: /var/lib/panel/volumes
       BACKUP_ROOT: /var/lib/panel/backups
+      ADMIN_FILE_ROOTS: ${ADMIN_FILE_ROOTS:-Panel-Installation=/opt/nxpanel:ro}
       PORT_RANGE: ${PORT_RANGE:-25500-25600}
       TZ: ${TZ:-Europe/Berlin}
     ports:
@@ -66,6 +67,7 @@ services:
       # Konfigurationsdateien und Backups gingen ins Leere.
       - /var/lib/panel:/var/lib/panel
       - /mnt/ugreen-backups:/mnt/ugreen-backups
+      - /opt/nxpanel:/opt/nxpanel:ro
     networks: [nxp-internal, nxp-public]
 
 volumes:

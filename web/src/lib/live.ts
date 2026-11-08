@@ -48,8 +48,14 @@ export function useLive(serverId: string, onLines: (lines: string[], meta: { his
           switch (m.type) {
             case 'hello': setStatus(m.status); setCanCommand(m.canCommand); setLastError(null); break;
             case 'log': onLinesRef.current(m.lines, { ...(m.history ? { history: true } : {}), ...(m.dropped ? { dropped: m.dropped } : {}) }); break;
-            case 'status': setStatus(m.status); break;
-            case 'event': setEvents((ev) => [m.event, ...ev].slice(0, 50)); break;
+            case 'status':
+              setStatus(m.status);
+              if (m.status === 'running' || m.status === 'starting') setLastError(null);
+              break;
+            case 'event':
+              setEvents((ev) => [m.event, ...ev].slice(0, 50));
+              if (m.event.severity === 'error') setLastError(m.event.summary);
+              break;
             case 'stats': setStats((s) => [...s, { ...m.stats, ts: m.ts }].slice(-MAX_POINTS)); break;
             case 'error': setLastError(m.message); break;
           }

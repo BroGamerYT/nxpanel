@@ -2,16 +2,22 @@ import { engine, type DockerEvent } from '../docker/client.js';
 import { log } from '../log.js';
 import { writeEvent } from '../events.js';
 import { setStatus } from './status.js';
-import { findServer, bumpCrashCount, recentCrashCount } from './repo.js';
+import { findServer, bumpCrashCount } from './repo.js';
 import { startServer, expectedStops } from './lifecycle.js';
 import { reconcile } from './reconcile.js';
+import { notifyServerStatus } from '../notifications/discord.js';
 
-/** Nach so vielen Abstuerzen in CRASH_WINDOW_MIN gibt das Panel auf. */
-const CRASH_LIMIT = 5;
+/** Nach 5 fehlgeschlagenen Starts/Abstuerzen hintereinander bleibt der Server aus ("Nicht startbar"). */
+export const CRASH_LIMIT = 5;
 const CRASH_WINDOW_MIN = 10;
+const AUTO_RESTART_DELAY_MS = 3_000;
 
 /** Sicherheitsnetz: auch ohne Ereignis wird regelmaessig abgeglichen. */
 const RECONCILE_INTERVAL_MS = 60_000;
+
+/** Verhindert Doppelzaehlung, wenn awaitReady und Docker-'die'-Event gleichzeitig feuern. */
+const lastCrashHandledAt = new Map<string, number>();
+const pendingRestarts = new Set<string>();
 
 let stopStream: (() => void) | null = null;
 let timer: NodeJS.Timeout | null = null;
@@ -80,81 +86,118 @@ async function onStarted(e: DockerEvent): Promise<void> {
 }
 
 async function onDied(e: DockerEvent): Promise<void> {
-  const server = await findServer(e.serverId);
+  if (!e.serverId) return;
+  await handleUnexpectedExit(e.serverId, {
+    containerId: e.containerId,
+    exitCode: e.exitCode ?? -1,
+    oom: e.attributes['oomKilled'] === 'true',
+  });
+}
+
+/**
+ * Zentrale Behandlung eines unerwarteten Container-Absturzes (beim Start oder im Betrieb).
+ * Zaehlt Abstuerze exakt hoch (1..5), fuehrt bei aktivem Auto-Start bis zu 5 Startversuche
+ * durch und laesst den Server nach dem 5. Absturz ausgeschaltet ("Nicht startbar").
+ */
+export async function handleUnexpectedExit(
+  serverId: string,
+  opts: { containerId?: string | null; exitCode?: number; oom?: boolean } = {},
+): Promise<void> {
+  // Entprellen: falls awaitReady (lifecycle.ts) und Docker-Event 'die' denselben Tod melden
+  const now = Date.now();
+  const prev = lastCrashHandledAt.get(serverId) ?? 0;
+  if (now - prev < 2500) return;
+  lastCrashHandledAt.set(serverId, now);
+
+  const server = await findServer(serverId);
   if (!server) return;
 
   // Vom Panel selbst ausgeloest - kein Absturz.
-  if (expectedStops.has(e.serverId)) return;
-  if (server.status === 'stopping' || server.status === 'suspended') return;
+  if (expectedStops.has(serverId)) return;
+  if (server.status === 'stopping' || server.status === 'suspended' || server.status === 'installing') return;
 
-  const exitCode = e.exitCode ?? -1;
-  const oom = e.attributes['oomKilled'] === 'true';
+  const exitCode = opts.exitCode ?? -1;
+  const oom = opts.oom ?? false;
+  const cid = opts.containerId ?? server.container_id;
 
-  log.warn({ serverId: e.serverId, exitCode, oom }, 'Container unerwartet beendet');
+  log.warn({ serverId, exitCode, oom }, 'Container unerwartet beendet');
 
-  // Die letzten Zeilen sagen fast immer, WARUM. Ohne sie steht in der
-  // Zeitachse nur "Exit-Code 1" - und der Nutzer muss erst docker logs
-  // kennen, um weiterzukommen.
-  const lastLines = await engine.tailLogs(e.containerId, 30);
+  const lastLines = cid ? await engine.tailLogs(cid, 30).catch(() => []) : [];
   const hint = lastLines.length > 0 ? lastLines[lastLines.length - 1]!.slice(0, 160) : '';
 
-  await setStatus(e.serverId, 'crashed', {
-    reason: oom ? 'Arbeitsspeicher erschoepft (OOM)' : `Exit-Code ${exitCode}`,
+  const crashes = await bumpCrashCount(serverId);
+
+  await setStatus(serverId, 'crashed', {
+    reason: oom
+      ? 'Arbeitsspeicher erschoepft (OOM)'
+      : crashes >= CRASH_LIMIT
+        ? `Nicht startbar (${crashes}/${CRASH_LIMIT} Abstuerze)`
+        : `Exit-Code ${exitCode} (${crashes}/${CRASH_LIMIT})`,
   });
 
   await writeEvent({
-    serverId: e.serverId,
+    serverId,
     kind: 'crash',
     severity: 'error',
     summary: oom
-      ? 'Abgestuerzt: Arbeitsspeicher erschoepft'
+      ? `Abgestuerzt (${crashes}/${CRASH_LIMIT}): Arbeitsspeicher erschoepft`
       : hint
-        ? `Abgestuerzt (Exit ${exitCode}): ${hint}`
-        : `Abgestuerzt mit Exit-Code ${exitCode}`,
+        ? `Abgestuerzt (${crashes}/${CRASH_LIMIT}, Exit ${exitCode}): ${hint}`
+        : `Abgestuerzt (${crashes}/${CRASH_LIMIT}) mit Exit-Code ${exitCode}`,
     code: oom ? 'crash_oom' : 'crash_exit',
-    params: { exitCode, hint: hint || '' },
-    payload: { exitCode, oomKilled: oom, lastLines },
+    params: { exitCode, hint: hint || '', crashes, limit: CRASH_LIMIT },
+    payload: { exitCode, oomKilled: oom, lastLines, crashes, limit: CRASH_LIMIT },
   });
-
-  await bumpCrashCount(e.serverId);
 
   if (!server.auto_restart) {
     await writeEvent({
-      serverId: e.serverId,
+      serverId,
       kind: 'restart_skipped',
       severity: 'warn',
-      summary: 'Kein automatischer Neustart: auto_restart ist ausgeschaltet',
+      summary: 'Kein automatischer Neustart: Auto-Start ist ausgeschaltet',
       code: 'restart_skipped_disabled',
     });
+    void notifyServerStatus('crash', server.name, hint || `Abgestürzt (Exit ${exitCode})`);
     return;
   }
 
-  const crashes = await recentCrashCount(e.serverId, CRASH_WINDOW_MIN);
   if (crashes >= CRASH_LIMIT) {
     await writeEvent({
-      serverId: e.serverId,
+      serverId,
       kind: 'restart_skipped',
       severity: 'error',
-      summary: `Kein automatischer Neustart: ${crashes} Abstuerze in ${CRASH_WINDOW_MIN} Minuten`,
+      summary: `Nicht startbar: ${crashes} fehlgeschlagene Startversuche hintereinander – Server bleibt ausgeschaltet`,
       code: 'restart_skipped_limit',
       params: { crashes, limit: CRASH_LIMIT, window: CRASH_WINDOW_MIN },
-      payload: { crashes, limit: CRASH_LIMIT },
+      payload: { crashes, limit: CRASH_LIMIT, unstartable: true },
     });
-    log.error({ serverId: e.serverId, crashes }, 'Absturzschleife - Auto-Restart ausgesetzt');
+    log.error({ serverId, crashes }, 'Absturzschleife (5/5) - Server als nicht startbar markiert und ausgeschaltet');
+    void notifyServerStatus('crash', server.name, `Nicht startbar nach ${crashes} Abstürzen – Server bleibt ausgeschaltet.`);
     return;
   }
 
+  if (pendingRestarts.has(serverId)) return;
+  pendingRestarts.add(serverId);
+
   await writeEvent({
-    serverId: e.serverId,
+    serverId,
     kind: 'restart_attempt',
-    summary: `Automatischer Neustart (Absturz ${crashes} von ${CRASH_LIMIT})`,
+    summary: `Auto-Start aktiv: Startversuch ${crashes} von ${CRASH_LIMIT} nach Absturz`,
     code: 'restart_attempt',
     params: { count: crashes, limit: CRASH_LIMIT },
+    payload: { count: crashes, limit: CRASH_LIMIT },
   });
 
-  try {
-    await startServer(e.serverId);
-  } catch (err) {
-    log.error({ err, serverId: e.serverId }, 'Automatischer Neustart fehlgeschlagen');
-  }
+  setTimeout(() => {
+    pendingRestarts.delete(serverId);
+    void (async () => {
+      const fresh = await findServer(serverId);
+      if (!fresh || !fresh.auto_restart || fresh.status !== 'crashed' || fresh.suspended) return;
+      try {
+        await startServer(serverId);
+      } catch (err) {
+        log.error({ err, serverId, attempt: crashes }, 'Automatischer Neustart fehlgeschlagen');
+      }
+    })();
+  }, AUTO_RESTART_DELAY_MS);
 }

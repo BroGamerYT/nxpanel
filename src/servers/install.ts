@@ -55,9 +55,29 @@ export async function installServer(server: ServerRecord, opts: InstallOptions =
     void appendFile(logPath, `${line}\n`, 'utf8').catch(() => {});
   };
 
+  const allocs = await sql<{ port: number; ref: string | null; is_primary: boolean }[]>`
+    SELECT port, ref, is_primary FROM allocations WHERE server_id = ${server.id}
+  `;
+  const primaryPort = (allocs.find((a) => a.is_primary) ?? allocs[0])?.port ?? 0;
+  const portsMap = Object.fromEntries(allocs.filter((a) => a.ref).map((a) => [a.ref!, a.port]));
+  const subCtx = {
+    variables: server.variables,
+    ramMb: server.ram_mb,
+    ip: '0.0.0.0',
+    port: primaryPort,
+    ports: portsMap,
+    serverDir: '/mnt/server',
+    serverName: server.name,
+  };
+  const resolvedVars = Object.fromEntries(
+    Object.entries(server.variables).map(([k, v]) => [k, typeof v === 'string' && v.includes('{{') ? substitute(v, subCtx) : v]),
+  );
+
   const env: Record<string, string> = {
-    ...server.variables,
+    ...resolvedVars,
     SERVER_MEMORY: String(server.ram_mb),
+    SERVER_IP: '0.0.0.0',
+    SERVER_PORT: String(primaryPort),
     SERVER_NAME: server.name,
     SERVER_SHORT_ID: server.short_id,
   };
@@ -66,15 +86,7 @@ export async function installServer(server: ServerRecord, opts: InstallOptions =
   // - steam_dev.cfg fuer schnellere SteamCMD-Updates beim Serverstart
   // - laeuft der Server spaeter als normaler Benutzer (run_as), bekommt er die
   //   Dateien, die der Installer als root angelegt hat.
-  let body = substitute(egg.install_script, {
-    variables: server.variables,
-    ramMb: server.ram_mb,
-    ip: '0.0.0.0',
-    port: 0,
-    ports: {},
-    serverDir: '/mnt/server',
-    serverName: server.name,
-  });
+  let body = substitute(egg.install_script.replace(/\r\n?/g, '\n'), subCtx);
   const onExit: string[] = [];
   if (config.STEAMCMD_FAST_DOWNLOAD) {
     const tuned = tuneSteamCmd(body);
@@ -83,7 +95,7 @@ export async function installServer(server: ServerRecord, opts: InstallOptions =
   }
   if (egg.run_as) onExit.push(`chown -R ${egg.run_as} /mnt/server 2>/dev/null || true`);
   const handOver = onExit.length ? `nxp_on_exit() {\n${onExit.map((l) => `  ${l}`).join('\n')}\n}\ntrap nxp_on_exit EXIT\n` : '';
-  const shell = /ash$/.test(egg.shell ?? '') ? 'ash' : 'bash';
+  const shell = /(?:^|\/)ash$/.test((egg.shell ?? '').trim()) ? 'ash' : 'bash';
   const script = handOver + body;
 
   // Freien Speicher vorab pruefen: SteamCMD meldet volle Platten nur

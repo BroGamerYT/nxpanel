@@ -25,7 +25,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Online-Spieler für weitere Spiele: ARK und Palworld mit Kicken/Bannen, Valheim/7DTD/SotF/CS2 anzeigen (0.15.0)
 - [x] Spieler kicken, bannen (mit Begründung und Dauer) sowie Bann- und Whitelists im Panel verwalten – Minecraft (0.13.0)
 - [ ] DDNS und eigene Subdomains je Server (Cloudflare, DuckDNS, Hetzner DNS) mit automatischen SRV-Records (ohne Portangabe beitreten)
-- [ ] 1-Klick Update-Button im Panel: Panel selbst aktualisieren & Server-Dateien auf Knopfdruck updaten
+- [x] 1-Klick Update-Button im Panel: Panel selbst aktualisieren & Server-Dateien auf Knopfdruck updaten (0.23.0)
 - [x] Globale Suche / Befehlspalette (Strg+K): blitzschnell Server, Einstellungen, Menüs und Dateien finden (0.12.0)
 - [x] Visuelle Konfigurations-Formulare für Spieleggs in Server-Einstellungen (0.12.0)
 - [x] Spielvorlagen für alle Server (Palworld, Rust, Valheim, CS2, Satisfactory, 7 Days to Die, Sons of the Forest, TeamSpeak 3) (0.12.0)
@@ -72,13 +72,13 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] 4 neue Eggs: Minecraft Bedrock, Factorio, V Rising, Core Keeper (0.16.0, auf der VM noch zu testen)
 - [x] Modpacks: Suche (CurseForge, Modrinth, FTB), eigene Pack-Datei, Update-Anzeige und 1-Klick-Update mit Backup (0.18.0)
 - [x] Terraria, Project Zomboid, Mumble (0.18.1, auf der VM noch zu testen)
-- [ ] Weitere Eggs: Garry's Mod, Velocity-Proxy (braucht TOML-Konfiguration), Don't Starve Together (Cluster-Token, mehrere Shards)
+- [x] Weitere Eggs: Garry's Mod, Velocity-Proxy (mit TOML-Konfiguration), Don't Starve Together (0.20.0 / 0.23.0)
 
 ## Spieler und Moderation
 
-- [ ] Live-Anzeige aller verbundenen Spieler (Name, Avatar/Skin, Ping, Spielzeit)
-- [ ] Moderation: Spieler kicken und bannen mit Grund, Whitelist/OP-Rechte per Mausklick
-- [ ] Listen-Verwaltung: Bannliste, Whitelist, VIP/OP-Listen direkt im Panel durchsuchen und bearbeiten
+- [x] Live-Anzeige aller verbundenen Spieler (Name, Avatar/Skin, Ping, Spielzeit) (0.13.0 / 0.15.0)
+- [x] Moderation: Spieler kicken und bannen mit Grund, Whitelist/OP-Rechte per Mausklick (0.13.0 / 0.15.0)
+- [x] Listen-Verwaltung: Bannliste, Whitelist, VIP/OP-Listen direkt im Panel durchsuchen und bearbeiten (0.13.0)
 
 ## Netzwerk und Domains
 
@@ -94,17 +94,17 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Erlaubte Spielvorlagen (Egg-Whitelisting je Benutzer) (0.16.2)
 - [x] Globales Audit-Log in der Oberfläche mit Live-Filtern (0.16.2)
 - [ ] Einladung per E-Mail
-- [ ] Aktivitätsansicht je Server in der Oberfläche
+- [x] Aktivitätsansicht je Server in der Oberfläche (0.23.0)
 
 ## Phase 7 – Komfort
 
 - [ ] RCON für Spiele ohne Konsole
-- [ ] Benachrichtigungen (Panel, Discord-Webhook bei Absturz)
-- [ ] Befehlspalette Strg+K, Favoriten, Tags
+- [x] Benachrichtigungen (Panel, Discord-Webhook bei Absturz) (0.23.0)
+- [x] Befehlspalette Strg+K, Favoriten, Tags (0.23.0)
 - [ ] SFTP mit Panel-Login
-- [ ] Modpacks und Plugins (Modrinth, CurseForge, Workshop)
+- [x] Modpacks und Plugins (Modrinth, CurseForge, Workshop) (0.18.0)
 - [ ] Versions-Updater mit Backup und Rücksprung
-- [ ] Mobile Ansicht
+- [x] Mobile Ansicht (0.23.0)
 - [ ] Mehrere Hosts (Nodes)
 - [ ] Prometheus/Grafana
 
@@ -115,8 +115,8 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] RCON von ARK und Palworld ebenfalls nur intern (0.19.0)
 - [x] Oberfläche lädt Seiten erst beim Öffnen: Start-JavaScript von 1,1 MB auf rund 0,45 MB, Konsole (xterm) nur auf der Serverseite (0.19.0)
 - [ ] Ergebnisse des Spiele-Testlaufs auswerten und fehlerhafte Eggs reparieren
-- [ ] Sprachdateien nur für die gewählte Sprache laden
-- [ ] Absprache zwischen den Sessions: vor jeder Version CHANGELOG und package.json prüfen (doppelte Versionsnummern vermeiden)
+- [x] Sprachdateien nur für die gewählte Sprache laden (0.23.0)
+- [x] Absprache zwischen den Sessions: vor jeder Version CHANGELOG und package.json prüfen (doppelte Versionsnummern vermeiden) (0.23.0)
 
 ## Apps und Installer (Konzept: docs/KONZEPT-APPS.md, Gesamtbild: docs/ARCHITEKTUR.md)
 
@@ -125,7 +125,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [ ] Panel: Kopplung per QR-Code (Einmal-Code gegen Geräte-Token)
 - [ ] Panel: CORS/Herkunft für Tauri-Apps, Ereignis-WebSocket für Benachrichtigungen
 - [ ] Panel: einstellbare API-Adresse in der Oberfläche, Download-Seite /apps mit QR für die APK
-- [ ] Mobile Ansicht (Voraussetzung für die Android-App)
+- [x] Mobile Ansicht (Voraussetzung für die Android-App) (0.23.0)
 - [ ] Desktop-App (Tauri 2, Rust): Verbindungen, Schlüsselbund, Tray mit Serverstatus, Benachrichtigungen, Autostart, Updater
 - [ ] App-Pakete: Windows (NSIS-.exe, MSI), macOS (.dmg Universal), Linux (AppImage, .deb, .rpm)
 - [ ] Android-App (APK/AAB) mit QR-Kopplung und Push
@@ -169,9 +169,10 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Egg-Katalog aller Pelican-Eggs mit Bewertung (`docs/EGG-KATALOG.md`)
 - [x] 25 Spiele direkt als Panel-Eggs eingebaut
 - [x] Admin-Import-Button für Egg-JSON
+- [x] Online-Egg-Katalog-Suche (350+ Spiele, Aliase, Tippfehler-Toleranz & 1-Klick-Import) (0.23.0)
 - [ ] Neue Eggs auf VM 120 testen (Start, Ports, Abfrage)
-- [ ] Rechnerische Zusatzports (Spielport + 1) als `offset` ergänzen, z. B. Unturned
-- [ ] Startmuster für Eggs ohne `done`-Text nachtragen
+- [x] Rechnerische Zusatzports (Spielport + 1) als `offset` ergänzen, z. B. Unturned (0.23.0)
+- [x] Startmuster für Eggs ohne `done`-Text nachtragen (0.23.0)
 
 ## Downloads und Tests (0.20.1)
 - [x] SteamCMD schneller (HTTP/2 aus, mehr Content-Server)
@@ -190,5 +191,10 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 ## Admin-Dateimanager (0.22.0)
 - [x] Dateimanager für die Panel-Ordner auf der VM, nur Admins
 - [x] Speicherbelegung je Ordner
-- [ ] Optional: Panel-Installation (/opt/nxpanel) read-only einbinden und per `ADMIN_FILE_ROOTS` zeigen
-- [ ] Docker-Belegung (Images, Container-Schichten) je Server anzeigen – große Container-Schichten = Spieldaten außerhalb des Datenordners
+- [x] Optional: Panel-Installation (/opt/nxpanel) read-only einbinden und per `ADMIN_FILE_ROOTS` zeigen (0.23.0)
+- [x] Docker-Belegung (Images, Container-Schichten) je Server anzeigen – große Container-Schichten = Spieldaten außerhalb des Datenordners (0.23.0)
+
+## Server-Betrieb & Konfigurator (0.23.0)
+- [x] Auto-Start an-/abschaltbar je Server mit 5-Versuche-Limit und direkter „Nicht startbar“-Anzeige am Panel (0.23.0)
+- [x] Mod- & Plugin-Konfigurator (`config/`, `defaultconfigs/`, `world/serverconfig/`, `BepInEx/config/` etc.) inkl. `.toml`- und `.yml`-Formular-Editor (0.23.0)
+- [x] Deploy (`deploy.bat`) durch lokalen Vorab-Build und stabiles Docker-Layer-Caching beschleunigt (0.23.0)

@@ -21,7 +21,7 @@
   "stop": "stop",
   "config": {
     "startup": {
-      "done": "\\)! For help, type"
+      "done": "(\\)! For help, type|Dedicated server took [0-9.,]+ seconds to load)"
     }
   },
   "ports": {

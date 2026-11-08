@@ -7,9 +7,11 @@
     "Proton (mschnitzer/asa-linux-server)": "mschnitzer/asa-linux-server:latest"
   },
   "entrypoint": [
-    "/usr/bin/start_server"
+    "/bin/bash",
+    "-c",
+    "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; exec /usr/bin/start_server"
   ],
-  "startup": "/usr/bin/start_server",
+  "startup": "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; exec /usr/bin/start_server",
   "data_dir": "/home/gameserver/server-files",
   "console": "readonly",
   "stop": {

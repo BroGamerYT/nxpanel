@@ -17,7 +17,8 @@
     "ghcr.io/parkervcp/steamcmd:proton": "ghcr.io/parkervcp/steamcmd:proton"
   },
   "file_denylist": [],
-  "startup": "proton run ./Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe",
+  "startup": "PROTON_USE_WINED3D=1 xvfb-run -a proton run ./Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe -nullrhi -nosound",
+  "tmp": "disk",
   "config": {
     "files": "{\r\n    \"Astro/Saved/Config/WindowsServer/Engine.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"url.Port\": \"{{server.build.default.port}}\",\r\n            \"[SystemSettings].net.AllowEncryption\":\"false\"\r\n        }\r\n    },\r\n    \"Astro/Saved/Config/WindowsServer/AstroServerSettings.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"[/Script/Astro.AstroServerSettings].PublicIP\": \"{{env.PUBLIC_IP}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerName\": \"{{env.OWNER_NAME}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerGuid\": \"{{env.OWNER_GUID}}\",\r\n            \"[/Script/Astro.AstroServerSettings].PlayerProperties\": \"(PlayerFirstJoinName=\\\"{{env.OWNER_NAME}}\\\",PlayerCategory=Admin,PlayerGuid=\\\"{{env.OWNER_GUID}}\\\",PlayerRecentJoinName=\\\"\\\")\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerPassword\": \"{{env.SERVER_PWD}}\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerName\": \"{{env.SERVER_NAME}}\"\r\n        }\r\n    }\r\n}",
     "startup": "{\r\n    \"done\": \"nable to use setpriority safely\"\r\n}",
@@ -36,10 +37,10 @@
       "name": "Public IP",
       "description": "Public IP to connect to the server.",
       "env_variable": "PUBLIC_IP",
-      "default_value": "",
+      "default_value": "0.0.0.0",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string",
+      "rules": "nullable|string",
       "sort": null,
       "field_type": "text",
       "name_locales": {
@@ -55,10 +56,10 @@
       "name": "Server Owner Name",
       "description": "Steam username of the server owner",
       "env_variable": "OWNER_NAME",
-      "default_value": "",
+      "default_value": "Admin",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string",
+      "rules": "nullable|string",
       "sort": null,
       "field_type": "text",
       "name_locales": {
@@ -77,7 +78,7 @@
       "default_value": "",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string",
+      "rules": "nullable|string",
       "sort": null,
       "field_type": "text",
       "name_locales": {

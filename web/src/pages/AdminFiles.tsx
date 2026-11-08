@@ -6,10 +6,11 @@ import { t } from '../lib/i18n';
 import { FileManager } from '../components/FileManager';
 import { Button, ErrorBox, Spinner } from '../components/ui';
 
-interface Root { id: string; label: string; path: string; available: boolean }
+interface Root { id: string; label: string; path: string; available: boolean; readOnly?: boolean }
 interface Usage { path: string; entries: { name: string; path: string; bytes: number; label?: string; orphan?: boolean }[]; partial: boolean }
 
 const ALL = ['file.read', 'file.write', 'file.delete', 'file.archive'];
+const READ_ONLY = ['file.read'];
 
 function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
@@ -50,7 +51,10 @@ export function AdminFiles() {
               title={r.available ? r.path : t('adminFiles.notMounted', { path: r.path })}
               className={`rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${active?.id === r.id ? 'border-amber bg-amber/10 text-ink' : 'border-seam bg-rack/40 text-dim hover:text-ink'}`}
             >
-              <span className="block font-medium">{r.label}</span>
+              <span className="flex items-center gap-1.5 font-medium">
+                {r.label}
+                {r.readOnly && <span className="rounded bg-rack px-1.5 py-0.5 text-[10px] font-mono text-dim border border-seam">{t('adminFiles.readOnly')}</span>}
+              </span>
               <span className="block font-mono text-[11px] opacity-70">{r.path}</span>
             </button>
           ))}
@@ -61,10 +65,10 @@ export function AdminFiles() {
         <>
           <div className="flex items-start gap-2 rounded-md border border-amber/40 bg-amber/10 px-3 py-2 text-sm">
             <AlertTriangle className="size-4 text-amber shrink-0 mt-0.5" aria-hidden />
-            <span>{t('adminFiles.warning')}</span>
+            <span>{active.readOnly ? t('adminFiles.readOnlyHint') : t('adminFiles.warning')}</span>
           </div>
           <UsagePanel key={`u-${active.id}`} root={active} />
-          <FileManager key={active.id} serverId={`admin:${active.id}`} apiBase={`/admin/files/${active.id}`} permissions={ALL} />
+          <FileManager key={active.id} serverId={`admin:${active.id}`} apiBase={`/admin/files/${active.id}`} permissions={active.readOnly ? READ_ONLY : ALL} />
         </>
       )}
     </div>

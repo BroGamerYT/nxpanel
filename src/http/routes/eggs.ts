@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { sql } from '../../db/index.js';
 import { parseRules } from '../../eggs/rules.js';
 import { isGeneratedDefault } from '../../eggs/variables.js';
-import { importEgg } from '../../eggs/import.js';
+import { convertForeignEggToBundled, importEgg, type RawEgg } from '../../eggs/import.js';
+import { isAllowedEggUrl, searchEggCatalog, toRawGithubUrl } from '../../eggs/catalog.js';
 import { writeAudit } from '../../audit.js';
 import { HttpError, requireAuth, requireAdmin } from '../auth.js';
 import { BRANDING, coverFor, isValidChoice, readCustomCover, removeCustomCover, saveCustomCover, steamAppId, steamCover } from '../../eggs/cover.js';
@@ -156,6 +157,76 @@ export async function eggRoutes(app: FastifyInstance) {
         }),
       },
     };
+  });
+
+  /** Online-Katalog aller Eggs durchsuchen (lokaler Katalog + GitHub pelican-eggs). */
+  app.get<{ Querystring: { q?: string; category?: string; live?: string } }>('/admin/eggs/catalog', { preHandler: requireAdmin() }, async (req) => {
+    const q = (req.query.q ?? '').slice(0, 100);
+    const category = (req.query.category ?? 'all').slice(0, 40);
+    const includeLive = req.query.live === 'true' || q.trim().length >= 2;
+    const rows = await sql<{ name: string }[]>`SELECT name FROM eggs`;
+    const existingNames = new Set(rows.map((r) => r.name));
+    const items = await searchEggCatalog(q, { category, includeLive, existingNames });
+    return { items };
+  });
+
+  /** Egg direkt von einer GitHub-URL herunterladen, automatisch fuer NexusPanel aufbereiten und importieren. */
+  app.post('/admin/eggs/import-url', { preHandler: requireAdmin() }, async (req, reply) => {
+    const body = z.object({
+      url: z.string().url().max(500),
+      steamId: z.number().int().positive().optional().nullable(),
+      category: z.string().max(60).optional(),
+    }).parse(req.body);
+
+    if (!isAllowedEggUrl(body.url)) {
+      throw new HttpError(400, 'Nur GitHub-JSON-Links (github.com / raw.githubusercontent.com) sind erlaubt', 'invalid_url');
+    }
+
+    const rawUrl = toRawGithubUrl(body.url);
+    let rawJson: RawEgg;
+    try {
+      const res = await fetch(rawUrl, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      rawJson = (await res.json()) as RawEgg;
+    } catch (err) {
+      throw new HttpError(400, `Download von GitHub fehlgeschlagen: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`, 'download_failed');
+    }
+
+    const { egg, report } = convertForeignEggToBundled(rawJson, rawUrl);
+    if (body.steamId && !egg.cover?.steam) {
+      egg.cover = { steam: body.steamId };
+    }
+    if (body.category && (!rawJson.nest || egg.nest === 'Survival')) {
+      const mapCat: Record<string, string> = {
+        SteamCMD: 'Survival',
+        Standalone: 'Eigenständig',
+        Minecraft: 'Minecraft',
+        Voice: 'Sprachserver',
+        Chatbots: 'Bots & Tools',
+      };
+      egg.nest = mapCat[body.category] ?? body.category;
+    }
+
+    const [dupe] = await sql`SELECT 1 FROM eggs WHERE lower(name) = lower(${String(egg.name ?? '')})`;
+    if (dupe) throw new HttpError(409, `Ein Spiel mit dem Namen "${egg.name}" ist bereits installiert`, 'conflict');
+
+    let result;
+    try {
+      result = await importEgg(egg, egg.nest ?? 'Importiert');
+    } catch (err) {
+      throw new HttpError(400, err instanceof Error ? err.message : 'Egg ungueltig', 'invalid_egg');
+    }
+
+    const allWarnings = [...new Set([...report, ...result.warnings])];
+    await writeAudit({
+      userId: req.actor!.id,
+      actorName: req.actor!.username,
+      action: 'egg.import_url',
+      ip: req.ip,
+      metadata: { name: result.name, url: rawUrl },
+    });
+    reply.code(201);
+    return { ...result, warnings: allWarnings };
   });
 
   /** Egg einspielen (Pterodactyl-Format oder eigenes). Body = der Inhalt der JSON-Datei. */

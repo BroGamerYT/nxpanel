@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { sql } from '../../db/index.js';
 import { volumePath } from '../../docker/client.js';
@@ -238,7 +238,7 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
     return { ref: body.ref, port, env: `${body.ref.toUpperCase()}_PORT` };
   });
 
-  /** Liste bekannter Konfigurationsdateien fuer diesen Server abfragen */
+  /** Liste bekannter Konfigurationsdateien (inkl. Mod- und Plugin-Ordner) fuer diesen Server abfragen */
   app.get<{ Params: { id: string } }>('/servers/:id/configs', { preHandler: requireServer('startup.read') }, async (req) => {
     const { server } = req.target!;
     const [egg] = await sql<{ raw_egg: { config_files?: Record<string, unknown> } | null }[]>`
@@ -248,6 +248,12 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
 
     const candidateFiles = new Set<string>(declared);
     candidateFiles.add('server.properties');
+    candidateFiles.add('bukkit.yml');
+    candidateFiles.add('spigot.yml');
+    candidateFiles.add('paper.yml');
+    candidateFiles.add('purpur.yml');
+    candidateFiles.add('pufferfish.yml');
+    candidateFiles.add('velocity.toml');
     candidateFiles.add('ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini');
     candidateFiles.add('ShooterGame/Saved/Config/WindowsServer/Game.ini');
     candidateFiles.add('Pal/Saved/Config/LinuxServer/PalWorldSettings.ini');
@@ -260,17 +266,39 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
     candidateFiles.add('ts3server.ini');
 
     const dir = volumePath(server.short_id);
-    const configs: Array<{ path: string; name: string; exists: boolean }> = [];
+    const configs: Array<{ path: string; name: string; exists: boolean; group: string }> = [];
+    const seen = new Set<string>();
 
     for (const rel of candidateFiles) {
       const full = join(dir, rel);
       const exists = existsSync(full);
       if (exists || declared.includes(rel)) {
+        seen.add(rel);
         configs.push({
           path: rel,
           name: basename(rel),
           exists,
+          group: 'main',
         });
+      }
+    }
+
+    // Mod- und Plugin-Konfigurationsordner automatisch durchsuchen
+    const modDirs = [
+      { folder: 'config', group: 'config' },
+      { folder: 'defaultconfigs', group: 'defaultconfigs' },
+      { folder: 'world/serverconfig', group: 'serverconfig' },
+      { folder: 'BepInEx/config', group: 'BepInEx/config' },
+      { folder: 'oxide/config', group: 'oxide/config' },
+      { folder: 'carbon/configs', group: 'carbon/configs' },
+      { folder: 'plugins', group: 'plugins' },
+    ];
+
+    for (const { folder, group } of modDirs) {
+      for (const item of scanModConfigFolder(dir, folder, group, 5, 5000)) {
+        if (seen.has(item.path)) continue;
+        seen.add(item.path);
+        configs.push(item);
       }
     }
 
@@ -293,6 +321,65 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
     await rebuild(ops, server.id, actor.id, `Port ${port} entfernt`);
     return { ok: true };
   });
+}
+
+const CONFIG_EXT_RE = /\.(toml|cfg|conf|ini|properties|json|json5|jsonc|yml|yaml|snbt|xml)$/i;
+
+/** Durchsucht einen Mod-/Plugin-Ordner ebenenweise (Breadth-First) nach Konfigurationsdateien (max. 2 MB je Datei). */
+function scanModConfigFolder(
+  volumeRoot: string,
+  relFolder: string,
+  group: string,
+  maxDepth: number,
+  maxFiles: number,
+): Array<{ path: string; name: string; exists: boolean; group: string }> {
+  const rootTarget = join(volumeRoot, relFolder);
+  if (!existsSync(rootTarget)) return [];
+
+  const results: Array<{ path: string; name: string; exists: boolean; group: string }> = [];
+  const queue: Array<{ rel: string; depth: number }> = [{ rel: relFolder, depth: 1 }];
+
+  while (queue.length > 0 && results.length < maxFiles) {
+    const { rel: currentRel, depth } = queue.shift()!;
+    let entries;
+    try {
+      entries = readdirSync(join(volumeRoot, currentRel), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Erst alle Dateien auf dieser Ebene aufnehmen, Unterordner fuer die naechste Ebene vormerken
+    for (const entry of entries) {
+      if (results.length >= maxFiles) break;
+      if (entry.name.startsWith('.')) continue;
+      const childRel = `${currentRel}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (depth < maxDepth) {
+          // Cache-, Backup- und Temp-Unterordner in Mods/Plugins ueberspringen
+          if (/^(cache|backups?|logs?|tmp|temp|lang|locales?|schematics|assets|textures)$/i.test(entry.name)) continue;
+          queue.push({ rel: childRel, depth: depth + 1 });
+        }
+      } else if (entry.isFile() && CONFIG_EXT_RE.test(entry.name)) {
+        try {
+          const st = statSync(join(volumeRoot, childRel));
+          if (st.size > 2 * 1024 * 1024) continue;
+        } catch {
+          continue;
+        }
+        const display = childRel.slice(relFolder.length + 1);
+        results.push({
+          path: childRel,
+          name: display,
+          exists: true,
+          group,
+        });
+      }
+    }
+  }
+
+  results.sort((a, b) => a.name.localeCompare(b.name));
+  return results;
 }
 
 /** Einen einzelnen Port aus dem Bereich des Hosts (oder 25500-25600 als Rueckfall) vergeben. */

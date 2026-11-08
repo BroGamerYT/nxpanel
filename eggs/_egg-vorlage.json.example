@@ -1,0 +1,265 @@
+{
+  "_comment": "MUSTER-VORLAGE (Template) fuer NexusPanel-Eggs. Zum Abgleichen und Korrigieren von Eggs aus dem Internet (Pelican / Pterodactyl). Siehe docs/EGG-VORLAGE.md fuer die ausfuehrliche Checkliste.",
+  "name": "Beispiel-Spiel",
+  "author": "nxpanel",
+  "nest": "Survival",
+  "cover": {
+    "steam": 1623730,
+    "_comment": "WICHTIG: Hier immer die Steam-Store-AppID des HAUPTSPIELS eintragen (nicht die Dedicated-Server-AppID aus SRCDS_APPID), damit das Titelbild geladen werden kann."
+  },
+  "docker_images": {
+    "Standard (Debian)": "ghcr.io/parkervcp/yolks:debian",
+    "Proton (Windows-Emulation)": "ghcr.io/parkervcp/steamcmd:proton"
+  },
+  "startup": "./ServerBinary -port {{SERVER_PORT}} -queryport {{QUERY_PORT}} -rconport {{RCON_PORT}} -maxplayers {{MAX_PLAYERS}}",
+  "data_dir": "/home/container",
+  "run_as": "1000:1000",
+  "capabilities": [
+    "CHOWN",
+    "SETUID",
+    "SETGID",
+    "DAC_OVERRIDE",
+    "FOWNER"
+  ],
+  "tmp": "disk",
+  "_comment_tmp": "Bei Wine/Proton-Spielen zwingend 'disk' setzen, da Proton >500 MB nach /tmp entpackt.",
+  "console": "full",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Server started|Listening on|Game server connected",
+    "timeout_seconds": 600
+  },
+  "web_interface": {
+    "url": "http://{{SERVER_IP}}:{{WEB_PORT}}",
+    "label": "Webinterface öffnen",
+    "note": "Optional: Nur eintragen, wenn das Spiel ein eigenes Webinterface mitbringt."
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel",
+      "start": 7777,
+      "end": 7876,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Steam Query",
+        "offset": 1,
+        "protocol": "udp",
+        "optional": false
+      },
+      {
+        "ref": "rcon",
+        "name": "RCON",
+        "start": 27020,
+        "end": 27119,
+        "protocol": "tcp",
+        "optional": false,
+        "internal": true
+      },
+      {
+        "ref": "web",
+        "name": "Webinterface",
+        "start": 8080,
+        "end": 8179,
+        "protocol": "tcp",
+        "optional": true
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 4096,
+    "ram_per_player_mb": 150,
+    "min_cpu_percent": 200,
+    "disk_mb": 20000,
+    "notes": "Kurzer Hinweis zum RAM-/Speicherbedarf des Spiels."
+  },
+  "scripts": {
+    "installation": {
+      "container": "ghcr.io/parkervcp/installers:debian",
+      "entrypoint": "bash",
+      "script": "#!/bin/bash\n# Installationsskript (laeuft in /mnt/server)\n"
+    }
+  },
+  "config_files": {
+    "Config/ServerSettings.ini": {
+      "parser": "ini",
+      "find": {
+        "ServerSettings.ServerName": "{{SERVER_NAME}}",
+        "ServerSettings.Port": "{{SERVER_PORT}}",
+        "ServerSettings.QueryPort": "{{QUERY_PORT}}",
+        "ServerSettings.RCONPort": "{{RCON_PORT}}",
+        "ServerSettings.AdminPassword": "{{ADMIN_PASSWORD}}"
+      }
+    }
+  },
+  "variables": [
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "description": "Name des Servers in der öffentlichen Serverliste.",
+      "description_locales": {
+        "de": "Name des Servers in der öffentlichen Serverliste.",
+        "en": "Name of the server in the public server list."
+      },
+      "env_variable": "SERVER_NAME",
+      "default_value": "NexusPanel Server",
+      "rules": "required|string|max:64",
+      "user_viewable": true,
+      "user_editable": true
+    },
+    {
+      "name": "Admin-Passwort",
+      "name_locales": {
+        "de": "Admin-Passwort",
+        "en": "Admin Password"
+      },
+      "description": "Passwort für Admin-Befehle und RCON. Leer lassen erzeugt automatisch eines.",
+      "description_locales": {
+        "de": "Passwort für Admin-Befehle und RCON. Leer lassen erzeugt automatisch eines.",
+        "en": "Password for admin commands and RCON. Leave blank to generate one."
+      },
+      "env_variable": "ADMIN_PASSWORD",
+      "default_value": "{{GENERATE_PASSWORD}}",
+      "rules": "required|string|min:8|max:64",
+      "secret": true,
+      "user_viewable": true,
+      "user_editable": true
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "description": "Passwort zum Beitreten (leer lassen für öffentlichen Server).",
+      "description_locales": {
+        "de": "Passwort zum Beitreten (leer lassen für öffentlichen Server).",
+        "en": "Password required to join (leave blank for public server)."
+      },
+      "env_variable": "SERVER_PASSWORD",
+      "default_value": "",
+      "rules": "nullable|string|max:64",
+      "secret": true,
+      "user_viewable": true,
+      "user_editable": true
+    },
+    {
+      "name": "Maximale Spieler",
+      "name_locales": {
+        "de": "Maximale Spieler",
+        "en": "Maximum Players"
+      },
+      "description": "Maximale Anzahl gleichzeitiger Spieler.",
+      "description_locales": {
+        "de": "Maximale Anzahl gleichzeitiger Spieler.",
+        "en": "Maximum number of concurrent players."
+      },
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "16",
+      "rules": "required|numeric|between:1,64",
+      "user_viewable": true,
+      "user_editable": true
+    },
+    {
+      "name": "Spielmodus",
+      "name_locales": {
+        "de": "Spielmodus",
+        "en": "Game Mode"
+      },
+      "description": "Auswahl des Spielmodus.",
+      "description_locales": {
+        "de": "Auswahl des Spielmodus.",
+        "en": "Select the game mode."
+      },
+      "env_variable": "GAME_MODE",
+      "default_value": "survival",
+      "rules": "required|in:survival,creative,hardcore",
+      "user_viewable": true,
+      "user_editable": true
+    },
+    {
+      "name": "Steam App-ID",
+      "env_variable": "SRCDS_APPID",
+      "default_value": "123456",
+      "rules": "required|string",
+      "user_viewable": false,
+      "user_editable": false
+    }
+  ],
+  "query": {
+    "kind": "source",
+    "port_ref": "query",
+    "rcon": {
+      "port_ref": "rcon",
+      "password_var": "ADMIN_PASSWORD"
+    }
+  },
+  "log_file": "Saved/Logs/Server.log",
+  "log_dirs": [
+    "logs",
+    "Saved/Logs"
+  ],
+  "hints": [
+    {
+      "match": "No space left on device|state is 0x202",
+      "flags": "i",
+      "level": "error",
+      "text": "Festplatte voll: Nicht genug freier Speicher für die Spieldateien.",
+      "text_locales": {
+        "de": "Festplatte voll: Nicht genug freier Speicher für die Spieldateien.",
+        "en": "Disk full: Not enough free space for the game files."
+      }
+    },
+    {
+      "match": "ProtonFixes\\[\\d+\\] WARN|fsync: up and running",
+      "flags": "",
+      "level": "ignore",
+      "text": "Harmlose Meldung von Proton – kann ignoriert werden.",
+      "text_locales": {
+        "de": "Harmlose Meldung von Proton – kann ignoriert werden.",
+        "en": "Harmless message from Proton – safe to ignore."
+      }
+    }
+  ],
+  "import": {
+    "notes": "Übernimmt Spielstände und Konfigurationsdateien aus einem ZIP-Backup.",
+    "rules": [
+      {
+        "match": "Saved/SaveGames",
+        "to": "Saved/SaveGames",
+        "exclude": [
+          "Logs",
+          "Crashes"
+        ]
+      }
+    ],
+    "detect": {
+      "markers": [
+        "Saved/SaveGames",
+        "ServerSettings.ini"
+      ],
+      "vars": [
+        {
+          "var": "SERVER_NAME",
+          "from": "ini",
+          "file": "ServerSettings.ini",
+          "section": "ServerSettings",
+          "key": "ServerName"
+        }
+      ]
+    }
+  },
+  "notes": [
+    "Interne Hinweise zu Besonderheiten des Spiels oder Images."
+  ]
+}

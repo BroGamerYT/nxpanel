@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { sql } from '../../db/index.js';
 import { extractGameInfo, listServersForActor, publicHostFor } from '../../servers/access.js';
-import { listPorts } from '../../servers/repo.js';
+import { listPorts, resetCrashCount } from '../../servers/repo.js';
 import { effectiveFlags, can, canCreateServer, canDeleteServer, type ServerFlag } from '../../auth/permissions.js';
 import { prepareServer, ValidationError, NotFoundError } from '../../servers/create.js';
 import { defaultNodeId } from '../../servers/nodes.js';
@@ -14,6 +14,8 @@ import { log } from '../../log.js';
 import { HttpError, requireAuth, requireServer } from '../auth.js';
 import { importAfterCreate, loadRules, resolveImportFile } from './import.js';
 import { diskCollector } from '../../servers/stats.js';
+import { createBackup, listBackups } from '../../servers/backups.js';
+import { engine } from '../../docker/client.js';
 
 export type PowerAction = 'start' | 'stop' | 'restart' | 'kill';
 
@@ -72,6 +74,8 @@ export const patchBody = z.object({
   description: z.string().max(500).nullable().optional(),
   autoRestart: z.boolean().optional(),
   autoSleepMinutes: z.number().int().min(0).max(1440).optional(),
+  tags: z.array(z.string().trim().min(1).max(24)).max(10).optional(),
+  isFavorite: z.boolean().optional(),
 }).refine((b) => Object.keys(b).length > 0, 'Nichts zu aendern');
 
 /**
@@ -212,18 +216,22 @@ export async function serverRoutes(
     const body = patchBody.parse(req.body);
     const { server, access } = req.target!;
     const actor = req.actor!;
-    if ((body.name !== undefined || body.description !== undefined) && !can(actor, access, 'settings.rename')) {
+    if ((body.name !== undefined || body.description !== undefined || body.tags !== undefined) && !can(actor, access, 'settings.rename') && !can(actor, access, 'startup.update')) {
       throw new HttpError(403, 'Fehlendes Recht: settings.rename', 'forbidden');
     }
-    if ((body.autoRestart !== undefined || body.autoSleepMinutes !== undefined) && !can(actor, access, 'startup.update')) {
+    if ((body.autoRestart !== undefined || body.autoSleepMinutes !== undefined) && !can(actor, access, 'startup.update') && !can(actor, access, 'control.start')) {
       throw new HttpError(403, 'Fehlendes Recht: startup.update', 'forbidden');
     }
+    const cleanTags = body.tags ? Array.from(new Set(body.tags.map((t) => t.trim()).filter(Boolean))) : undefined;
     await sql`
       UPDATE servers SET
         name = ${body.name ?? server.name},
         description = ${body.description === undefined ? sql`description` : body.description},
         auto_restart = ${body.autoRestart ?? server.auto_restart},
-        auto_sleep_minutes = ${body.autoSleepMinutes !== undefined ? body.autoSleepMinutes : server.auto_sleep_minutes}
+        auto_sleep_minutes = ${body.autoSleepMinutes !== undefined ? body.autoSleepMinutes : server.auto_sleep_minutes},
+        crash_count = ${body.autoRestart !== undefined ? 0 : server.crash_count},
+        tags = ${cleanTags !== undefined ? cleanTags : (server.tags ?? [])},
+        is_favorite = ${body.isFavorite !== undefined ? body.isFavorite : Boolean(server.is_favorite)}
       WHERE id = ${server.id}`;
     await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: 'server.update', ip: req.ip, metadata: body });
     return { ok: true };
@@ -253,6 +261,70 @@ export async function serverRoutes(
     await setStatus(server.id, 'installing', { reason: 'Neuinstallation', actorId: actor.id });
     await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: 'server.reinstall', ip: req.ip });
     runInBackground(server.id, actor.id, 'reinstall', () => ops.provision(server.id, { actorId: actor.id }));
+    reply.code(202);
+    return { accepted: true };
+  });
+
+  /**
+   * 1-Klick Server-Update (fuer alle Spiele):
+   * 1. Stoppt den Server geordnet (falls er laeuft)
+   * 2. Legt optional ein Sicherheits-Backup vor dem Update an
+   * 3. Zieht das neueste Docker-Image, fuehrt bei SteamCMD-Installern das Update-Skript aus bzw. baut den Container neu
+   * 4. Startet den Server wieder (falls er vorher lief oder auf Wunsch)
+   */
+  app.post<{ Params: { id: string }; Body: { backup?: boolean; startAfter?: boolean } }>('/servers/:id/update-game', { preHandler: requireServer('control.restart') }, async (req, reply) => {
+    const { server, access } = req.target!;
+    const actor = req.actor!;
+    const body = z.object({ backup: z.boolean().default(true), startAfter: z.boolean().default(true) }).parse(req.body ?? {});
+
+    if (body.backup && !can(actor, access, 'backup.create')) {
+      throw new HttpError(403, 'Fehlendes Recht fuer Sicherheits-Backup: backup.create', 'forbidden');
+    }
+    if (server.suspended) throw new HttpError(409, 'Server ist gesperrt', 'suspended');
+    if (server.status === 'installing' || server.status === 'stopping') {
+      throw new HttpError(409, `Update ist im Zustand "${server.status}" nicht moeglich`, 'invalid_state');
+    }
+
+    await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: 'server.update_game', ip: req.ip, metadata: body });
+    await resetCrashCount(server.id).catch(() => {});
+
+    const wasRunning = server.status === 'running' || server.status === 'starting';
+    const ip = req.ip;
+
+    runInBackground(server.id, actor.id, 'update', async () => {
+      await writeEvent({
+        serverId: server.id,
+        kind: 'status_change',
+        actorId: actor.id,
+        summary: `1-Klick-Update gestartet${body.backup ? ' (mit Sicherheits-Backup)' : ''}`,
+      });
+
+      if (wasRunning) {
+        await power.stop(server.id, { actorId: actor.id });
+      }
+
+      if (body.backup) {
+        const b = await createBackup(server.id, { id: actor.id, username: actor.username }, ip, 'Vor Server-Update');
+        const end = Date.now() + 60 * 60_000;
+        let bStatus = 'running';
+        while (Date.now() < end) {
+          bStatus = (await listBackups(server.id)).find((x) => x.id === b.id)?.status ?? 'missing';
+          if (bStatus !== 'running') break;
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        if (bStatus !== 'completed') {
+          throw new Error(`Sicherheits-Backup fehlgeschlagen (${bStatus}) – Update abgebrochen`);
+        }
+      }
+
+      await engine.pullImage(server.docker_image).catch((err: unknown) => log.warn({ err, image: server.docker_image }, 'Image-Pull beim Update fehlgeschlagen, nutze lokales Image'));
+      await ops.rebuild(server.id, { actorId: actor.id, reason: '1-Klick-Update' });
+
+      if (body.startAfter || wasRunning) {
+        await power.start(server.id, { actorId: actor.id });
+      }
+    });
+
     reply.code(202);
     return { accepted: true };
   });
@@ -288,7 +360,10 @@ export async function serverRoutes(
         limits: { ramMb: server.ram_mb, swapMb: server.swap_mb, cpuPercent: server.cpu_percent, diskMb: server.disk_mb },
         // Belegt laut letzter Messung (alle paar Minuten), null = noch nicht gemessen.
         diskUsedMb: diskCollector.serverMb().get(server.id) ?? null,
+        containerLayerMb: diskCollector.docker()?.serverContainerMb?.[server.id] ?? null,
         autoRestart: server.auto_restart,
+        crashCount: server.crash_count,
+        unstartable: server.status === 'crashed' && server.crash_count >= 5,
         autoSleepMinutes: server.auto_sleep_minutes,
         suspended: server.suspended,
         publicHost: publicHostFor(node?.public_host ?? null, node?.port_from ?? null, node?.port_to ?? null, primaryPort),
@@ -296,6 +371,8 @@ export async function serverRoutes(
         serverType: gameInfo.serverType,
         modpackName: gameInfo.modpackName,
         modpackVersion: gameInfo.modpackVersion,
+        tags: server.tags ?? [],
+        isFavorite: Boolean(server.is_favorite),
         // Nur ausliefern, was der Nutzer sehen darf.
         ...(has('allocation.read') ? { ports } : {}),
         ...(has('startup.read') ? {
@@ -340,6 +417,9 @@ export async function serverRoutes(
     }
 
     await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: `server.power.${action}`, ip: req.ip });
+
+    // Bei manuellem Start/Restart/Stop den Absturz-Zaehler sofort zuruecksetzen
+    await resetCrashCount(server.id).catch(() => {});
 
     // Ein Start kann Minuten dauern (Readiness). Die API antwortet sofort mit
     // 202, den Verlauf sieht die Oberflaeche ueber Status und Ereignisse.

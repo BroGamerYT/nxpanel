@@ -19,7 +19,7 @@
     "ghcr.io/parkervcp/steamcmd:debian": "ghcr.io/parkervcp/steamcmd:debian"
   },
   "file_denylist": [],
-  "startup": "./Unturned_Headless.x86_64 -batchmode -nographics -bind 0.0.0.0 -port {{SERVER_PORT}} -GSLT {{GSLT}} -Name \"{{SRV_NAME}}\" -Password {{SRV_PW}} +InternetServer/{{SRV_ID}}",
+  "startup": "./Unturned_Headless.x86_64 -batchmode -nographics -bind 0.0.0.0 -port {{SERVER_PORT}} -GSLT \"{{GSLT}}\" -Name \"{{SRV_NAME}}\" -Password \"{{SRV_PW}}\" +InternetServer/{{SRV_ID}}",
   "config": {
     "files": "{}",
     "startup": "{\r\n    \"done\": \"Loading level: 100%\"\r\n}",
@@ -71,7 +71,7 @@
       "default_value": "",
       "user_viewable": true,
       "user_editable": true,
-      "rules": "required|string",
+      "rules": "nullable|string",
       "sort": null,
       "field_type": "text",
       "name_locales": {
@@ -159,6 +159,27 @@
   "nest": "Survival",
   "cover": {
     "steam": 304930
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 27015,
+      "end": 27025,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Steam Query (Port +1)",
+        "offset": 1,
+        "protocol": "udp"
+      }
+    ]
+  },
+  "query": {
+    "kind": "source",
+    "port_ref": "query"
   },
   "resources": {
     "base_ram_mb": 2048,

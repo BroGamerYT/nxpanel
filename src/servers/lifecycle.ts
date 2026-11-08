@@ -2,7 +2,8 @@ import { engine } from '../docker/client.js';
 import { log } from '../log.js';
 import { writeEvent } from '../events.js';
 import { setStatus, getStatus } from './status.js';
-import { findServer, listPorts } from './repo.js';
+import { findServer, listPorts, resetCrashCount } from './repo.js';
+import { handleUnexpectedExit } from './supervisor.js';
 import { sql } from '../db/index.js';
 import { parseReadyCheck, matchesDone, waitForPort } from '../eggs/ready.js';
 import { existsSync } from 'node:fs';
@@ -17,19 +18,20 @@ import type { ServerRecord } from '../types.js';
 /** Server, deren Stopp das Panel selbst ausgeloest hat - fuer die Absturzerkennung. */
 const expectedStops = new Set<string>();
 
+/** Server, die dieser Panel-Prozess gerade aktiv startet oder stoppt. */
+const activeTransitions = new Set<string>();
+
 export interface ActorContext {
   actorId?: string | null | undefined;
 }
 
 export async function startServer(serverId: string, ctx: ActorContext = {}): Promise<void> {
   stopWakeProxy(serverId);
+  // Bei manuellem Start durch einen Nutzer den Absturz-Zaehler ("Nicht startbar") zuruecksetzen
+  if (ctx.actorId) {
+    await resetCrashCount(serverId);
+  }
   let server = await requireServer(serverId);
-
-  // Container passt nicht mehr zum Egg (z. B. /tmp zu klein fuer Proton)? Erst neu anlegen.
-  if (server.container_id && !server.suspended && await ensureRuntimeCurrent(serverId, ctx.actorId ?? null).catch((err: unknown) => {
-    log.warn({ err, serverId }, 'Container-Abgleich fehlgeschlagen');
-    return false;
-  })) server = await requireServer(serverId);
 
   if (server.suspended) throw new Error('Server ist gesperrt');
 
@@ -42,20 +44,32 @@ export async function startServer(serverId: string, ctx: ActorContext = {}): Pro
     await writeEvent({ serverId, kind: 'start_failed', severity: 'error', actorId: ctx.actorId ?? null, summary: msg, payload: { usedMb: used, limitMb: server.disk_mb } });
     throw new Error(msg);
   }
-  if (!server.container_id) throw new Error('Kein Container vorhanden - erst installieren');
 
-  // Konfiguration vor JEDEM Start schreiben: Port und IP koennen sich seit
-  // dem letzten Mal geaendert haben, etwa nach einem Umzug.
-  await writeConfigBeforeStart(server);
-
-  // Aeltere Container stecken noch im Docker-Standardnetz - nachziehen.
-  await engine.joinGameNetwork(server.container_id).catch(() => {});
-
+  activeTransitions.add(serverId);
   await setStatus(serverId, 'starting', { reason: 'angefordert', actorId: ctx.actorId });
 
   try {
+    // Container fehlt (z. B. nach docker system prune) oder passt nicht mehr zum Egg? Automatisch anlegen.
+    if (await ensureRuntimeCurrent(serverId, ctx.actorId ?? null).catch((err: unknown) => {
+      log.warn({ err, serverId }, 'Container-Abgleich fehlgeschlagen');
+      if (!server.container_id) throw err;
+      return false;
+    })) {
+      server = await requireServer(serverId);
+    }
+
+    if (!server.container_id) throw new Error('Kein Container vorhanden - erst installieren');
+
+    // Konfiguration vor JEDEM Start schreiben: Port und IP koennen sich seit
+    // dem letzten Mal geaendert haben, etwa nach einem Umzug.
+    await writeConfigBeforeStart(server);
+
+    // Aeltere Container stecken noch im Docker-Standardnetz - nachziehen.
+    await engine.joinGameNetwork(server.container_id).catch(() => {});
+
     await engine.start(server.container_id);
   } catch (err) {
+    activeTransitions.delete(serverId);
     // Wichtig: Scheitert der Start, darf der Server nicht auf 'starting'
     // stehen bleiben. Sonst zeigt das Panel dauerhaft einen Zustand an, der
     // nie eintritt, und kein Neustart ist mehr moeglich.
@@ -77,27 +91,18 @@ export async function startServer(serverId: string, ctx: ActorContext = {}): Pro
   }
 
   // Bereitschaft nach Vorgabe des Eggs abwarten.
-  const ready = await awaitReady(server);
+  let ready: { reason: string; seconds: number; exited?: boolean };
+  try {
+    ready = await awaitReady(server);
+  } finally {
+    activeTransitions.delete(serverId);
+  }
 
   if (ready.exited) {
-    // Der Container ist gestorben, bevor er bereit war. Hat der Beobachter
-    // das schon eingetragen, nicht doppelt melden.
-    const current = await getStatus(serverId);
-    if (current !== 'crashed') {
-      const lastLines = await engine.tailLogs(server.container_id, 30);
-      const hint = lastLines.at(-1)?.slice(0, 160) ?? '';
-      await setStatus(serverId, 'crashed', { reason: 'Beim Start beendet', actorId: ctx.actorId });
-      await writeEvent({
-        serverId,
-        kind: 'crash',
-        severity: 'error',
-        summary: hint ? `Beim Start abgestuerzt: ${hint}` : 'Beim Start abgestuerzt',
-        code: 'crash_on_start',
-        params: { hint: hint || '' },
-        payload: { phase: 'start', seconds: ready.seconds, lastLines },
-      });
-      void notifyServerStatus('crash', server.name, hint || 'Beim Start abgestürzt');
-    }
+    // Der Container ist gestorben, bevor er bereit war. Ueber handleUnexpectedExit
+    // wird der Absturz (entprellt mit dem Docker-'die'-Ereignis) gezaehlt und ggf.
+    // bis zu 5-mal automatisch neu gestartet.
+    await handleUnexpectedExit(serverId, { containerId: server.container_id, exitCode: -1 });
     throw new Error('Server ist beim Start abgestuerzt - siehe Zeitachse');
   }
 
@@ -108,6 +113,15 @@ export async function startServer(serverId: string, ctx: ActorContext = {}): Pro
   });
   void notifyServerStatus('start', server.name, `Server erfolgreich gestartet in ${ready.seconds}s`);
 
+  // Wenn der Server 60 Sekunden stabil durchlaeuft, gilt der Start als erfolgreich -> Absturz-Zaehler auf 0
+  setTimeout(() => {
+    void (async () => {
+      const current = await getStatus(serverId);
+      if (current === 'running') {
+        await resetCrashCount(serverId).catch(() => {});
+      }
+    })();
+  }, 60_000).unref();
 }
 
 /**
@@ -133,6 +147,7 @@ export async function stopServer(
     SELECT stop_command, stop_timeout FROM eggs WHERE id = ${server.egg_id}`;
   const grace = opts.graceSeconds ?? egg?.stop_timeout ?? 30;
   expectedStops.add(serverId);
+  activeTransitions.add(serverId);
 
   await setStatus(serverId, 'stopping', { reason: 'angefordert', actorId: opts.actorId });
   void notifyServerStatus('stop', server.name, opts.actorId ? 'Server wird heruntergefahren' : 'Server wird gestoppt');
@@ -162,6 +177,8 @@ export async function stopServer(
       /* Container ist vermutlich schon weg */
     }
     await finishStop(serverId);
+  } finally {
+    activeTransitions.delete(serverId);
   }
 }
 
@@ -192,6 +209,7 @@ export async function killServer(serverId: string, ctx: ActorContext = {}): Prom
 }
 
 async function finishStop(serverId: string): Promise<void> {
+  await resetCrashCount(serverId).catch(() => {});
   await setStatus(serverId, 'offline', { reason: 'gestoppt' });
   expectedStops.delete(serverId);
 }
@@ -318,4 +336,4 @@ function waitWithTimeout<T>(promise: Promise<T>, ms: number): Promise<boolean> {
   ]);
 }
 
-export { expectedStops };
+export { expectedStops, activeTransitions };

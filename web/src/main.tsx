@@ -23,7 +23,7 @@ const GameTestReport = page(() => import('./pages/GameTestReport'), 'GameTestRep
 const Integrations = page(() => import('./pages/Integrations'), 'Integrations');
 const AdminFiles = page(() => import('./pages/AdminFiles'), 'AdminFiles');
 import { Spinner } from './components/ui';
-import { I18nProvider, t } from './lib/i18n';
+import { I18nProvider, i18nReady, t } from './lib/i18n';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 2_000 } },
@@ -57,16 +57,18 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <I18nProvider>
-            <App />
-          </I18nProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>,
-);
+void i18nReady.finally(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <I18nProvider>
+              <App />
+            </I18nProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+});

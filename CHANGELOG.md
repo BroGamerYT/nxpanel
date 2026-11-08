@@ -21,6 +21,24 @@ Bis 0.4.x wurden Nachträge ohne eigene Nummer ausgespielt; sie sind hier
 nachträglich anhand des Entwicklungslogs eingeordnet. Ab 0.5.0 bekommt
 jede Auslieferung eine eigene Nummer.
 
+## [0.23.0] - 2026-11-08 – Online-Egg-Suche, Auto-Start-Limit, Mod-Konfigurator & TODO-Paket
+
+### Hinzugefügt
+- **Online-Egg-Katalog & intelligente Suche (350+ Spiele)**: Unter „Neuer Server → Spiel importieren (JSON)“ und in der Spielsuche durchsucht das Panel jetzt den gesamten Pelican- und Pterodactyl-Katalog (`pelican-eggs/*`, `pterodactyl/game-eggs`) sowie bei Bedarf öffentliche GitHub-Repos. Unterstützt deutsche Namen, Abkürzungen (`ls25`, `cs2`, `gta`, `mc`, `7d2d`, `asa`, `ets2` …) und fehlertolerante Tippfehler-Suche (Fuzzy-Search). Gefundene Vorlagen werden per 1-Klick importiert und automatisch auf NexusPanel umgestellt.
+- **Egg-Vorlage & CLI-Werkzeuge**: Kommentierte Vorlage `eggs/_egg-vorlage.json.example`, Handbuch `docs/EGG-VORLAGE.md` und neue Befehle `npm run egg -- search`, `convert` und `check`.
+- **Auto-Start mit 5-Versuche-Limit & „Nicht startbar“-Anzeige**: Auto-Start lässt sich direkt auf jeder Server-Kachel, im Serverkopf und in den Einstellungen per Klick aktivieren oder deaktivieren. Stürzt ein Server 5-mal hintereinander ab, bleibt er ausgeschaltet und zeigt direkt am Panel das rote Badge **„Nicht startbar (5/5 Abstürze)“** samt Warnhinweis an.
+- **Mod- & Plugin-Konfigurator**: Der visuelle Konfigurations-Editor unter „Einstellungen → Konfigurationsdateien“ durchsucht jetzt automatisch Mod- und Plugin-Ordner (`config/`, `defaultconfigs/`, `world/serverconfig/`, `BepInEx/config/`, `oxide/config/`, `plugins/`) und stellt `.toml`-, `.cfg`-, `.ini`-, `.yml`- und `.json`-Dateien inkl. der `#`-Kommentare der Mod-Entwickler als interaktive Formulare mit Gruppenfilter und Suche dar.
+- **Aktivitätsansicht je Server**: Im Reiter „Zeitachse“ können Berechtigte (`activity.read`) zwischen den Server-Ereignissen und dem Benutzer-Aktivitätsprotokoll (Audit-Log des Servers inkl. Aktion, Nutzer, Details und IP) umschalten.
+- **Docker-Container-Schicht je Server & Read-Only-Ordner im Admin-Dateimanager**: Auf der Serverseite wird neben dem Speicherplatz auch die Größe der schreibbaren Container-Schicht (`SizeRw`) angezeigt (mit Warnhinweis, falls ein Spiel Daten außerhalb von `/home/container` ablegt). `ADMIN_FILE_ROOTS` unterstützt `:ro` (z. B. `Panel-Installation=/opt/nxpanel:ro`).
+- **Favoriten & Tags für Server**: Server lassen sich per Stern-Klick als Favorit oben in der Serverliste anheften und mit frei wählbaren `#Tags` versehen (inkl. Tag-Filter in der Serverliste und Suche in der Befehlspalette `Strg+K`).
+- **1-Klick-Update für alle Spiele mit Vorab-Backup**: Neben Modpacks können nun alle Spielserver über den „Aktualisieren“-Dialog mit einem Klick aktualisiert werden (optionales Sicherheits-Backup vorab, Ziehen des neuesten Docker-Images, Container-Rebuild und automatischer Neustart).
+- **Panel-Benachrichtigungsglocke & Mobile Ansicht**: Neue Benachrichtigungsglocke in der Kopfleiste mit Zähler für ungelesene Warnungen/Abstürze/Updates und Direktsprung zum Server sowie ausklappbares Burger-Menü und horizontal scrollbare Reiter für Smartphones.
+
+### Geändert
+- **Sprachdateien nach Bedarf laden**: Die Oberfläche lädt nur noch die Sprachdatei der gewählten Sprache (`de.json` oder `en.json`) statt alle Sprachen ins Start-Bundle zu packen.
+- **Rechnerische Zusatzports & Startmuster**: Der Egg-Importer erkennt `SERVER_PORT + N`-Ausdrücke sowie Spiele wie Unturned und Barotrauma automatisch als `offset`-Port und vergibt für Vorlagen ohne eigenes `done`-Muster ein allgemeines Bereitschafts-Muster.
+- **Deutlich schnelleres Deploy (`deploy.bat`)**: Lokaler Vorab-Build von Backend und Oberfläche, stabiles Docker-Layer-Caching (`mtime=0` im Manifest), asynchrones Egg-Seeding beim Start und 1,5 s Shutdown-Timeout beim Container-Neustart.
+
 ## [0.22.1] - 2026-11-07
 
 ### Geändert

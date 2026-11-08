@@ -2,6 +2,7 @@ import { sql } from '../db/index.js';
 import { engine } from '../docker/client.js';
 import { log } from '../log.js';
 import { setStatus } from './status.js';
+import { activeTransitions } from './lifecycle.js';
 import type { ServerRecord, ServerStatus } from '../types.js';
 
 /**
@@ -54,9 +55,11 @@ export async function reconcile(): Promise<void> {
     // die Information, die man beim Nachsehen braucht.
     if (server.status === 'crashed' && actual === 'offline') continue;
 
-    // Waehrend das Panel selbst startet, stoppt oder installiert, nicht
-    // dazwischenfunken.
-    if (['starting', 'stopping', 'installing'].includes(server.status)) continue;
+    // Waehrend das Panel selbst aktiv startet, stoppt oder installiert, nicht
+    // dazwischenfunken. Ist kein Start/Stopp im laufenden Panel-Prozess aktiv
+    // (z. B. nach einem Panel-Neustart waehrend des Starts), Status sofort nachziehen!
+    if (server.status === 'installing') continue;
+    if ((server.status === 'starting' || server.status === 'stopping') && activeTransitions.has(server.id)) continue;
 
     if (server.status !== actual && server.status !== 'suspended') {
       await setStatus(server.id, actual, { reason: `Abgleich: Container ist ${container.state}` });

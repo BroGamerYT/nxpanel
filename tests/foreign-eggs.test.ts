@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeForeignEgg } from '../src/eggs/import.js';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { normalizeForeignEgg, convertForeignEggToBundled } from '../src/eggs/import.js';
+import {
+  searchEggCatalog,
+  loadCuratedCatalog,
+  isAllowedEggUrl,
+  toRawGithubUrl,
+  inferCategoryFromPath,
+} from '../src/eggs/catalog.js';
 import { patchConfigFile } from '../src/eggs/config-files.js';
-import { substitute } from '../src/eggs/variables.js';
+import { substitute, fillGeneratedValues, validateVariables } from '../src/eggs/variables.js';
 
 const ctx = (variables: Record<string, string>, ports: Record<string, number> = {}) =>
   ({ variables, ramMb: 4096, ip: '0.0.0.0', port: 28000, ports, serverDir: '/home/container', serverName: 'S' });
@@ -42,11 +51,71 @@ describe('Fremde Eggs (Pterodactyl/Pelican)', () => {
     expect(raw.run_as).toBeUndefined();
   });
 
+  it('repariert leere Pflichtfelder, Passwoerter, Doppelte und erkennt Proton-tmp', () => {
+    const { raw, notes } = normalizeForeignEgg({
+      name: 'ProtonTest',
+      startup: './start',
+      docker_images: { Proton: 'ghcr.io/pelican-eggs/steamcmd:proton' },
+      variables: [
+        { name: '[SERVER] Admin Pass', env_variable: 'ADMIN_PASSWORD', default_value: '', rules: 'required|string|max:32' },
+        { name: '[SERVER] Custom Args', env_variable: 'EXTRA_ARGS', default_value: '', rules: 'required|string' },
+        { name: 'Duplicate', env_variable: 'EXTRA_ARGS', default_value: 'foo', rules: 'nullable|string' },
+      ],
+    });
+    expect(raw.tmp).toBe('disk');
+    expect(raw.variables).toHaveLength(2);
+    expect(raw.variables![0]).toMatchObject({ env_variable: 'ADMIN_PASSWORD', default_value: '{{GENERATE_PASSWORD}}', secret: true });
+    expect(raw.variables![1]).toMatchObject({ env_variable: 'EXTRA_ARGS', rules: 'nullable|string' });
+    expect(notes.some((n) => n.includes('Doppelte Variable'))).toBe(true);
+
+    const { egg } = convertForeignEggToBundled({
+      name: 'ProtonTest',
+      startup: './start',
+      docker_images: { Proton: 'ghcr.io/pelican-eggs/steamcmd:proton' },
+      variables: [
+        { name: '[SERVER] Server Name', env_variable: 'SERVER_NAME', default_value: 'MySrv', rules: 'required|string' },
+        { name: '[SERVER] Query Port', env_variable: 'QUERY_PORT', default_value: '27015', rules: 'required|numeric' },
+      ],
+    });
+    expect(egg.variables![0]!.name).toBe('Server Name');
+    expect(egg.variables![0]!.name_locales).toEqual({ de: 'Server Name', en: 'Server Name' });
+    expect(egg.resources?.base_ram_mb).toBe(6144);
+    expect(egg.query).toEqual({ kind: 'source', port_ref: 'query' });
+    expect(egg.hints?.length).toBeGreaterThan(0);
+  });
+
   it('Parser "file" ersetzt Zeilen, die mit dem Suchtext beginnen', () => {
     const r = patchConfigFile('# Kommentar\nport=1\nname=alt\n', { parser: 'file', find: { 'port=': 'port={{SERVER_PORT}}', 'fehlt=': 'fehlt=1' } }, ctx({}));
     expect(r.content).toBe('# Kommentar\nport=28000\nname=alt\n');
     expect(r.changed).toEqual(['port=']);
     expect(r.skipped).toEqual(['fehlt=']);
+  });
+
+  it('alle mitgelieferten Eggs (eggs/*.json) bestehen die Variablenpruefung mit Standardwerten', () => {
+    const eggsDir = join(process.cwd(), 'eggs');
+    const files = readdirSync(eggsDir).filter((f) => f.endsWith('.json'));
+    expect(files.length).toBeGreaterThanOrEqual(45);
+
+    const customDefaults: Record<string, Record<string, string>> = {
+      'Farming Simulator 25': { FS_LICENSE_KEY: 'TEST-DUMMY-KEY-ONLY' },
+    };
+
+    for (const file of files) {
+      const rawInput = JSON.parse(readFileSync(join(eggsDir, file), 'utf8'));
+      const { raw } = normalizeForeignEgg(rawInput);
+      const defs = (raw.variables ?? [])
+        .filter((v) => v.env_variable)
+        .map((v) => ({
+          env_variable: v.env_variable!,
+          default_value: v.default_value === null || v.default_value === undefined ? null : String(v.default_value),
+          rules: Array.isArray(v.rules) ? v.rules.join('|') : (v.rules ?? null),
+          user_editable: v.user_editable ?? true,
+        }));
+      const inputVars = customDefaults[raw.name ?? ''] ?? {};
+      const filled = fillGeneratedValues(defs, inputVars, () => 'RandomPass123456');
+      const validated = validateVariables(defs, filled.values);
+      expect(validated.errors, `Validation errors in ${file} (${raw.name})`).toEqual([]);
+    }
   });
 });
 
@@ -57,6 +126,55 @@ describe('Platzhalter in Variablen', () => {
   it('Vorlagen in Variablen werden aufgeloest, Nutzerwerte gehen vor', () => {
     expect(substitute('-Xmx{{MEMORY}}', ctx({ MEMORY: '{{SERVER_MEMORY_HEAP}}M' }))).toBe('-Xmx3481M');
     expect(substitute('{{SERVER_NAME}}', ctx({ SERVER_NAME: 'Mein Valheim' }))).toBe('Mein Valheim');
+  });
+  it('unterstuetzt Pelican-Platzhalter server.environment.* und server.allocations.default.*', () => {
+    expect(
+      substitute(
+        'port={{server.allocations.default.port}} ip={{server.allocations.default.ip}} mode={{server.environment.GAME_MODE}}',
+        ctx({ GAME_MODE: 'survival' }),
+      ),
+    ).toBe('port=28000 ip=0.0.0.0 mode=survival');
+  });
+});
+
+describe('Online-Egg-Katalog & Suche', () => {
+  it('laedt alle kuratierten Eggs aus docs/EGG-KATALOG.md und durchsucht sie nach Name, Kategorie und AppID', async () => {
+    const all = await loadCuratedCatalog();
+    expect(all.length).toBeGreaterThanOrEqual(250);
+
+    const valheim = await searchEggCatalog('valheim', { includeLive: false });
+    expect(valheim.some((i) => i.name.toLowerCase().includes('valheim'))).toBe(true);
+
+    const mc = await searchEggCatalog('paper', { category: 'Minecraft', includeLive: false });
+    expect(mc.length).toBeGreaterThan(0);
+    expect(mc.every((i) => i.category === 'Minecraft')).toBe(true);
+
+    expect(isAllowedEggUrl('https://github.com/pelican-eggs/games-steamcmd/blob/main/valheim/egg-valheim.json')).toBe(true);
+    expect(isAllowedEggUrl('http://169.254.169.254/latest/meta-data')).toBe(false);
+    expect(toRawGithubUrl('https://github.com/pelican-eggs/minecraft/blob/main/java/paper/egg-paper.json'))
+      .toBe('https://raw.githubusercontent.com/pelican-eggs/minecraft/main/java/paper/egg-paper.json');
+  });
+
+  it('findet Spiele auch ueber deutsche Namen, Abkuerzungen (Aliase) und trotz Tippfehlern (Fuzzy-Search)', async () => {
+    // Abkuerzung CS2 -> Counter-Strike 2
+    const cs2 = await searchEggCatalog('cs2', { includeLive: false });
+    expect(cs2.some((i) => i.name.toLowerCase().includes('counter-strike'))).toBe(true);
+
+    // Abkuerzung GTA -> FiveM / alt:V
+    const gta = await searchEggCatalog('gta', { includeLive: false });
+    expect(gta.some((i) => /fivem|alt:v|ragemp/i.test(i.name))).toBe(true);
+
+    // Tippfehler: "valhiem" statt "valheim" und "palword" statt "palworld"
+    const typo1 = await searchEggCatalog('valhiem', { includeLive: false });
+    expect(typo1[0]?.name.toLowerCase()).toContain('valheim');
+
+    const typo2 = await searchEggCatalog('palword', { includeLive: false });
+    expect(typo2[0]?.name.toLowerCase()).toContain('palworld');
+
+    // Kategorie-Erkennung fuer pterodactyl/game-eggs Pfade
+    expect(inferCategoryFromPath('minecraft/java/paper/egg-paper.json', 'Auto')).toBe('Minecraft');
+    expect(inferCategoryFromPath('voice_servers/teamspeak3/egg-teamspeak3.json', 'Auto')).toBe('Voice');
+    expect(inferCategoryFromPath('game_eggs/steamcmd_servers/rust/egg-rust.json', 'Auto')).toBe('SteamCMD');
   });
 });
 

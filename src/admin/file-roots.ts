@@ -19,6 +19,7 @@ export interface AdminFileRoot {
   label: string;
   path: string;
   available: boolean;
+  readOnly?: boolean;
 }
 
 function slug(s: string): string {
@@ -26,7 +27,7 @@ function slug(s: string): string {
 }
 
 export function adminFileRoots(env: { VOLUME_ROOT: string; BACKUP_ROOT: string; NAS_BACKUP_ROOT: string; ADMIN_FILE_ROOTS: string } = config): AdminFileRoot[] {
-  const list: { label: string; path: string }[] = [];
+  const list: { label: string; path: string; readOnly?: boolean }[] = [];
   const vol = resolve(env.VOLUME_ROOT);
   const backup = resolve(env.BACKUP_ROOT);
   const parent = dirname(vol);
@@ -39,8 +40,14 @@ export function adminFileRoots(env: { VOLUME_ROOT: string; BACKUP_ROOT: string; 
   }
   if (env.NAS_BACKUP_ROOT) list.push({ label: 'NAS-Backups', path: resolve(env.NAS_BACKUP_ROOT) });
   for (const part of env.ADMIN_FILE_ROOTS.split(/[;\n]/)) {
-    const m = part.trim().match(/^([^=]+)=(\/.+)$/);
-    if (m && m[2] !== '/') list.push({ label: m[1]!.trim(), path: resolve(m[2]!.trim()) });
+    const m = part.trim().match(/^([^=]+)=(\/.+?)(:ro)?$/i);
+    if (m && m[2] !== '/') {
+      list.push({
+        label: m[1]!.trim(),
+        path: resolve(m[2]!.trim()),
+        ...(m[3] ? { readOnly: true } : {}),
+      });
+    }
   }
   const seen = new Set<string>();
   const out: AdminFileRoot[] = [];
@@ -49,7 +56,13 @@ export function adminFileRoots(env: { VOLUME_ROOT: string; BACKUP_ROOT: string; 
     seen.add(r.path);
     let id = slug(r.label);
     while (out.some((o) => o.id === id)) id += '-2';
-    out.push({ id, label: r.label, path: r.path, available: existsSync(r.path) });
+    out.push({
+      id,
+      label: r.label,
+      path: r.path,
+      available: existsSync(r.path),
+      ...(r.readOnly ? { readOnly: true } : {}),
+    });
   }
   return out;
 }

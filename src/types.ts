@@ -31,6 +31,8 @@ export interface ServerRecord {
   auto_sleep_minutes: number;
   crash_count: number;
   suspended: boolean;
+  tags?: string[];
+  is_favorite?: boolean;
 }
 
 export interface PortBinding {

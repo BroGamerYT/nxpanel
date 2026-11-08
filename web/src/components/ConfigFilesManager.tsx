@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Sliders, FileCode, Save, RefreshCw, AlertCircle, Check, FileText } from 'lucide-react';
+import { Sliders, FileCode, Save, AlertCircle, Check, FileText, FolderCog, Search, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { t } from '../lib/i18n';
 import { Button, ErrorBox, Spinner } from './ui';
@@ -10,6 +10,7 @@ interface ConfigItem {
   path: string;
   name: string;
   exists: boolean;
+  group?: string;
 }
 
 interface ConfigFilesManagerProps {
@@ -26,20 +27,35 @@ export function ConfigFilesManager({ serverId, canWrite, stopped }: ConfigFilesM
     data: configData,
     isLoading: loadingList,
     error: listError,
-    refetch: refetchList,
   } = useQuery<{ configs: ConfigItem[] }>({
     queryKey: ['serverConfigs', serverId],
     queryFn: () => api<{ configs: ConfigItem[] }>(`/servers/${serverId}/configs`),
   });
 
   const configs = configData?.configs ?? [];
+  const mainConfigs = useMemo(() => configs.filter((c) => !c.group || c.group === 'main'), [configs]);
+  const modConfigs = useMemo(() => configs.filter((c) => c.group && c.group !== 'main'), [configs]);
+  const modGroups = useMemo(() => [...new Set(modConfigs.map((c) => c.group!))], [modConfigs]);
+
   const [activePath, setActivePath] = useState<string>('');
+  const [modFilterGroup, setModFilterGroup] = useState<string>('all');
+  const [modSearch, setModSearch] = useState<string>('');
+  const [showAllMods, setShowAllMods] = useState(false);
   const [viewMode, setViewMode] = useState<'form' | 'code'>('form');
   const [content, setContent] = useState('');
   const [initialContent, setInitialContent] = useState('');
   const [dirty, setDirty] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const filteredMods = useMemo(() => {
+    const q = modSearch.trim().toLowerCase();
+    return modConfigs.filter((c) => {
+      if (modFilterGroup !== 'all' && c.group !== modFilterGroup) return false;
+      if (!q) return true;
+      return c.name.toLowerCase().includes(q) || c.path.toLowerCase().includes(q);
+    });
+  }, [modConfigs, modFilterGroup, modSearch]);
 
   // Sobald Config-Liste geladen ist, erste Datei vorauswaehlen
   useEffect(() => {
@@ -56,7 +72,6 @@ export function ConfigFilesManager({ serverId, canWrite, stopped }: ConfigFilesM
     data: fileData,
     isLoading: loadingContent,
     error: contentError,
-    refetch: refetchContent,
   } = useQuery<{ content: string; size: number }>({
     queryKey: ['fileContent', serverId, activePath],
     queryFn: () =>
@@ -146,30 +161,135 @@ export function ConfigFilesManager({ serverId, canWrite, stopped }: ConfigFilesM
         </div>
       )}
 
-      {/* Dateiauswahl Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-seam pb-3">
-        {configs.map((cfg) => {
-          const isActive = cfg.path === activePath;
-          return (
-            <button
-              key={cfg.path}
-              type="button"
-              onClick={() => handleSelectConfig(cfg.path)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono transition border ${
-                isActive
-                  ? 'bg-amber text-black border-amber font-semibold shadow'
-                  : 'bg-rack-1/80 text-dim border-seam hover:text-ink hover:bg-rack-2'
-              }`}
-            >
-              <FileCode className="size-3.5" />
-              <span>{cfg.name}</span>
-              {!cfg.exists && (
-                <span className="text-[10px] px-1 py-0.2 rounded bg-rack-2/70 text-dim">neu</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* Haupt-Konfigurationsdateien Tabs */}
+      {mainConfigs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-seam pb-3">
+          {mainConfigs.map((cfg) => {
+            const isActive = cfg.path === activePath;
+            return (
+              <button
+                key={cfg.path}
+                type="button"
+                onClick={() => handleSelectConfig(cfg.path)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono transition border ${
+                  isActive
+                    ? 'bg-amber text-black border-amber font-semibold shadow'
+                    : 'bg-rack-1/80 text-dim border-seam hover:text-ink hover:bg-rack-2'
+                }`}
+              >
+                <FileCode className="size-3.5" />
+                <span>{cfg.name}</span>
+                {!cfg.exists && (
+                  <span className="text-[10px] px-1 py-0.2 rounded bg-rack-2/70 text-dim">neu</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Mod- & Plugin-Konfigurationsordner (z. B. config/, defaultconfigs/, serverconfig/, BepInEx/config/) */}
+      {modConfigs.length > 0 && (
+        <div className="rounded-lg border border-seam bg-rack p-3 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-ink">
+              <FolderCog className="size-4 text-amber" />
+              <span>Mod- & Plugin-Konfigurationen ({modConfigs.length})</span>
+            </div>
+            {modGroups.length > 1 && (
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => setModFilterGroup('all')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-mono transition ${
+                    modFilterGroup === 'all'
+                      ? 'bg-amber text-black font-semibold'
+                      : 'bg-rack-2 text-dim hover:text-ink'
+                  }`}
+                >
+                  Alle ({modConfigs.length})
+                </button>
+                {modGroups.map((grp) => {
+                  const count = modConfigs.filter((c) => c.group === grp).length;
+                  return (
+                    <button
+                      key={grp}
+                      type="button"
+                      onClick={() => setModFilterGroup(grp)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono transition ${
+                        modFilterGroup === grp
+                          ? 'bg-amber text-black font-semibold'
+                          : 'bg-rack-2 text-dim hover:text-ink'
+                      }`}
+                    >
+                      {grp}/ ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <Search className="size-3.5 text-dim absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={modSearch}
+              onChange={(e) => setModSearch(e.target.value)}
+              placeholder="Mod- oder Plugin-Config suchen (z. B. ftbchunks, mekanism, create, voicechat) …"
+              className="w-full bg-rack-2 border border-seam rounded pl-8 pr-7 py-1.5 text-xs text-ink placeholder:text-dim/60 focus:outline-none focus:border-amber"
+            />
+            {modSearch && (
+              <button
+                type="button"
+                onClick={() => setModSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-dim hover:text-ink"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="max-h-44 overflow-y-auto flex flex-wrap gap-1.5 pt-0.5">
+            {filteredMods.length === 0 ? (
+              <span className="text-xs text-dim py-1">Keine passende Mod-Konfiguration gefunden.</span>
+            ) : (
+              <>
+                {(showAllMods || modSearch.trim() ? filteredMods : filteredMods.slice(0, 150)).map((cfg) => {
+                  const isActive = cfg.path === activePath;
+                  return (
+                    <button
+                      key={cfg.path}
+                      type="button"
+                      onClick={() => handleSelectConfig(cfg.path)}
+                      title={cfg.path}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition border ${
+                        isActive
+                          ? 'bg-amber text-black border-amber font-semibold shadow'
+                          : 'bg-rack-2/70 text-dim border-seam hover:text-ink hover:bg-rack-2'
+                      }`}
+                    >
+                      <FileCode className="size-3 shrink-0" />
+                      <span className="truncate max-w-[260px]">
+                        {modFilterGroup === 'all' && modGroups.length > 1 ? `${cfg.group}/${cfg.name}` : cfg.name}
+                      </span>
+                    </button>
+                  );
+                })}
+                {!showAllMods && !modSearch.trim() && filteredMods.length > 150 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllMods(true)}
+                    className="px-2.5 py-1 rounded text-xs font-medium bg-amber/15 text-amber border border-amber/30 hover:bg-amber/25"
+                  >
+                    + {filteredMods.length - 150} weitere anzeigen (oder oben suchen)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Editor & Steuerungsleiste */}
       <div className="border border-seam rounded-xl overflow-hidden bg-rack-1 shadow-md flex flex-col min-h-[500px]">

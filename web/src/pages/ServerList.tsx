@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GameCover } from '../components/GameCover';
-import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical } from 'lucide-react';
+import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical, RotateCcw, AlertTriangle, Star, Tag, Play, Square } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
 import { useAuth } from '../lib/auth';
-import { STATUS, formatMb, formatRate } from '../lib/status';
+import { POWER_ALLOWED, STATUS, formatMb, formatRate } from '../lib/status';
+import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
 import type { DashboardData, ServerListItem, ServerLive, ServerStatus } from '../lib/types';
 import { Dashboard, Bar } from '../components/Dashboard';
 import { ErrorBox, Input, Led, Select, Spinner, StatusLabel } from '../components/ui';
@@ -20,14 +21,28 @@ import { Tooltip } from '../components/Tooltip';
  */
 export function ServerList() {
   const { me } = useAuth();
+  const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<'alle' | ServerStatus>('alle');
   const [game, setGame] = useState('alle');
+  const [tagFilter, setTagFilter] = useState('alle');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['servers'],
     queryFn: () => api<{ servers: ServerListItem[] }>('/servers'),
     refetchInterval: 5_000,
+  });
+
+  const toggleAutoStart = useMutation({
+    mutationFn: ({ id, autoRestart }: { id: string; autoRestart: boolean }) =>
+      api(`/servers/${id}`, { method: 'PATCH', body: { autoRestart } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['servers'] }),
+  });
+
+  const toggleFavorite = useMutation({
+    mutationFn: ({ id, isFavorite }: { id: string; isFavorite: boolean }) =>
+      api(`/servers/${id}`, { method: 'PATCH', body: { isFavorite } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['servers'] }),
   });
 
   const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<DashboardData>('/dashboard'), refetchInterval: 5_000 });
@@ -36,10 +51,12 @@ export function ServerList() {
   const servers = data?.servers ?? [];
   const liveOf = (id: string) => dash.data?.perServer[id];
   const games = useMemo(() => [...new Set(servers.map((s) => s.eggName))].sort(), [servers]);
+  const allTags = useMemo(() => [...new Set(servers.flatMap((s) => s.tags ?? []))].sort(), [servers]);
   const shown = servers.filter((s) =>
     (statusFilter === 'alle' || s.status === statusFilter) &&
     (game === 'alle' || s.eggName === game) &&
-    (!q || `${s.name} ${s.eggName} ${s.ownerName} ${s.primaryPort ?? ''}`.toLowerCase().includes(q.toLowerCase())),
+    (tagFilter === 'alle' || (s.tags ?? []).includes(tagFilter)) &&
+    (!q || `${s.name} ${s.eggName} ${s.ownerName} ${s.primaryPort ?? ''} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(q.toLowerCase())),
   );
   const running = servers.filter((s) => s.status === 'running').length;
 
@@ -95,6 +112,12 @@ export function ServerList() {
               {games.map((g) => <option key={g}>{g}</option>)}
             </Select>
           )}
+          {allTags.length > 0 && (
+            <Select aria-label="Tag" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="w-auto">
+              <option value="alle">{t('servers.allTags')}</option>
+              {allTags.map((tg) => <option key={tg} value={tg}>#{tg}</option>)}
+            </Select>
+          )}
         </div>
       )}
 
@@ -112,59 +135,113 @@ export function ServerList() {
 
       {shown.length > 0 && view === 'tiles' && (
         <ul className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {shown.map((s) => <li key={s.id}><Tile s={s} live={liveOf(s.id)} diskMb={dash.data?.diskUsed[s.id]} /></li>)}
+          {shown.map((s) => (
+            <li key={s.id}>
+              <Tile
+                s={s}
+                live={liveOf(s.id)}
+                diskMb={dash.data?.diskUsed[s.id]}
+                onToggleAutoStart={(autoRestart) => toggleAutoStart.mutate({ id: s.id, autoRestart })}
+                onToggleFavorite={(isFavorite) => toggleFavorite.mutate({ id: s.id, isFavorite })}
+                onSelectTag={(tg) => setTagFilter((prev) => (prev === tg ? 'alle' : tg))}
+              />
+            </li>
+          ))}
         </ul>
       )}
 
       {shown.length > 0 && view === 'list' && (
-        <div className="rounded-lg border border-seam overflow-hidden">
+        <div className="rounded-lg border border-seam overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-rack text-dim text-left">
               <tr>
-                <th className="font-medium px-4 py-2.5">{t('servers.col.name')}</th>
-                <th className="font-medium px-4 py-2.5 hidden sm:table-cell">{t('servers.col.game')}</th>
-                <th className="font-medium px-4 py-2.5 hidden md:table-cell">{t('servers.col.address')}</th>
-                <th className="font-medium px-4 py-2.5 hidden lg:table-cell">{t('servers.col.load')}</th>
-                <th className="font-medium px-4 py-2.5 hidden xl:table-cell">{t('res.disk')}</th>
-                <th className="font-medium px-4 py-2.5 hidden lg:table-cell">{t('servers.col.owner')}</th>
+                <th className="font-medium px-3 py-2.5">{t('servers.col.name')}</th>
+                <th className="font-medium px-3 py-2.5 hidden sm:table-cell">{t('servers.col.game')}</th>
+                <th className="font-medium px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{t('servers.col.address')}</th>
+                <th className="font-medium px-3 py-2.5 hidden lg:table-cell whitespace-nowrap">{t('servers.col.load')}</th>
+                <th className="font-medium px-3 py-2.5 hidden xl:table-cell whitespace-nowrap">{t('res.disk')}</th>
+                <th className="font-medium px-3 py-2.5 text-right whitespace-nowrap">{t('files.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-seam">
               {shown.map((s) => (
                 <tr key={s.id} className="hover:bg-rack/70">
-                  <td className="px-4 py-3">
-                    <Link to={`/server/${s.shortId}`} className="flex items-center gap-3 group">
-                      <Tooltip content={STATUS[s.status]?.label ?? s.status} side="right">
-                        <span className="cursor-help inline-flex"><Led status={s.status} /></span>
-                      </Tooltip>
-                      <GameCover cover={s.cover} seed={s.eggId ?? s.id} className="w-16 rounded shrink-0 hidden sm:block" />
-                      <span className="min-w-0">
-                        <span className="block font-medium group-hover:text-amber truncate">{s.name}</span>
-                        <span className="block text-xs text-dim">{STATUS[s.status].label}</span>
-                      </span>
-                    </Link>
+                  <td className="px-3 py-2.5 max-w-[240px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleFavorite.mutate({ id: s.id, isFavorite: !s.isFavorite })}
+                        title={s.isFavorite ? t('servers.favRemove') : t('servers.favAdd')}
+                        className={`shrink-0 p-1 rounded hover:bg-rack-2 transition-colors ${s.isFavorite ? 'text-amber' : 'text-dim/40 hover:text-dim'}`}
+                      >
+                        <Star className={`size-4 ${s.isFavorite ? 'fill-amber' : ''}`} />
+                      </button>
+                      <Link to={`/server/${s.shortId}`} className="flex items-center gap-2.5 group min-w-0 flex-1">
+                        <Tooltip content={STATUS[s.status]?.label ?? s.status} side="right">
+                          <span className="cursor-help inline-flex shrink-0"><Led status={s.status} /></span>
+                        </Tooltip>
+                        <GameCover cover={s.cover} seed={s.eggId ?? s.id} className="w-12 rounded shrink-0 hidden sm:block" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium group-hover:text-amber truncate" title={s.name}>{s.name}</span>
+                          {s.unstartable || (s.status === 'crashed' && (s.crashCount ?? 0) >= 5) ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-led-crash">
+                              <AlertTriangle className="size-3 shrink-0" />
+                              {t('status.unstartable')}
+                            </span>
+                          ) : (s.crashCount ?? 0) > 0 && (s.status === 'crashed' || s.status === 'starting') ? (
+                            <span className="block text-xs text-amber font-medium">
+                              {STATUS[s.status].label} · {t('status.autoStartAttempt', { count: s.crashCount ?? 0 })}
+                            </span>
+                          ) : (
+                            <span className="block text-xs text-dim">
+                              {STATUS[s.status].label}
+                              {!s.isOwner && s.ownerName ? ` · ${s.ownerName}` : ''}
+                            </span>
+                          )}
+                          {s.tags && s.tags.length > 0 && (
+                            <span className="flex flex-wrap gap-1 mt-1">
+                              {s.tags.map((tg) => (
+                                <button
+                                  key={tg}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setTagFilter((prev) => (prev === tg ? 'alle' : tg));
+                                  }}
+                                  className="inline-flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-rack-2 text-dim hover:text-amber border border-seam"
+                                >
+                                  #{tg}
+                                </button>
+                              ))}
+                            </span>
+                          )}
+                        </span>
+                      </Link>
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-dim hidden sm:table-cell">
+                  <td className="px-3 py-2.5 text-dim hidden sm:table-cell max-w-[180px]">
                     <div className="min-w-0">
-                      <span className="block text-ink font-medium">{s.eggName}</span>
+                      <span className="block text-ink font-medium truncate">{s.eggName}</span>
                       {s.modpackName ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-amber font-medium truncate max-w-[220px]" title={s.modpackName}>
+                        <span className="inline-flex items-center gap-1 text-xs text-amber font-medium truncate max-w-[170px]" title={s.modpackName}>
                           <Package className="size-3 shrink-0" aria-hidden />
                           <span className="truncate">{s.modpackName}</span>
-                          {s.modpackVersion && <span className="text-dim font-mono">v{s.modpackVersion}</span>}
+                          {s.modpackVersion && <span className="text-dim font-mono shrink-0">v{s.modpackVersion}</span>}
                         </span>
                       ) : null}
                       {s.gameVersion ? (
-                        <span className="block text-xs text-dim font-mono">
+                        <span className="block text-xs text-dim font-mono truncate">
                           {s.serverType ? `${s.serverType} ` : ''}{s.gameVersion}
                         </span>
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-4 py-3 hidden md:table-cell">{s.primaryPort ? <Address port={s.primaryPort} host={s.publicHost} /> : <span className="text-dim">–</span>}</td>
-                  <td className="px-4 py-3 text-dim hidden lg:table-cell tabular-nums"><LoadCell s={s} live={liveOf(s.id)} /></td>
-                  <td className="px-4 py-3 text-dim hidden xl:table-cell tabular-nums">{dash.data?.diskUsed[s.id] !== undefined ? t('server.ramOf', { used: formatMb(dash.data.diskUsed[s.id]!), max: formatMb(s.diskMb) }) : formatMb(s.diskMb)}</td>
-                  <td className="px-4 py-3 text-dim hidden lg:table-cell">{s.isOwner ? t('servers.you') : s.ownerName}</td>
+                  <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{s.primaryPort ? <Address port={s.primaryPort} host={s.publicHost} /> : <span className="text-dim">–</span>}</td>
+                  <td className="px-3 py-2.5 text-dim hidden lg:table-cell tabular-nums whitespace-nowrap"><LoadCell s={s} live={liveOf(s.id)} /></td>
+                  <td className="px-3 py-2.5 text-dim hidden xl:table-cell tabular-nums whitespace-nowrap">{dash.data?.diskUsed[s.id] !== undefined ? t('server.ramOf', { used: formatMb(dash.data.diskUsed[s.id]!), max: formatMb(s.diskMb) }) : formatMb(s.diskMb)}</td>
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                    <QuickPowerButtons s={s} compact />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -172,6 +249,59 @@ export function ServerList() {
         </div>
       )}
       {servers.length > 0 && shown.length === 0 && <p className="text-dim text-sm">{t('servers.noMatch')}</p>}
+    </div>
+  );
+}
+
+function QuickPowerButtons({ s, compact = false }: { s: ServerListItem; compact?: boolean }) {
+  const power = usePower(s.id);
+  if (s.status === 'install_failed' || s.suspended) return null;
+
+  const buttons: Array<{ a: PowerAction; icon: typeof Play; activeClass: string }> = [
+    { a: 'start', icon: Play, activeClass: 'bg-amber text-amber-ink border-amber font-semibold hover:brightness-110' },
+    { a: 'restart', icon: RotateCcw, activeClass: 'bg-rack-2 text-ink border-seam hover:border-amber/60 hover:text-amber' },
+    { a: 'stop', icon: Square, activeClass: 'bg-rack-2 text-ink border-seam hover:border-rose/60 hover:text-rose' },
+  ];
+
+  const allowedButtons = buttons.filter((b) => s.permissions.includes(`control.${b.a}`));
+  if (allowedButtons.length === 0) return null;
+
+  return (
+    <div
+      className={`flex items-center gap-1.5 ${compact ? 'justify-end' : 'pt-1'}`}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      {allowedButtons.map(({ a, icon: Icon, activeClass }) => {
+        const enabled = POWER_ALLOWED[a].includes(s.status) && !power.isPending;
+        const isBusy = power.isPending && power.variables === a;
+        return (
+          <button
+            key={a}
+            type="button"
+            disabled={!enabled}
+            title={POWER_LABEL[a]}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              power.mutate(a);
+            }}
+            className={`inline-flex items-center justify-center gap-1.5 rounded border text-xs transition-all ${
+              compact ? 'h-7 px-2' : 'flex-1 h-8 px-2.5'
+            } ${
+              enabled
+                ? activeClass
+                : 'bg-rack-2/40 text-dim/40 border-seam/50 cursor-not-allowed'
+            }`}
+          >
+            <Icon className={`size-3.5 shrink-0 ${isBusy ? 'animate-spin' : ''}`} />
+            {!compact && <span className="truncate">{POWER_LABEL[a]}</span>}
+            {compact && a === 'start' && <span className="hidden sm:inline">{POWER_LABEL[a]}</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -186,26 +316,102 @@ function loadView(): View {
 function LoadCell({ s, live }: { s: ServerListItem; live: ServerLive | undefined }) {
   if (!live) return <>{formatMb(s.ramMb)}</>;
   return (
-    <span className="inline-flex items-center gap-3">
-      <span>{live.cpuPercent.toFixed(0)} %</span>
+    <span className="inline-flex items-center gap-2.5 whitespace-nowrap">
+      <span className="text-ink font-medium">{live.cpuPercent.toFixed(0)} %</span>
+      <span>·</span>
       <span>{t('server.ramOf', { used: formatMb(live.memMb), max: formatMb(s.ramMb) })}</span>
     </span>
   );
 }
 
-function Tile({ s, live, diskMb }: { s: ServerListItem; live: ServerLive | undefined; diskMb: number | undefined }) {
+function Tile({
+  s,
+  live,
+  diskMb,
+  onToggleAutoStart,
+  onToggleFavorite,
+  onSelectTag,
+}: {
+  s: ServerListItem;
+  live: ServerLive | undefined;
+  diskMb: number | undefined;
+  onToggleAutoStart: (next: boolean) => void;
+  onToggleFavorite: (next: boolean) => void;
+  onSelectTag: (tag: string) => void;
+}) {
   const st = STATUS[s.status];
+  const isUnstartable = !!(s.unstartable || (s.status === 'crashed' && (s.crashCount ?? 0) >= 5));
+  const autoRestart = s.autoRestart ?? true;
+  const canToggleAuto = s.permissions.includes('startup.update') || s.permissions.includes('control.start');
+
   return (
-    <Link to={`/server/${s.shortId}`} className="block rounded-lg border border-seam bg-rack overflow-hidden hover:border-amber/60 group">
-      <GameCover cover={s.cover} seed={s.eggId ?? s.id} />
+    <Link
+      to={`/server/${s.shortId}`}
+      className={`block rounded-lg border bg-rack overflow-hidden hover:border-amber/60 group ${
+        isUnstartable ? 'border-led-crash/60 ring-1 ring-led-crash/30' : 'border-seam'
+      }`}
+    >
+      <div className="relative">
+        <GameCover cover={s.cover} seed={s.eggId ?? s.id} />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleFavorite(!s.isFavorite);
+          }}
+          title={s.isFavorite ? t('servers.favRemove') : t('servers.favAdd')}
+          className={`absolute top-2 right-2 size-7 rounded-md flex items-center justify-center backdrop-blur-sm border transition-colors ${
+            s.isFavorite
+              ? 'bg-abyss/80 text-amber border-amber/40'
+              : 'bg-abyss/60 text-dim hover:text-ink border-seam/60'
+          }`}
+        >
+          <Star className={`size-3.5 ${s.isFavorite ? 'fill-amber' : ''}`} />
+        </button>
+      </div>
       <div className={`h-1 ${st.led} ${st.busy ? 'led-busy' : ''}`} />
       <div className="p-4 space-y-3">
         <div className="min-w-0">
-          <p className="font-medium truncate group-hover:text-amber">{s.name}</p>
-          <div className="text-xs text-dim mt-0.5 flex flex-wrap items-center gap-1.5">
-            <Tooltip content={st.label} side="top">
-              <span className="inline-flex items-center gap-1.5 cursor-help"><Led status={s.status} />{st.label}</span>
-            </Tooltip>
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-medium truncate group-hover:text-amber">{s.name}</p>
+            {canToggleAuto && (
+              <Tooltip content={t('status.autoStartHint')} side="top">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleAutoStart(!autoRestart);
+                  }}
+                  className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${
+                    autoRestart
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                      : 'bg-rack-2 text-dim border-seam hover:text-ink'
+                  }`}
+                >
+                  <RotateCcw className="size-3" />
+                  {autoRestart ? t('status.autoStartOn') : t('status.autoStartOff')}
+                </button>
+              </Tooltip>
+            )}
+          </div>
+          <div className="text-xs text-dim mt-1 flex flex-wrap items-center gap-1.5">
+            {isUnstartable ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-led-crash/15 text-led-crash border border-led-crash/40 font-semibold">
+                <AlertTriangle className="size-3 shrink-0" />
+                {t('status.unstartable')}
+              </span>
+            ) : (
+              <Tooltip content={st.label} side="top">
+                <span className="inline-flex items-center gap-1.5 cursor-help"><Led status={s.status} />{st.label}</span>
+              </Tooltip>
+            )}
+            {!isUnstartable && (s.crashCount ?? 0) > 0 && (s.status === 'crashed' || s.status === 'starting') && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber/15 text-amber font-medium">
+                {t('status.autoStartAttempt', { count: s.crashCount ?? 0 })}
+              </span>
+            )}
             <span>·</span>
             <span>{s.eggName}</span>
             {s.gameVersion && (
@@ -221,8 +427,27 @@ function Tile({ s, live, diskMb }: { s: ServerListItem; live: ServerLive | undef
               {s.modpackVersion && <span className="text-dim font-mono text-[11px] shrink-0">v{s.modpackVersion}</span>}
             </p>
           )}
+          {s.tags && s.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {s.tags.map((tg) => (
+                <button
+                  key={tg}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSelectTag(tg);
+                  }}
+                  className="inline-flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-rack-2 text-dim hover:text-amber border border-seam"
+                >
+                  <Tag className="size-2.5" /> {tg}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {s.primaryPort && <p className="font-mono text-[13px] text-dim">{(s.publicHost || window.location.hostname)}:{s.primaryPort}</p>}
+        <QuickPowerButtons s={s} />
         <div className="space-y-2 text-xs">
           <div>
             <div className="flex justify-between text-dim"><span>{t('res.cpu')}</span><span className="tabular-nums">{live ? `${live.cpuPercent.toFixed(0)} % / ${s.cpuPercent} %` : '–'}</span></div>

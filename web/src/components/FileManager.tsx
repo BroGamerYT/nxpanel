@@ -22,9 +22,11 @@ import {
   Sparkles,
   Code2,
   Eye,
+  Sliders,
 } from 'lucide-react';
 import { FileRevisionsModal } from './FileRevisionsModal';
 import { MarkdownViewer } from './MarkdownViewer';
+import { ConfigFormEditor } from './ConfigFormEditor';
 import { api, currentToken, refreshSession } from '../lib/api';
 import { t } from '../lib/i18n';
 import type { FileEntry, DirectoryListing } from '../lib/types';
@@ -677,6 +679,10 @@ function FileEditorModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const lang = getFileLanguage(relPath);
+  const isConfigFile = ['TOML', 'INI', 'PROPERTIES', 'YAML', 'JSON'].includes(lang);
+  const [viewMode, setViewMode] = useState<'form' | 'code'>(() =>
+    ['TOML', 'INI', 'PROPERTIES', 'YAML'].includes(getFileLanguage(relPath)) ? 'form' : 'code'
+  );
   const lines = useMemo(() => content.split('\n'), [content]);
   const lineCount = lines.length;
 
@@ -806,7 +812,37 @@ function FileEditorModal({
                 {t('files.saved')}
               </span>
             )}
-            {lang === 'JSON' && (
+            {isConfigFile && (
+              <div className="flex items-center bg-rack-1 p-0.5 rounded-md border border-seam mr-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('form')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition ${
+                    viewMode === 'form'
+                      ? 'bg-amber text-black shadow-sm'
+                      : 'text-dim hover:text-ink'
+                  }`}
+                  title="Komfortable Formular-Ansicht mit Schaltern und Eingabefeldern"
+                >
+                  <Sliders className="size-3.5" />
+                  Formular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('code')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition ${
+                    viewMode === 'code'
+                      ? 'bg-amber text-black shadow-sm'
+                      : 'text-dim hover:text-ink'
+                  }`}
+                  title="Direkter Text- & Code-Editor"
+                >
+                  <Code2 className="size-3.5" />
+                  Code
+                </button>
+              </div>
+            )}
+            {lang === 'JSON' && viewMode === 'code' && (
               <Button
                 variant="quiet"
                 className="h-7 text-xs px-2"
@@ -828,15 +864,17 @@ function FileEditorModal({
                 {mdPreview ? 'Editor' : 'Vorschau'}
               </Button>
             )}
-            <Button
-              variant="quiet"
-              className={`h-7 text-xs px-2 ${showSearch ? 'bg-amber/15 text-amber border-amber/30' : ''}`}
-              onClick={() => setShowSearch(!showSearch)}
-              title="Suchen (Strg + F)"
-            >
-              <Search className="size-3.5 mr-1" />
-              Suchen
-            </Button>
+            {viewMode === 'code' && (
+              <Button
+                variant="quiet"
+                className={`h-7 text-xs px-2 ${showSearch ? 'bg-amber/15 text-amber border-amber/30' : ''}`}
+                onClick={() => setShowSearch(!showSearch)}
+                title="Suchen (Strg + F)"
+              >
+                <Search className="size-3.5 mr-1" />
+                Suchen
+              </Button>
+            )}
             {revisions && (
             <Button
               variant="quiet"
@@ -902,12 +940,22 @@ function FileEditorModal({
           </div>
         )}
 
-        {/* Editor Body mit synchronisierten Zeilennummern */}
+        {/* Editor Body mit synchronisierten Zeilennummern oder Formular-Editor */}
         <div className="flex-1 relative bg-[#090b0e] overflow-hidden flex">
           {isLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <Spinner />
             </div>
+          ) : isConfigFile && viewMode === 'form' ? (
+            <ConfigFormEditor
+              content={content}
+              filename={relPath}
+              onChange={(next) => {
+                setContent(next);
+                setDirty(next !== initialContent);
+              }}
+              disabled={!canWrite}
+            />
           ) : mdPreview ? (
             <div className="flex-1 p-6 overflow-y-auto bg-night/70">
               <MarkdownViewer content={content} showRawToggle={false} showCopyButton={true} />

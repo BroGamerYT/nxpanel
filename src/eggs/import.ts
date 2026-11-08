@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { JSONValue } from 'postgres';
 import { sql } from '../db/index.js';
 import { log } from '../log.js';
-import { missingPlaceholders } from './variables.js';
+import { GENERATE_PASSWORD, missingPlaceholders } from './variables.js';
 import { filterCapabilities, sanitizeDataPath } from './capabilities.js';
 
 /**
@@ -14,10 +14,12 @@ import { filterCapabilities, sanitizeDataPath } from './capabilities.js';
  * aendert.
  */
 
-interface RawEgg {
+export interface RawEgg {
+  _comment?: string;
   name?: string;
   author?: string;
   nest?: string;
+  cover?: { steam?: number };
   docker_images?: Record<string, string>;
   image?: string;
   startup?: string;
@@ -25,14 +27,14 @@ interface RawEgg {
   web_interface?: unknown;
   ready_check?: unknown;
   ports?: unknown;
-  resources?: unknown;
+  resources?: { base_ram_mb?: number; ram_per_player_mb?: number; min_cpu_percent?: number; disk_mb?: number; notes?: string };
   watchers?: unknown;
   config?: { files?: unknown; startup?: unknown; logs?: unknown; stop?: string };
   /** Pelican (PLCN_v3): mehrere benannte Startkommandos, das erste ist die Vorgabe. */
   startup_commands?: Record<string, string>;
   config_files?: unknown;
   stop?: { method?: string; timeout_seconds?: number } | string;
-  scripts?: { installation?: { script?: string; container?: string } };
+  scripts?: { installation?: { script?: string; container?: string; entrypoint?: string } };
   install_script?: string;
   install_image?: string;
   variables?: RawVariable[];
@@ -40,16 +42,23 @@ interface RawEgg {
   capabilities?: unknown;
   data_dir?: unknown;
   run_as?: unknown;
+  tmp?: unknown;
+  query?: { kind: 'minecraft' | 'ark' | 'palworld' | 'source'; port_ref?: string; rcon?: { port_ref?: string; password_var?: string; password_files?: string[] } };
+  hints?: Array<{ match: string; flags?: string; level?: string; text: string; text_locales?: Record<string, string> }>;
+  log_file?: string;
+  log_dirs?: string[];
+  import?: unknown;
+  notes?: string[];
 }
 
-interface RawVariable {
+export interface RawVariable {
   name?: string;
   name_locales?: Record<string, string>;
   description?: string;
   description_locales?: Record<string, string>;
   env_variable?: string;
   default_value?: string | number | boolean | null;
-  rules?: string;
+  rules?: string | string[];
   requires?: string;
   secret?: boolean;
   user_viewable?: boolean;
@@ -160,7 +169,7 @@ export async function importEgg(input: RawEgg, nestName = 'Importiert'): Promise
         ${v.description ?? null}, ${v.description_locales ? sql.json(v.description_locales) : null},
         ${v.env_variable!},
         ${v.default_value === null || v.default_value === undefined ? null : String(v.default_value)},
-        ${v.rules ?? null}, ${v.requires ?? null}, ${v.secret ?? false},
+        ${Array.isArray(v.rules) ? v.rules.join('|') : (v.rules ?? null)}, ${v.requires ?? null}, ${v.secret ?? false},
         ${v.user_viewable ?? true}, ${v.user_editable ?? true}, ${order++}
       )
       ON CONFLICT (egg_id, env_variable) DO UPDATE SET
@@ -192,6 +201,12 @@ async function ensureNest(name: string): Promise<string> {
 }
 
 const YOLK = /^ghcr\.io\/(pelican-eggs|parkervcp|pterodactyl)\//;
+const PROTON_OR_WINE = /proton|wine/i;
+const PASSWORD_VAR = /(^|_)(PASS|PASSWORD|PW|SECRET|RCON_PASS|ADMIN_PASS)($|_)/i;
+const USER_ACCOUNT_VARS = new Set([
+  'STEAM_USER', 'STEAM_PASS', 'SLG_USER', 'SLG_PW', 'PUBLIC_IP', 'OWNER_NAME',
+  'OWNER_GUID', 'SERVER_TOKEN', 'FS_LICENSE_KEY', 'STEAM_ACC', 'GSLT',
+]);
 
 function parseMaybeJson(v: unknown): unknown {
   if (typeof v !== 'string') return v;
@@ -214,10 +229,27 @@ function escapeRegex(s: string): string {
  *  - die Yolk-Images laufen als normaler Benutzer; Wings setzt den Besitzer
  *    der Dateien nach der Installation - hier uebernimmt das run_as + chown
  *  - "image" ist bei PLCN_v3 ein Bild (URL/Data-URL), kein Docker-Image
+ *  - Pflicht-Passwoerter ohne Vorgabe bekommen "{{GENERATE_PASSWORD}}"
+ *  - andere leere Pflichtfelder (ausser echten Konten/Keys) werden auf "nullable" gelockert
+ *  - Wine/Proton-Images bekommen automatisch "tmp": "disk" und passende Ressourcen
  */
 export function normalizeForeignEgg(input: RawEgg): { raw: RawEgg; notes: string[] } {
   const raw: RawEgg = { ...input };
   if (input.config) raw.config = { ...input.config };
+  if (input.scripts?.installation) {
+    raw.scripts = {
+      ...input.scripts,
+      installation: {
+        ...input.scripts.installation,
+        ...(typeof input.scripts.installation.script === 'string'
+          ? { script: input.scripts.installation.script.replace(/\r\n?/g, '\n') }
+          : {}),
+      },
+    };
+  }
+  if (typeof raw.install_script === 'string') {
+    raw.install_script = raw.install_script.replace(/\r\n?/g, '\n');
+  }
   const notes: string[] = [];
   if (raw.config) {
     const files = parseMaybeJson(raw.config.files);
@@ -238,34 +270,222 @@ export function normalizeForeignEgg(input: RawEgg): { raw: RawEgg; notes: string
   if (!raw.ready_check) {
     const done = (raw.config?.startup as { done?: unknown } | undefined)?.done;
     const list = (Array.isArray(done) ? done : [done]).filter((d): d is string => typeof d === 'string' && d.trim() !== '');
-    if (list.length) raw.ready_check = { kind: 'done', regex: list.map(escapeRegex).join('|'), timeout_seconds: 900 };
-  }
-  // Zusatzports: Pterodactyl kennt nur den Hauptport, weitere stehen als
-  // Variable mit fester Zahl (QUERY_PORT=27016). Hier bekommt jede so eine
-  // Variable einen eigenen, vom Panel vergebenen und freigegebenen Port.
-  // RCON bleibt intern (nur das Panel spricht es an).
-  if (raw.ports === undefined && raw.variables?.length) {
-    const secondary: Array<Record<string, unknown>> = [];
-    raw.variables = raw.variables.map((v) => {
-      const m = /^([A-Z0-9_]+)_PORT$/.exec(v.env_variable ?? '');
-      const def = Number(v.default_value);
-      if (!m || m[1] === 'SERVER' || !Number.isInteger(def) || def < 1 || def > 65535) return v;
-      const ref = m[1]!.toLowerCase();
-      secondary.push({ ref, name: v.name ?? m[1], protocol: 'both', optional: true, ...(ref === 'rcon' ? { internal: true } : {}) });
-      // Regel lockern: der Wert ist jetzt eine Vorlage, keine Zahl mehr
-      return { ...v, default_value: `{{${m[1]}_PORT}}`, rules: 'nullable|string', user_editable: false };
-    });
-    if (secondary.length) {
-      raw.ports = { primary: { ref: 'game', name: 'Spiel', protocol: 'both' }, secondary };
-      notes.push(`Zusatzports automatisch vergeben: ${secondary.map((p) => String(p.ref).toUpperCase() + '_PORT').join(', ')}`);
+    if (list.length) {
+      raw.ready_check = { kind: 'done', regex: list.map(escapeRegex).join('|'), timeout_seconds: 900 };
+    } else {
+      raw.ready_check = {
+        kind: 'done',
+        regex: 'Server started|Listening on|Game server connected|Connection to Steam servers successful|Done \\(|Engine is initialized|Session running|HostOnline|Dedicated Server now running|Ready for connections',
+        timeout_seconds: 900,
+      };
+      notes.push('Startmuster (done) fehlte: allgemeines Bereitschafts-Muster gesetzt');
     }
   }
+  if (raw.variables?.length) {
+    // 1. Doppelte Variablen nach env_variable entfernen (erster gewinnt)
+    const seenVars = new Set<string>();
+    raw.variables = raw.variables.filter((v) => {
+      if (!v.env_variable) return true;
+      if (seenVars.has(v.env_variable)) {
+        notes.push(`Doppelte Variable entfernt: ${v.env_variable}`);
+        return false;
+      }
+      seenVars.add(v.env_variable);
+      return true;
+    });
+
+    raw.variables = raw.variables.map((v) =>
+      Array.isArray(v.rules) ? { ...v, rules: v.rules.join('|') } : v,
+    );
+  }
+  // Zusatzports: Pterodactyl kennt nur den Hauptport, weitere stehen als
+  // Variable mit fester Zahl (QUERY_PORT=27016) oder leerer Port-Vorgabe.
+  // Hier bekommt jede so eine Variable einen eigenen, vom Panel vergebenen
+  // und freigegebenen Port. RCON bleibt intern (nur das Panel spricht es an).
+  if (raw.ports === undefined) {
+    const secondary: Array<Record<string, unknown>> = [];
+    if (raw.variables?.length) {
+      raw.variables = raw.variables.map((v) => {
+        const m = /^([A-Z0-9_]+)_PORT$/.exec(v.env_variable ?? '');
+        const rawDef = v.default_value;
+        const isEmptyDef = rawDef === '' || rawDef === null || rawDef === undefined;
+        const def = Number(rawDef);
+        const isValidPortNum = !isEmptyDef && Number.isInteger(def) && def >= 1 && def <= 65535;
+        if (!m || m[1] === 'SERVER' || (!isValidPortNum && !isEmptyDef)) return v;
+        const ref = m[1]!.toLowerCase();
+        secondary.push({ ref, name: v.name ?? m[1], protocol: 'both', optional: true, ...(ref === 'rcon' ? { internal: true } : {}) });
+        // Regel lockern: der Wert ist jetzt eine Vorlage, keine Zahl mehr
+        return { ...v, default_value: `{{${m[1]}_PORT}}`, rules: 'nullable|string', user_editable: false };
+      });
+    }
+    // Rechnerische Zusatzports (z. B. $((SERVER_PORT + 1)) im Startkommando oder Unturned/Barotrauma Spielport + 1)
+    const startupAndFiles = `${raw.startup ?? ''} ${JSON.stringify(raw.config?.files ?? '')}`;
+    const offsetMatches = [
+      ...startupAndFiles.matchAll(/\$\(\(\s*(?:\$\{)?SERVER_PORT(?:\})?\s*\+\s*(\d{1,4})\s*\)\)/g),
+      ...startupAndFiles.matchAll(/\{\{\s*SERVER_PORT\s*\}\}\s*\+\s*(\d{1,4})/g),
+    ];
+    const seenOffsets = new Set<number>();
+    for (const m of offsetMatches) {
+      const off = Number(m[1]);
+      if (Number.isInteger(off) && off >= 1 && off <= 1000 && !seenOffsets.has(off)) {
+        seenOffsets.add(off);
+      }
+    }
+    if (!seenOffsets.has(1) && /Unturned_Headless|\.\/DedicatedServer\s+-batchmode/i.test(raw.startup ?? '')) {
+      seenOffsets.add(1);
+    }
+    for (const off of seenOffsets) {
+      const ref = off === 1 && !secondary.some((p) => p.ref === 'query') ? 'query' : `plus${off}`;
+      if (!secondary.some((p) => p.ref === ref)) {
+        secondary.push({
+          ref,
+          name: off === 1 ? 'Steam Query (Port +1)' : `Zusatzport (+${off})`,
+          offset: off,
+          protocol: 'udp',
+          optional: true,
+        });
+      }
+    }
+    if (secondary.length) {
+      raw.ports = { primary: { ref: 'game', name: 'Spiel', protocol: 'both' }, secondary };
+      notes.push(`Zusatzports automatisch vergeben: ${secondary.map((p) => p.offset ? `+${String(p.offset)}` : String(p.ref).toUpperCase() + '_PORT').join(', ')}`);
+    }
+  }
+  // Pflichtfelder ohne Standardwert reparieren:
+  // - Passwort-Pflichtfelder bekommen {{GENERATE_PASSWORD}} + secret: true
+  // - Andere leere Pflichtfelder (ausser Lizenz-/Account-Feldern) werden auf nullable gesetzt
+  if (raw.variables?.length) {
+    const autoPw: string[] = [];
+    const relaxed: string[] = [];
+    raw.variables = raw.variables.map((v) => {
+      const env = v.env_variable ?? '';
+      const rules = typeof v.rules === 'string' ? v.rules : '';
+      const def = (v.default_value ?? '').toString().trim();
+      const isReq = /(^|\|)required(\||$)/.test(rules);
+      const isPw = PASSWORD_VAR.test(env) && !USER_ACCOUNT_VARS.has(env);
+      let next = { ...v };
+      if (isPw && next.secret === undefined) {
+        next.secret = true;
+      }
+      if (isReq && !def && !USER_ACCOUNT_VARS.has(env) && !/_PORT$/.test(env)) {
+        if (isPw) {
+          next.default_value = GENERATE_PASSWORD;
+          next.secret = true;
+          autoPw.push(env);
+        } else {
+          next.rules = rules.replace(/(^|\|)required(\||$)/, '$1nullable$2');
+          relaxed.push(env);
+        }
+      }
+      return next;
+    });
+    if (autoPw.length) notes.push(`Pflicht-Passwort automatisch auf Zufalls-Generator gesetzt: ${autoPw.join(', ')}`);
+    if (relaxed.length) notes.push(`Leere Pflichtfelder auf optional (nullable) umgestellt: ${relaxed.join(', ')}`);
+  }
+
   const images = Object.values(raw.docker_images ?? {});
   if (raw.run_as === undefined && images.length && images.every((i) => YOLK.test(i))) {
     raw.run_as = '1000:1000';
     notes.push('Pterodactyl-/Pelican-Image: laeuft als Benutzer 1000, Dateien werden nach der Installation uebergeben');
   }
+  if (raw.tmp === undefined && images.some((i) => PROTON_OR_WINE.test(i))) {
+    raw.tmp = 'disk';
+    notes.push('Wine/Proton-Image erkannt: /tmp auf Festplatte ("disk") umgestellt');
+  }
   return { raw, notes };
+}
+
+/**
+ * Bereitet ein fremdes Egg vollstaendig als saubere NexusPanel-Vorlage auf
+ * (fuer den Export in den Ordner eggs/ per CLI "npm run egg -- convert"):
+ *  - Fuehrt normalizeForeignEgg() aus
+ *  - Entfernt unschoene Praefixe wie "[SERVER] " oder "[STEAM] " aus Variablennamen
+ *  - Ergaenzt fehlende name_locales / description_locales (de & en)
+ *  - Ergaenzt fehlende resources (bei Proton/Wine mehr RAM & CPU)
+ *  - Ergaenzt nest ("Importiert", falls leer)
+ *  - Erkennt Source-Query-Ports automatisch fuer die Live-Spielerabfrage
+ */
+export function convertForeignEggToBundled(input: RawEgg, sourceHint?: string): { egg: RawEgg; report: string[] } {
+  const { raw, notes } = normalizeForeignEgg(input);
+  const report = [...notes];
+  const images = Object.values(raw.docker_images ?? {});
+  const isProtonOrWine = images.some((i) => PROTON_OR_WINE.test(i));
+
+  if (!raw._comment && sourceHint) {
+    raw._comment = `NexusPanel-Egg, konvertiert aus ${sourceHint}.`;
+  }
+
+  if (!raw.nest) {
+    raw.nest = 'Survival';
+    report.push('Kategorie (nest) auf "Survival" gesetzt (bitte pruefen)');
+  }
+
+  if (!raw.resources) {
+    raw.resources = isProtonOrWine
+      ? { base_ram_mb: 6144, ram_per_player_mb: 150, min_cpu_percent: 200, disk_mb: 25000 }
+      : { base_ram_mb: 2048, ram_per_player_mb: 100, min_cpu_percent: 100, disk_mb: 15000 };
+    report.push(`Ressourcen-Vorschlag ergaenzt (${raw.resources.base_ram_mb} MB RAM)`);
+  }
+
+  // Variablen-Namen saeubern ([SERVER] / [STEAM] entfernen) und Locales ergaenzen
+  if (raw.variables?.length) {
+    let cleanedLabels = 0;
+    raw.variables = raw.variables.map((v) => {
+      const next = { ...v };
+      if (typeof next.name === 'string') {
+        const cleaned = next.name.replace(/^\s*\[[A-Za-z0-9_-]+\]\s*/, '').trim();
+        if (cleaned && cleaned !== next.name) {
+          next.name = cleaned;
+          cleanedLabels++;
+        }
+      }
+      const label = next.name ?? next.env_variable ?? '';
+      if (label && !next.name_locales) {
+        next.name_locales = { de: label, en: label };
+      } else if (next.name_locales) {
+        next.name_locales = {
+          de: next.name_locales.de ?? next.name_locales.en ?? label,
+          en: next.name_locales.en ?? next.name_locales.de ?? label,
+          ...next.name_locales,
+        };
+      }
+      if (typeof next.description === 'string' && next.description.trim() && !next.description_locales) {
+        next.description_locales = { de: next.description, en: next.description };
+      }
+      return next;
+    });
+    if (cleanedLabels > 0) report.push(`${cleanedLabels} Variablen-Namen von [PRAEFIX]-Tags bereinigt und Locales (de/en) angelegt`);
+  }
+
+  // Wenn ein Query-Port existiert und noch kein query-Block da ist -> Source Query vorschlagen
+  if (!raw.query && raw.ports && typeof raw.ports === 'object') {
+    const sec = (raw.ports as { secondary?: Array<{ ref?: string }> }).secondary ?? [];
+    const hasQuery = sec.some((p) => p.ref === 'query' || p.ref === 'steam_query' || p.ref === 'server_query');
+    if (hasQuery) {
+      const qRef = sec.find((p) => p.ref === 'query' || p.ref === 'steam_query' || p.ref === 'server_query')!.ref!;
+      raw.query = { kind: 'source', port_ref: qRef };
+      report.push(`Live-Spielerabfrage (query: source) auf Port "${qRef}" eingerichtet`);
+    }
+  }
+
+  // Bei Proton/Wine die Proton-Standardhinweise ergaenzen, falls noch keine hints existieren
+  if (isProtonOrWine && (!raw.hints || raw.hints.length === 0)) {
+    raw.hints = [
+      {
+        match: 'ProtonFixes\\[\\d+\\] WARN|fsync: up and running|wine: RLIMIT',
+        flags: '',
+        level: 'ignore',
+        text: 'Harmlose Meldung von Proton/Wine – kann ignoriert werden.',
+        text_locales: {
+          de: 'Harmlose Meldung von Proton/Wine – kann ignoriert werden.',
+          en: 'Harmless message from Proton/Wine – safe to ignore.',
+        },
+      },
+    ];
+    report.push('Proton/Wine-Konsolenfilter (hints) ergaenzt');
+  }
+
+  return { egg: raw, report };
 }
 
 function normalizeImages(raw: RawEgg): Record<string, string> {

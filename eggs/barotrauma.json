@@ -73,6 +73,27 @@
   "cover": {
     "steam": 602960
   },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel / UDP",
+      "start": 27015,
+      "end": 27025,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Steam Query (Port +1)",
+        "offset": 1,
+        "protocol": "udp"
+      }
+    ]
+  },
+  "query": {
+    "kind": "source",
+    "port_ref": "query"
+  },
   "resources": {
     "base_ram_mb": 2048,
     "min_cpu_percent": 100

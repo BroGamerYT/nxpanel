@@ -55,7 +55,14 @@ export interface ContainerEngine {
   labels(containerId: string): Promise<Record<string, string> | null>;
 }
 
-export interface DockerDiskUsage { imagesMb: number; containersMb: number; volumesMb: number; buildCacheMb: number }
+export interface DockerDiskUsage {
+  imagesMb: number;
+  containersMb: number;
+  volumesMb: number;
+  buildCacheMb: number;
+  /** Schreibschicht (SizeRw) je Server-ID in MB – gross = Spieldaten ausserhalb des Datenordners. */
+  serverContainerMb?: Record<string, number>;
+}
 
 export interface ContainerStats {
   /** Prozent eines Kerns, 200 = zwei volle Kerne */
@@ -247,17 +254,25 @@ class LocalDockerEngine implements ContainerEngine {
     // /system/df ist teuer (Docker rechnet alle Schichten nach) - der Aufrufer cacht.
     const df = (await this.docker.df()) as {
       LayersSize?: number;
-      Containers?: Array<{ SizeRw?: number }>;
+      Containers?: Array<{ SizeRw?: number; Labels?: Record<string, string> }>;
       Volumes?: Array<{ UsageData?: { Size?: number } }>;
       BuildCache?: Array<{ Size?: number }>;
     };
     const mb = (b: number) => Math.round(b / 1048576);
     const sum = (xs: Array<number | undefined> | undefined) => (xs ?? []).reduce<number>((a, b) => a + Math.max(0, b ?? 0), 0);
+    const serverContainerMb: Record<string, number> = {};
+    for (const c of df.Containers ?? []) {
+      const sid = c.Labels?.[PANEL_LABEL];
+      if (sid && typeof c.SizeRw === 'number' && c.SizeRw >= 0) {
+        serverContainerMb[sid] = mb(c.SizeRw);
+      }
+    }
     return {
       imagesMb: mb(df.LayersSize ?? 0),
       containersMb: mb(sum(df.Containers?.map((c) => c.SizeRw))),
       volumesMb: mb(sum(df.Volumes?.map((v) => v.UsageData?.Size))),
       buildCacheMb: mb(sum(df.BuildCache?.map((b) => b.Size))),
+      serverContainerMb,
     };
   }
 
@@ -407,9 +422,13 @@ class LocalDockerEngine implements ContainerEngine {
     }
 
     const memoryBytes = spec.ramMb * 1024 * 1024;
+    const containerName = `nxp-${spec.shortId}`;
+
+    // Falls ein verwaister Container gleichen Namens noch existiert (z. B. wenn container_id in DB NULL war), vorab wegraeumen.
+    await this.docker.getContainer(containerName).remove({ force: true }).catch(() => {});
 
     const container = await this.docker.createContainer({
-      name: `nxp-${spec.shortId}`,
+      name: containerName,
       Image: spec.image,
       ...(spec.user ? { User: spec.user } : {}),
       Env: Object.entries(spec.env).map(([k, v]) => `${k}=${v}`),

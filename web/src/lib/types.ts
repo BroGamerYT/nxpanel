@@ -9,12 +9,15 @@ export interface Me { user: User; permissions: Record<string, boolean> }
 
 export interface ServerListItem {
   id: string; shortId: string; name: string; status: ServerStatus; ownerName: string; eggName: string; eggId?: string; cover?: CoverInfo;
-  ramMb: number; cpuPercent: number; diskMb: number; suspended: boolean; primaryPort: number | null; publicHost: string | null;
+  ramMb: number; cpuPercent: number; diskMb: number; autoRestart?: boolean; crashCount?: number; unstartable?: boolean;
+  suspended: boolean; primaryPort: number | null; publicHost: string | null;
   isOwner: boolean; permissions: string[];
   gameVersion?: string | null;
   serverType?: string | null;
   modpackName?: string | null;
   modpackVersion?: string | null;
+  tags?: string[];
+  isFavorite?: boolean;
 }
 
 export interface ServerDetail {
@@ -23,7 +26,8 @@ export interface ServerDetail {
     egg: { id: string; name: string; consoleMode: 'full' | 'readonly' | 'none'; webInterface: unknown; hints?: ConsoleHint[]; gameKind?: string | null } | null;
     limits: { ramMb: number; swapMb: number; cpuPercent: number; diskMb: number };
     diskUsedMb?: number | null;
-    autoRestart: boolean; autoSleepMinutes?: number; suspended: boolean; publicHost: string | null;
+    containerLayerMb?: number | null;
+    autoRestart: boolean; crashCount?: number; unstartable?: boolean; autoSleepMinutes?: number; suspended: boolean; publicHost: string | null;
     ports?: Array<{ port: number; protocol: string; ref: string | null; is_primary: boolean }>;
     image?: string; startup?: string;
     rcon?: { port: number; password?: string | null } | null;
@@ -31,6 +35,8 @@ export interface ServerDetail {
     serverType?: string | null;
     modpackName?: string | null;
     modpackVersion?: string | null;
+    tags?: string[];
+    isFavorite?: boolean;
     variables?: Record<string, string>;
   };
   permissions: string[];
@@ -38,6 +44,10 @@ export interface ServerDetail {
 
 export interface TimelineEvent {
   id: number; ts: string; kind: string; severity: 'info' | 'warn' | 'error'; summary: string; actor?: string | null; payload?: unknown;
+}
+
+export interface ServerActivityItem {
+  id: number; ts: string; action: string; actor?: string | null; metadata?: Record<string, unknown> | null; ip?: string | null;
 }
 
 export interface Stats { cpuPercent: number; memMb: number; memLimitMb: number; netRxBytes: number; netTxBytes: number }

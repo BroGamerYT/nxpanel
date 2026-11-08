@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle, Star, Tag, Plus, X } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLive } from '../lib/live';
 import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
 import { POWER_ALLOWED, STATUS, formatMb } from '../lib/status';
-import type { ServerDetail, ServerStatus, TimelineEvent } from '../lib/types';
+import type { ServerDetail, ServerStatus, TimelineEvent, ServerActivityItem } from '../lib/types';
 import { Console, type ConsoleHandle } from '../components/Console';
 import { ServerSettings } from '../components/ServerSettings';
 import { LogFiles } from '../components/LogFiles';
@@ -72,13 +72,50 @@ function Loaded({ detail }: { detail: ServerDetail }) {
   const reinstall = useMutation({ mutationFn: () => api(`/servers/${server.id}/reinstall`, { method: 'POST' }) });
 
   const qc = useQueryClient();
+  const invalidateServer = () => {
+    void qc.invalidateQueries({ queryKey: ['server', server.shortId] });
+    void qc.invalidateQueries({ queryKey: ['server', server.id] });
+    void qc.invalidateQueries({ queryKey: ['servers'] });
+  };
+  const toggleAutoStart = useMutation({
+    mutationFn: (autoRestart: boolean) => api(`/servers/${server.id}`, { method: 'PATCH', body: { autoRestart } }),
+    onSuccess: invalidateServer,
+  });
+  const toggleFavorite = useMutation({
+    mutationFn: (isFavorite: boolean) => api(`/servers/${server.id}`, { method: 'PATCH', body: { isFavorite } }),
+    onSuccess: invalidateServer,
+  });
+  const updateTags = useMutation({
+    mutationFn: (tags: string[]) => api(`/servers/${server.id}`, { method: 'PATCH', body: { tags } }),
+    onSuccess: invalidateServer,
+  });
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTagText, setNewTagText] = useState('');
+  const canEditMeta = has('settings.rename') || has('startup.update');
+
+  // Aktuelle Absturz-Zahl (auch live aus dem WebSocket-Stream aktualisiert)
+  const latestCrashEvent = live.events.find((e) => e.kind === 'crash' || e.kind === 'restart_skipped' || e.kind === 'restart_attempt');
+  const liveCrashes = (latestCrashEvent?.payload as { crashes?: number; count?: number } | undefined)?.crashes
+    ?? (latestCrashEvent?.payload as { count?: number } | undefined)?.count;
+  const crashCount = status === 'running' || status === 'offline' ? 0 : (liveCrashes ?? server.crashCount ?? 0);
+  const isUnstartable = status === 'crashed' && crashCount >= 5;
+  const canToggleAutoStart = has('startup.update') || has('control.start');
+
   const modpack = useModpack(server.id, has('startup.read'));
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [preUpdateBackup, setPreUpdateBackup] = useState(true);
   const updateModpackMutation = useMutation({
     mutationFn: () => api(`/servers/${server.id}/modpack/update`, { method: 'POST', body: {} }),
     onSuccess: () => {
       setShowUpdateModal(false);
       void qc.invalidateQueries({ queryKey: ['modpack', server.id] });
+    },
+  });
+  const updateGameMutation = useMutation({
+    mutationFn: () => api(`/servers/${server.id}/update-game`, { method: 'POST', body: { backup: preUpdateBackup, startAfter: true } }),
+    onSuccess: () => {
+      setShowUpdateModal(false);
+      invalidateServer();
     },
   });
 
@@ -115,17 +152,56 @@ function Loaded({ detail }: { detail: ServerDetail }) {
       <Link to="/" className="inline-flex items-center gap-1 text-sm text-dim hover:text-ink"><ChevronLeft className="size-4" /> {t('server.back')}</Link>
 
       {/* Kopf: die LED-Leiste zeigt den Zustand ueber die ganze Breite - auch aus dem Augenwinkel erkennbar */}
-      <header className="rounded-lg border border-seam bg-rack overflow-hidden">
+      <header className={`rounded-lg border bg-rack overflow-hidden ${isUnstartable ? 'border-led-crash/60 ring-1 ring-led-crash/30' : 'border-seam'}`}>
         <div className={`h-1 ${STATUS[status].led} ${STATUS[status].busy ? 'led-busy' : ''}`} />
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight truncate">{server.name}</h1>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => toggleFavorite.mutate(!server.isFavorite)}
+                title={server.isFavorite ? t('servers.favRemove') : t('servers.favAdd')}
+                className={`shrink-0 p-1 rounded hover:bg-rack-2 transition-colors ${server.isFavorite ? 'text-amber' : 'text-dim hover:text-ink'}`}
+              >
+                <Star className={`size-4 ${server.isFavorite ? 'fill-amber' : ''}`} />
+              </button>
+              <h1 className="text-xl font-semibold tracking-tight truncate">{server.name}</h1>
+            </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5 text-sm text-dim">
-              <Tooltip content={STATUS_TOOLTIPS[status] ?? STATUS[status].label} side="bottom">
-                <span className="inline-flex items-center gap-2 text-ink cursor-help">
-                  <Led status={status} />{STATUS[status].label}
+              {isUnstartable ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-led-crash/15 text-led-crash border border-led-crash/40 font-semibold text-xs">
+                  <AlertTriangle className="size-3.5 shrink-0" />
+                  {t('status.unstartable')}
                 </span>
-              </Tooltip>
+              ) : (
+                <Tooltip content={STATUS_TOOLTIPS[status] ?? STATUS[status].label} side="bottom">
+                  <span className="inline-flex items-center gap-2 text-ink cursor-help">
+                    <Led status={status} />{STATUS[status].label}
+                  </span>
+                </Tooltip>
+              )}
+              {!isUnstartable && crashCount > 0 && (status === 'crashed' || status === 'starting') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber/15 text-amber font-medium">
+                  {t('status.autoStartAttempt', { count: crashCount })}
+                </span>
+              )}
+              {canToggleAutoStart && (
+                <Tooltip content={t('status.autoStartHint')} side="bottom">
+                  <button
+                    type="button"
+                    disabled={toggleAutoStart.isPending}
+                    onClick={() => toggleAutoStart.mutate(!server.autoRestart)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium border transition-colors ${
+                      server.autoRestart
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                        : 'bg-rack-2 text-dim border-seam hover:text-ink'
+                    }`}
+                  >
+                    <RotateCcw className="size-3" />
+                    {server.autoRestart ? t('status.autoStartOn') : t('status.autoStartOff')}
+                  </button>
+                </Tooltip>
+              )}
               {server.egg && <span>{server.egg.name}</span>}
               {isModpack ? (
                 <>
@@ -156,6 +232,62 @@ function Loaded({ detail }: { detail: ServerDetail }) {
               {primary && <Address port={primary.port} host={server.publicHost} />}
               {!live.connected && <span className="text-led-start">{t('server.connecting')}</span>}
             </div>
+            {((server.tags && server.tags.length > 0) || canEditMeta) && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {(server.tags ?? []).map((tg) => (
+                  <span key={tg} className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-rack-2 text-ink border border-seam">
+                    <Tag className="size-3 text-amber" />
+                    {tg}
+                    {canEditMeta && (
+                      <button
+                        type="button"
+                        onClick={() => updateTags.mutate((server.tags ?? []).filter((x) => x !== tg))}
+                        className="text-dim hover:text-rose ml-0.5"
+                        title={t('servers.tagRemove')}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    )}
+                  </span>
+                ))}
+                {canEditMeta && (
+                  addingTag ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const clean = newTagText.trim().replace(/^#/, '');
+                        if (clean) {
+                          const next = Array.from(new Set([...(server.tags ?? []), clean])).slice(0, 12);
+                          updateTags.mutate(next);
+                        }
+                        setNewTagText('');
+                        setAddingTag(false);
+                      }}
+                      className="inline-flex items-center gap-1"
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        maxLength={24}
+                        value={newTagText}
+                        onChange={(e) => setNewTagText(e.target.value)}
+                        onBlur={() => setAddingTag(false)}
+                        placeholder="Tag..."
+                        className="h-6 w-28 px-2 text-xs rounded bg-abyss border border-seam text-ink focus:outline-none focus:border-amber"
+                      />
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAddingTag(true)}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border border-dashed border-seam text-dim hover:text-ink hover:border-amber/60"
+                    >
+                      <Plus className="size-3" /> {t('servers.tagAdd')}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {canUpdate && status !== 'install_failed' && (
@@ -217,7 +349,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
             </div>
           </>
         )}
-          <DiskUse used={server.diskUsedMb ?? null} max={server.limits.diskMb} />
+          <DiskUse used={server.diskUsedMb ?? null} max={server.limits.diskMb} containerLayerMb={server.containerLayerMb ?? null} />
           <NetHistory serverId={server.id} />
         </div>
         {server.egg?.gameKind && status === 'running' && game.data?.running && (
@@ -227,6 +359,16 @@ function Loaded({ detail }: { detail: ServerDetail }) {
           <ModpackCard serverId={server.id} canUpdate={has('startup.update') && has('backup.create')} compact />
         )}
       </header>
+
+      {isUnstartable && (
+        <div className="rounded-lg border border-led-crash/50 bg-led-crash/10 px-4 py-3 text-sm text-ink flex items-start gap-3">
+          <AlertTriangle className="size-5 text-led-crash shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-led-crash">{t('status.unstartable')}</p>
+            <p className="text-dim mt-0.5">{t('status.unstartableBanner')}</p>
+          </div>
+        </div>
+      )}
 
       {power.error && <ErrorBox>{(power.error as Error).message}</ErrorBox>}
       {reinstall.error && <ErrorBox>{(reinstall.error as Error).message}</ErrorBox>}
@@ -306,15 +448,31 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                 <p className="text-sm text-dim">
                   {t('server.updateRestartNote')}
                 </p>
-                <div className="text-sm text-dim space-y-1">
+                <div className="text-sm text-dim space-y-1 bg-rack-2/60 border border-seam rounded p-3">
                   <div>Spiel: <strong className="text-ink">{server.egg?.name}</strong></div>
                   {gameDisplayVersion && <div>Version: <strong className="text-ink">{gameDisplayVersion}</strong></div>}
+                  {server.image && <div className="text-xs font-mono text-dim truncate">Image: {server.image}</div>}
                 </div>
+                {has('backup.create') && (
+                  <label className="flex items-start gap-2.5 text-sm text-ink cursor-pointer select-none pt-1">
+                    <input
+                      type="checkbox"
+                      checked={preUpdateBackup}
+                      onChange={(e) => setPreUpdateBackup(e.target.checked)}
+                      className="mt-0.5 rounded border-seam bg-abyss text-amber focus:ring-amber"
+                    />
+                    <span>{t('server.updatePreBackup')}</span>
+                  </label>
+                )}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button onClick={() => setShowUpdateModal(false)}>{t('common.close')}</Button>
-                  {has('control.restart') && (
-                    <Button variant="primary" onClick={() => { setShowUpdateModal(false); run('restart'); }}>
-                      <RotateCcw className="size-4" />
+                  {canUpdate && (
+                    <Button
+                      variant="primary"
+                      busy={updateGameMutation.isPending}
+                      onClick={() => updateGameMutation.mutate()}
+                    >
+                      <ArrowUpCircle className="size-4" />
                       {t('server.updateManual')}
                     </Button>
                   )}
@@ -325,7 +483,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
         </div>
       )}
 
-      <nav className="flex gap-1 border-b border-seam" role="tablist">
+      <nav className="flex gap-1 border-b border-seam overflow-x-auto whitespace-nowrap" role="tablist">
         {([
           ['konsole', 'server.tab.console', 'control.console'],
           ...(server.egg?.gameKind ? [['spieler', 'server.tab.players', 'control.console'] as const] : []),
@@ -341,7 +499,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
           .map(([key, label]) => (
             <button
               key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
-              className={`px-3 h-10 text-sm -mb-px border-b-2 ${tab === key ? 'border-amber text-ink' : 'border-transparent text-dim hover:text-ink'}`}
+              className={`px-3 h-10 text-sm -mb-px border-b-2 shrink-0 ${tab === key ? 'border-amber text-ink' : 'border-transparent text-dim hover:text-ink'}`}
             >
               {t(label)}
             </button>
@@ -370,15 +528,16 @@ function Loaded({ detail }: { detail: ServerDetail }) {
       {tab === 'mitnutzer' && <SubusersManager serverId={server.id} canManage={has('subuser.create') || has('subuser.update')} />}
       {tab === 'logs' && <LogFiles serverId={server.id} />}
       {tab === 'spieler' && <Players serverId={server.id} status={game.data} canCommand={has('control.command') || has('player.kick') || has('player.ban')} running={status === 'running'} />}
-      {tab === 'zeitachse' && <Timeline serverId={server.id} live={live.events} />}
+      {tab === 'zeitachse' && <Timeline serverId={server.id} live={live.events} canReadActivity={has('activity.read')} />}
       {tab === 'einstellungen' && <ServerSettings detail={detail} status={status} />}
     </div>
   );
 }
 
 /** Belegter Speicher - gemessen alle paar Minuten, darum ohne Verlauf. */
-function DiskUse({ used, max }: { used: number | null; max: number }) {
+function DiskUse({ used, max, containerLayerMb }: { used: number | null; max: number; containerLayerMb?: number | null }) {
   const pct = used === null ? 0 : used / max;
+  const largeLayer = (containerLayerMb ?? 0) >= 250;
   return (
     <div className="min-w-44">
       <div className="flex items-center gap-1 text-xs text-dim">
@@ -388,6 +547,12 @@ function DiskUse({ used, max }: { used: number | null; max: number }) {
       <div className="text-sm font-medium tabular-nums">{used === null ? t('disk.notMeasured') : t('server.ramOf', { used: formatMb(used), max: formatMb(max) })}</div>
       <Bar pct={pct} className="mt-1.5 w-40" />
       {used !== null && used > max && <div className="text-xs text-led-crash mt-1">{t('disk.overLimit')}</div>}
+      {containerLayerMb !== null && containerLayerMb !== undefined && containerLayerMb > 0 && (
+        <div className={`flex items-center gap-1 text-[11px] mt-1 ${largeLayer ? 'text-amber font-medium' : 'text-dim'}`}>
+          <span>{t('disk.containerLayer', { size: formatMb(containerLayerMb) })}</span>
+          <InfoTip text={t('disk.containerLayerHint')} side="top" />
+        </div>
+      )}
     </div>
   );
 }
@@ -411,37 +576,91 @@ function renderEventSummary(e: TimelineEvent): string {
   return e.summary;
 }
 
-function Timeline({ serverId, live }: { serverId: string; live: TimelineEvent[] }) {
+function Timeline({ serverId, live, canReadActivity }: { serverId: string; live: TimelineEvent[]; canReadActivity?: boolean }) {
+  const [mode, setMode] = useState<'events' | 'activity'>('events');
   const { data, isLoading } = useQuery({
     queryKey: ['events', serverId],
     queryFn: () => api<{ events: TimelineEvent[] }>(`/servers/${serverId}/events?limit=100`),
+    enabled: mode === 'events',
   });
-  if (isLoading) return <Spinner />;
+  const activity = useQuery({
+    queryKey: ['serverActivity', serverId],
+    queryFn: () => api<{ activity: ServerActivityItem[] }>(`/servers/${serverId}/activity?limit=100`),
+    enabled: Boolean(canReadActivity) && mode === 'activity',
+  });
+
   const seen = new Set<number>();
   const all = [...live, ...(data?.events ?? [])].filter((e) => !seen.has(e.id) && seen.add(e.id));
-  if (!all.length) return <p className="text-dim text-sm">{t('timeline.empty')}</p>;
+  const actList = activity.data?.activity ?? [];
 
   return (
-    <ol className="relative border-l border-seam ml-2 space-y-4">
-      {all.map((e) => (
-        <li key={e.id} className="pl-5 relative">
-          <span className={`absolute -left-[5px] top-1.5 size-2.5 rounded-full ${e.severity === 'error' ? 'bg-led-crash' : e.severity === 'warn' ? 'bg-led-start' : 'bg-led-stop'}`} />
-          <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
-            <time className="text-dim tabular-nums" dateTime={e.ts}>{fmtDateTime(e.ts, { dateStyle: 'short', timeStyle: 'medium' })}</time>
-            <span className="text-dim">{KIND_KEY[e.kind] ? t(`event.${KIND_KEY[e.kind]}`) : e.kind}</span>
-            {e.actor && <span className="text-dim">{t('timeline.by', { name: e.actor })}</span>}
+    <div className="space-y-4">
+      {canReadActivity && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMode('events')}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium border transition-colors ${mode === 'events' ? 'border-amber bg-amber/15 text-amber' : 'border-seam bg-rack/40 text-dim hover:text-ink'}`}
+          >
+            {t('timeline.eventsTab')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('activity')}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium border transition-colors ${mode === 'activity' ? 'border-amber bg-amber/15 text-amber' : 'border-seam bg-rack/40 text-dim hover:text-ink'}`}
+          >
+            {t('timeline.activityTab')}
+          </button>
+        </div>
+      )}
+
+      {mode === 'events' && (
+        isLoading ? <Spinner /> : !all.length ? <p className="text-dim text-sm">{t('timeline.empty')}</p> : (
+          <ol className="relative border-l border-seam ml-2 space-y-4">
+            {all.map((e) => (
+              <li key={e.id} className="pl-5 relative">
+                <span className={`absolute -left-[5px] top-1.5 size-2.5 rounded-full ${e.severity === 'error' ? 'bg-led-crash' : e.severity === 'warn' ? 'bg-led-start' : 'bg-led-stop'}`} />
+                <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
+                  <time className="text-dim tabular-nums" dateTime={e.ts}>{fmtDateTime(e.ts, { dateStyle: 'short', timeStyle: 'medium' })}</time>
+                  <span className="text-dim">{KIND_KEY[e.kind] ? t(`event.${KIND_KEY[e.kind]}`) : e.kind}</span>
+                  {e.actor && <span className="text-dim">{t('timeline.by', { name: e.actor })}</span>}
+                </div>
+                <p className="text-sm text-ink mt-0.5">{renderEventSummary(e)}</p>
+                {Array.isArray((e.payload as { lastLines?: string[] } | null)?.lastLines) && (
+                  <details className="mt-1.5">
+                    <summary className="text-xs text-dim cursor-pointer hover:text-ink">{t('timeline.lastLines')}</summary>
+                    <pre className="mt-1.5 max-h-60 overflow-auto rounded-md bg-[#0F141C] border border-seam p-3 text-xs font-mono text-ink/90">
+                      {(e.payload as { lastLines: string[] }).lastLines.join('\n')}
+                    </pre>
+                  </details>
+                )}
+              </li>
+            ))}
+          </ol>
+        )
+      )}
+
+      {mode === 'activity' && (
+        activity.isLoading ? <Spinner /> : !actList.length ? <p className="text-dim text-sm">{t('timeline.activityEmpty')}</p> : (
+          <div className="rounded-lg border border-seam bg-rack/40 divide-y divide-seam/60">
+            {actList.map((a) => (
+              <div key={a.id} className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  <span className="rounded bg-amber/15 text-amber px-2 py-0.5 text-xs font-mono">{a.action}</span>
+                  <span className="font-medium text-ink">{a.actor ?? 'System'}</span>
+                  {a.metadata && Object.keys(a.metadata).length > 0 && (
+                    <span className="text-xs text-dim font-mono truncate max-w-md">{JSON.stringify(a.metadata)}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-xs text-dim tabular-nums">
+                  {a.ip && <span className="font-mono">{a.ip}</span>}
+                  <time dateTime={a.ts}>{fmtDateTime(a.ts, { dateStyle: 'short', timeStyle: 'medium' })}</time>
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="text-sm text-ink mt-0.5">{renderEventSummary(e)}</p>
-          {Array.isArray((e.payload as { lastLines?: string[] } | null)?.lastLines) && (
-            <details className="mt-1.5">
-              <summary className="text-xs text-dim cursor-pointer hover:text-ink">{t('timeline.lastLines')}</summary>
-              <pre className="mt-1.5 max-h-60 overflow-auto rounded-md bg-[#0F141C] border border-seam p-3 text-xs font-mono text-ink/90">
-                {(e.payload as { lastLines: string[] }).lastLines.join('\n')}
-              </pre>
-            </details>
-          )}
-        </li>
-      ))}
-    </ol>
+        )
+      )}
+    </div>
   );
 }

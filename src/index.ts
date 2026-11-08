@@ -40,10 +40,8 @@ async function main(): Promise<void> {
     log.warn(`Erwartet unter: ${config.DOCKER_SOCKET}`);
   }
 
-  // Ohne Host-Eintrag und Eggs kann niemand einen Server anlegen - beides
-  // also beim Start sicherstellen, statt es dem Betreiber aufzuhalsen.
+  // Ohne Host-Eintrag kann niemand einen Server anlegen.
   await ensureLocalNode();
-  await seedBundledEggs();
 
   // Speicher messen geht auch ohne Docker (Datenordner der Server).
   diskCollector.start();
@@ -55,12 +53,16 @@ async function main(): Promise<void> {
   await app.listen({ port: config.PANEL_PORT, host: '0.0.0.0' });
   log.info(`Panel laeuft auf ${config.PANEL_URL}`);
 
-  // Unterbrochene Spiele-Tests nach Panel-Neustart/Update automatisch fortsetzen
-  void resumeTestRunnerIfInterrupted();
+  // Mitgelieferte Eggs im Hintergrund abgleichen, damit /healthz beim Deploy sofort antwortet
+  void seedBundledEggs()
+    .then(() => resumeTestRunnerIfInterrupted())
+    .catch((err) => log.warn({ err }, 'Hintergrund-Initialisierung der Eggs fehlgeschlagen'));
 
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => {
       log.info({ signal }, 'Beende');
+      // Falls offene Browser-WebSockets app.close() aufhalten, nach 1.5s sauber beenden
+      setTimeout(() => process.exit(0), 1500).unref();
       void stopTestRunner();
       stopSupervisor();
       statsCollector.stop();

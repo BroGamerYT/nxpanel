@@ -271,37 +271,28 @@ try {
         }
     }
 
-    # 2. Typpruefung
-    if ($hasTsc) {
-        Write-Step "Typpruefung"
-        & npx tsc --noEmit
-        if ($LASTEXITCODE -ne 0) { Write-Err "Typfehler. Nichts hochgeladen."; exit 1 }
-        Write-Ok "Keine Typfehler."
-    } else {
-        Write-Warn "typescript nicht vorhanden - Typpruefung uebersprungen."
-    }
+    # 2. Backend & Weboberflaeche lokal bauen (dauert lokal ~1.5 s und spart
+    #    den kompletten TypeScript/Vite-Build auf der VM!)
+    Write-Step "Backend & Weboberflaeche bauen"
+    & npm run build
+    if ($LASTEXITCODE -ne 0) { Write-Err "Backend-Build (tsc) fehlgeschlagen. Nichts hochgeladen."; exit 1 }
+    Write-Ok "Backend gebaut (dist/)."
 
-    # 2b. Weboberflaeche probehalber bauen. Gebaut wird sie zwar auf der VM,
-    # aber ein Fehler soll hier auffallen und nicht erst nach dem Upload.
-    if (-not $SkipTests) {
-        Write-Step "Weboberflaeche bauen (Probe)"
-        # Auch neue Pakete erkennen (z. B. nach einem Update von mir), nicht nur das erste Mal.
-        $webPkg = Get-Content (Join-Path $ProjectRoot 'web\package.json') -Raw | ConvertFrom-Json
-        $webMissing = @()
-        foreach ($section in @($webPkg.dependencies, $webPkg.devDependencies)) {
-            if ($section) { foreach ($name in $section.PSObject.Properties.Name) {
-                if (-not (Test-Path (Join-Path $ProjectRoot "web\node_modules\$name"))) { $webMissing += $name }
-            } }
-        }
-        if ($webMissing.Count -gt 0) {
-            Write-Host "    Pakete der Oberflaeche installieren: $($webMissing -join ', ')" -ForegroundColor DarkGray
-            & npm --prefix web ci
-            if ($LASTEXITCODE -ne 0) { Write-Err "npm ci in web/ fehlgeschlagen."; exit 1 }
-        }
-        & npm --prefix web run build
-        if ($LASTEXITCODE -ne 0) { Write-Err "Oberflaeche baut nicht. Nichts hochgeladen."; exit 1 }
-        Write-Ok "Oberflaeche baut."
+    $webPkg = Get-Content (Join-Path $ProjectRoot 'web\package.json') -Raw | ConvertFrom-Json
+    $webMissing = @()
+    foreach ($section in @($webPkg.dependencies, $webPkg.devDependencies)) {
+        if ($section) { foreach ($name in $section.PSObject.Properties.Name) {
+            if (-not (Test-Path (Join-Path $ProjectRoot "web\node_modules\$name"))) { $webMissing += $name }
+        } }
     }
+    if ($webMissing.Count -gt 0) {
+        Write-Host "    Pakete der Oberflaeche installieren: $($webMissing -join ', ')" -ForegroundColor DarkGray
+        & npm --prefix web ci
+        if ($LASTEXITCODE -ne 0) { Write-Err "npm ci in web/ fehlgeschlagen."; exit 1 }
+    }
+    & npm --prefix web run build
+    if ($LASTEXITCODE -ne 0) { Write-Err "Oberflaeche baut nicht. Nichts hochgeladen."; exit 1 }
+    Write-Ok "Oberflaeche gebaut (web/dist/)."
 
     # 3. Konfiguration vollstaendig?
     if ($cfg.host -eq 'HIER_IP_EINTRAGEN' -or -not $cfg.host) {
@@ -331,16 +322,15 @@ try {
     $tarPath = Join-Path $env:TEMP $tarName
 
     # .env, Daten und node_modules bleiben hier. Die .env lebt auf dem Server.
+    # dist/ und web/dist/ sind fertig gebaut und gehen direkt mit ins Archiv!
     $exclude = @(
         '--exclude=node_modules', '--exclude=.git', '--exclude=data',
-        '--exclude=dist', '--exclude=.env', '--exclude=*.tgz',
+        '--exclude=.env', '--exclude=*.tgz',
         '--exclude=deploy/deploy.config.json'
     )
     # install/ muss mit: der Server braucht install-linux.sh fuer die
     # Erstinstallation, wenn dort noch keine .env liegt.
-    # web/ = Weboberflaeche; gebaut wird sie auf der VM im Docker-Build
-    # (node_modules und dist sind oben ausgeschlossen).
-    & tar czf $tarPath @exclude src web migrations tests deploy install eggs docs `
+    & tar czf $tarPath @exclude dist src web/dist web/package.json web/package-lock.json migrations tests deploy install eggs docs `
         package.json package-lock.json tsconfig.json vitest.config.ts Dockerfile .dockerignore README.md CHANGELOG.md build-info.json
     if ($LASTEXITCODE -ne 0) { Write-Err "Packen fehlgeschlagen."; exit 1 }
 

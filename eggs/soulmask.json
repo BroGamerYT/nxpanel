@@ -248,7 +248,7 @@
     "steam": 2646460
   },
   "resources": {
-    "base_ram_mb": 8192,
+    "base_ram_mb": 16384,
     "min_cpu_percent": 200
   },
   "query": {

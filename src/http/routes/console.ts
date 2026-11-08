@@ -11,6 +11,7 @@ import { loadServerForActor } from '../../servers/access.js';
 import type { ContainerStats } from '../../docker/client.js';
 import { requireServer } from '../auth.js';
 import { followFile, logFilePath, tailFile } from '../../servers/logfile.js';
+import { statsCollector } from '../../servers/stats.js';
 
 /**
  * Live-Verbindung zu einem Server: Konsole, Statuswechsel, Auslastung.
@@ -158,6 +159,20 @@ export async function consoleRoutes(app: FastifyInstance, opts: { engine: Consol
     async function attachStats() {
       stopStats?.();
       stopStats = null;
+      const cached = statsCollector.snapshot().get(serverId);
+      if (cached && !closed) {
+        send({
+          type: 'stats',
+          stats: {
+            cpuPercent: cached.cpuPercent,
+            memMb: cached.memMb,
+            memLimitMb: cached.memLimitMb,
+            netRxBytes: 0,
+            netTxBytes: 0,
+          },
+          ts: cached.at,
+        });
+      }
       const cid = await containerId();
       if (!cid || closed) return;
       try {

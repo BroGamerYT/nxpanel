@@ -27,27 +27,77 @@ function flatten(tree: Tree, prefix = '', out: Record<string, string> = {}) {
   return out;
 }
 
-const modules = import.meta.glob<{ default: Tree }>('../locales/*.json', { eager: true });
-const catalogs: Record<string, Record<string, string>> = {};
-for (const [path, mod] of Object.entries(modules)) {
+const loaders = import.meta.glob<{ default: Tree }>('../locales/*.json');
+const loaderByCode: Record<string, () => Promise<{ default: Tree }>> = {};
+for (const [path, loader] of Object.entries(loaders)) {
   const code = /([^/]+)\.json$/.exec(path)![1]!;
-  catalogs[code] = flatten(mod.default);
+  loaderByCode[code] = loader;
 }
 
+const KNOWN_LANGUAGE_NAMES: Record<string, string> = {
+  de: 'Deutsch',
+  en: 'English',
+  fr: 'Français',
+  es: 'Español',
+  it: 'Italiano',
+  nl: 'Nederlands',
+  pl: 'Polski',
+  pt: 'Português',
+  ru: 'Русский',
+  tr: 'Türkçe',
+};
+
+const catalogs: Record<string, Record<string, string>> = {};
+const inflight: Record<string, Promise<void>> = {};
+
 /** Alle vorhandenen Sprachen, Grundsprache zuerst. */
-export const LANGUAGES = Object.keys(catalogs)
+export const LANGUAGES = Object.keys(loaderByCode)
   .sort((a, b) => (a === BASE ? -1 : b === BASE ? 1 : a.localeCompare(b)))
-  .map((code) => ({ code, name: catalogs[code]!['_meta.name'] ?? code }));
+  .map((code) => ({
+    code,
+    get name() {
+      return catalogs[code]?.['_meta.name'] ?? KNOWN_LANGUAGE_NAMES[code] ?? code;
+    },
+  }));
 
 let current = BASE;
-const listeners = new Set<(l: string) => void>();
+let revision = 0;
+const listeners = new Set<(state: string) => void>();
 
-/** Bester Treffer: genau ("pt-BR"), sonst die Hauptsprache ("pt"), sonst Deutsch. */
+function notify() {
+  revision++;
+  const state = `${current}:${revision}`;
+  for (const f of listeners) f(state);
+}
+
+/** Laedt eine Sprachdatei bei Bedarf nach (nur fuer die gewaehlte Sprache). */
+export async function ensureLocaleLoaded(code: string): Promise<void> {
+  const target = resolveLocale(code);
+  if (catalogs[target]) return;
+  if (!inflight[target]) {
+    const loader = loaderByCode[target];
+    inflight[target] = (loader ? loader() : Promise.resolve({ default: {} as Tree }))
+      .then((mod) => {
+        catalogs[target] = flatten(mod.default);
+      })
+      .finally(() => {
+        delete inflight[target];
+      });
+  }
+  await inflight[target];
+  // Deutsch und Englisch sind zu 100 % vollstaendig (geprueft per Test).
+  // Nur bei weiteren, evtl. unvollstaendigen Sprachen wird BASE als Fallback mitgeladen.
+  if (target !== BASE && target !== 'de' && !catalogs[BASE] && loaderByCode[BASE]) {
+    await ensureLocaleLoaded(BASE);
+  }
+}
+
+/** Bester Treffer: genau ("pt-BR"), sonst die Hauptsprache ("pt"), sonst BASE. */
 export function resolveLocale(wanted: string | null | undefined): string {
   if (!wanted) return BASE;
-  if (catalogs[wanted]) return wanted;
+  if (loaderByCode[wanted]) return wanted;
   const main = wanted.split('-')[0]!;
-  return catalogs[main] ? main : BASE;
+  return loaderByCode[main] ? main : BASE;
 }
 
 export function getLocale() { return current; }
@@ -73,7 +123,11 @@ export function setLocale(code: string) {
   current = l;
   try { localStorage.setItem(STORE, l); } catch { /* egal */ }
   document.documentElement.lang = l;
-  for (const f of listeners) f(l);
+  if (catalogs[l]) {
+    notify();
+  } else {
+    void ensureLocaleLoaded(l).then(() => notify());
+  }
 }
 
 /** Startsprache vor der Anmeldung: zuletzt gewaehlt, sonst Browser, sonst Deutsch. */
@@ -108,16 +162,18 @@ export function has(key: string) {
  * direkt auf und muessen dafuer keinen Hook benutzen.
  */
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, set] = useState(current);
+  const [state, set] = useState(() => `${current}:${revision}`);
   useEffect(() => {
     listeners.add(set);
     return () => { listeners.delete(set); };
   }, []);
-  return <div key={locale} className="contents">{children}</div>;
+  return <div key={state} className="contents">{children}</div>;
 }
 
-// Beim Laden sofort setzen, damit schon der erste Render stimmt.
-setLocale(initialLocale());
+// Beim Laden sofort setzen und gewaehlte Sprachdatei vorladen.
+export const i18nReady = ensureLocaleLoaded(initialLocale()).then(() => {
+  setLocale(initialLocale());
+});
 
 /** Datum/Zeit in der aktuellen Sprache. */
 export function fmtDateTime(d: string | number | Date, opts: Intl.DateTimeFormatOptions) {

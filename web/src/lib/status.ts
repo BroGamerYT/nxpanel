@@ -18,7 +18,7 @@ export const STATUS: Record<ServerStatus, { label: string; led: string; busy: bo
 export const POWER_ALLOWED: Record<'start' | 'stop' | 'restart' | 'kill', ServerStatus[]> = {
   start: ['offline', 'crashed'],
   stop: ['running', 'starting'],
-  restart: ['running', 'crashed', 'offline'],
+  restart: ['running', 'starting', 'crashed', 'offline'],
   kill: ['running', 'starting', 'stopping'],
 };
 

@@ -283,16 +283,29 @@ export class StateError extends Error {}
  */
 export async function ensureRuntimeCurrent(serverId: string, actorId?: string | null): Promise<boolean> {
   const [server] = await sql<ServerRecord[]>`SELECT * FROM servers WHERE id = ${serverId}`;
-  if (!server?.container_id) return false;
+  if (!server) return false;
+  if (!server.container_id) {
+    await rebuildContainer(serverId, { actorId: actorId ?? null, reason: 'Container fehlte beim Start – automatisch angelegt' });
+    return true;
+  }
   // Leeres RCON-Passwort im Container: neu bauen, damit das erzeugte greift.
   if (Object.keys(await ensureRconPassword(server)).length) {
     await rebuildContainer(serverId, { actorId: actorId ?? null, reason: 'RCON-Passwort angelegt (war leer - TPS und Spielerverwaltung gingen nicht)' });
     return true;
   }
   const egg = await loadEgg(server.egg_id);
+  const ctx = await buildContext(serverId, egg);
+  const wantStartup = substitute(egg.startup, ctx);
+  if (server.startup !== wantStartup) {
+    await rebuildContainer(serverId, { actorId: actorId ?? null, reason: 'Startbefehl an aktuelles Egg angepasst' });
+    return true;
+  }
   const want = runtimeKey(tmpFromEgg(egg.tmp));
   const labels = await engine.labels(server.container_id);
-  if (labels === null) return false;
+  if (labels === null) {
+    await rebuildContainer(serverId, { actorId: actorId ?? null, reason: 'Container war nicht mehr vorhanden – automatisch neu angelegt' });
+    return true;
+  }
   const have = labels[RUNTIME_LABEL] ?? runtimeKey(DEFAULT_TMP);
   if (have === want) return false;
   await rebuildContainer(serverId, { actorId: actorId ?? null, reason: `Laufzeit an das Spiel angepasst (${have} -> ${want})` });
@@ -326,7 +339,7 @@ export async function ensureRconPassword(server: ServerRecord): Promise<Record<s
 export async function rebuildContainer(serverId: string, opts: { actorId?: string | null; reason: string }): Promise<void> {
   const [server] = await sql<ServerRecord[]>`SELECT * FROM servers WHERE id = ${serverId}`;
   if (!server) throw new NotFoundError('Server nicht gefunden');
-  if (!(STOPPED_STATES as readonly string[]).includes(server.status)) {
+  if (!(STOPPED_STATES as readonly string[]).includes(server.status) && server.status !== 'starting') {
     throw new StateError(`Server ist "${server.status}" - erst stoppen`);
   }
   const egg = await loadEgg(server.egg_id);

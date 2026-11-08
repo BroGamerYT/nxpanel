@@ -38,10 +38,11 @@ import {
  */
 type RootReq = FastifyRequest<{ Params: { root: string } }>;
 
-function rootOf(req: RootReq): { root: string } {
+function rootOf(req: RootReq, requireWrite = false): { root: string } {
   const r = findAdminRoot(req.params.root);
   if (!r) throw new HttpError(404, 'Ordner nicht gefunden', 'not_found');
   if (!r.available) throw new HttpError(404, `${r.label} ist nicht eingebunden (${r.path})`, 'not_mounted');
+  if (requireWrite && r.readOnly) throw new HttpError(403, `${r.label} ist schreibgeschützt (read-only)`, 'read_only');
   return { root: r.path };
 }
 
@@ -59,7 +60,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   const admin = { preHandler: requireAdmin() };
 
   app.get('/admin/files', admin, async () => ({
-    roots: adminFileRoots().map((r) => ({ id: r.id, label: r.label, path: r.path, available: r.available })),
+    roots: adminFileRoots().map((r) => ({ id: r.id, label: r.label, path: r.path, available: r.available, readOnly: Boolean(r.readOnly) })),
   }));
 
   app.get<{ Params: { root: string }; Querystring: { path?: string } }>('/admin/files/:root', admin, async (req) => {
@@ -94,7 +95,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   app.put<{ Params: { root: string }; Body: { path: string; content: string } }>('/admin/files/:root/content', admin, async (req) => {
     const body = fileContentBody.parse(req.body);
     try {
-      await writeFileContent(rootOf(req), body.path, body.content);
+      await writeFileContent(rootOf(req, true), body.path, body.content);
       await audit(req, 'admin.file.edit', { path: body.path });
       return { ok: true, path: body.path };
     } catch (err) { wrapFileErrors(err); }
@@ -103,7 +104,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   app.post<{ Params: { root: string }; Body: { path: string } }>('/admin/files/:root/directory', admin, async (req) => {
     const body = createDirBody.parse(req.body);
     try {
-      await createDirectory(rootOf(req), body.path);
+      await createDirectory(rootOf(req, true), body.path);
       await audit(req, 'admin.file.mkdir', { path: body.path });
       return { ok: true, path: body.path };
     } catch (err) { wrapFileErrors(err); }
@@ -112,7 +113,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   app.post<{ Params: { root: string }; Body: { from: string; to: string } }>('/admin/files/:root/rename', admin, async (req) => {
     const body = renameBody.parse(req.body);
     try {
-      await renamePath(rootOf(req), body.from, body.to);
+      await renamePath(rootOf(req, true), body.from, body.to);
       await audit(req, 'admin.file.rename', { from: body.from, to: body.to });
       return { ok: true };
     } catch (err) { wrapFileErrors(err); }
@@ -121,7 +122,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   app.delete<{ Params: { root: string }; Body: { path: string } }>('/admin/files/:root', admin, async (req) => {
     const body = deleteFileBody.parse(req.body);
     try {
-      await deletePath(rootOf(req), body.path);
+      await deletePath(rootOf(req, true), body.path);
       await audit(req, 'admin.file.delete', { path: body.path });
       return { ok: true };
     } catch (err) { wrapFileErrors(err); }
@@ -139,7 +140,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { root: string }; Querystring: { path?: string } }>('/admin/files/:root/upload', admin, async (req) => {
-    const root = rootOf(req);
+    const root = rootOf(req, true);
     const part = await req.file();
     if (!part) throw new HttpError(400, 'Keine Datei übertragen', 'no_file');
     const safeFilename = basename(part.filename).replace(/[\0\r\n]/g, '');
@@ -165,7 +166,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   app.post<{ Params: { root: string }; Body: { paths: string[]; destination: string } }>('/admin/files/:root/compress', admin, async (req) => {
     const body = compressBody.parse(req.body);
     try {
-      const result = await compressToZip(rootOf(req), body.paths, body.destination);
+      const result = await compressToZip(rootOf(req, true), body.paths, body.destination);
       await audit(req, 'admin.file.compress', { paths: body.paths, destination: body.destination });
       return { ok: true, ...result };
     } catch (err) { wrapFileErrors(err); }
@@ -174,7 +175,7 @@ export async function adminFileRoutes(app: FastifyInstance) {
   app.post<{ Params: { root: string }; Body: { path: string; destination?: string } }>('/admin/files/:root/decompress', admin, async (req) => {
     const body = decompressBody.parse(req.body);
     try {
-      const result = await decompressArchive(rootOf(req), body.path, body.destination);
+      const result = await decompressArchive(rootOf(req, true), body.path, body.destination);
       await audit(req, 'admin.file.decompress', { path: body.path });
       return { ok: true, ...result };
     } catch (err) { wrapFileErrors(err); }

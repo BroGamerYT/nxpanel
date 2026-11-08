@@ -18,6 +18,7 @@ import { sql, closeDatabase, waitForDatabase } from '../db/index.js';
 import { runMigrations } from '../db/migrate.js';
 import { prepareServer, provisionServer, deleteServer } from '../servers/create.js';
 import { startServer } from '../servers/lifecycle.js';
+import { seedBundledEggs } from '../servers/nodes.js';
 import { engine } from '../docker/client.js';
 import { log } from '../log.js';
 import { readFile, writeFile, mkdir, rm, readdir } from 'node:fs/promises';
@@ -253,8 +254,16 @@ async function testSingleEgg(
       setTimeout(() => reject(new Error(`Timeout: Installation dauerte länger als ${timeoutMinutes} Minuten`)), timeoutMinutes * 60 * 1000),
     );
 
-    await Promise.race([installPromise, timeoutPromise]);
+    const provisioned = await Promise.race([installPromise, timeoutPromise]);
     installDurationSec = Math.round((Date.now() - installStart) / 1000);
+    if (provisioned.status === 'install_failed') {
+      const [failEvt] = await sql<{ summary: string }[]>`
+        SELECT summary FROM events
+        WHERE server_id = ${serverId} AND kind = 'install_failed'
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      throw new Error(failEvt?.summary ?? 'Installation fehlgeschlagen (Status: install_failed)');
+    }
     console.log(`  ✓ Installation erfolgreich abgeschlossen in ${installDurationSec}s`);
 
     // Container-ID holen
@@ -417,6 +426,7 @@ async function main() {
   console.log(`Verbinde mit Datenbank...`);
   await waitForDatabase();
   await runMigrations();
+  await seedBundledEggs();
 
   const { only, timeoutMinutes, mode, cpuPercent, ramMb } = parseArgs();
   console.log(`Modus: ${mode.toUpperCase()} (Timeout je Spiel: ${timeoutMinutes} Min.)`);

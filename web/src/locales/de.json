@@ -192,6 +192,8 @@
     "pruned_other": "{mb} MB frei, {count} Images gelöscht"
   },
   "disk": {
+    "containerLayer": "Container-Schicht: {size}",
+    "containerLayerHint": "Daten in der schreibbaren Container-Schicht außerhalb des Datenordners (/home/container). Ist dieser Wert sehr groß, schreibt das Spiel Daten an die falsche Stelle.",
     "notMeasured": "wird gemessen …",
     "overLimit": "Mehr belegt als zugeteilt – Speicher in den Einstellungen erhöhen."
   },
@@ -412,7 +414,9 @@
     "updateTitle": "Server-Update",
     "updateModpackConfirm": "Möchtest du das Modpack auf Version {version} aktualisieren? Vor dem Update wird automatisch ein Backup erstellt.",
     "updateUpToDate": "Server ist auf dem neuesten Stand ({version}).",
-    "updateRestartNote": "Beim Starten oder Neustarten prüfen Minecraft- und Steam-Server automatisch nach den neuesten Updates.",
+    "updateRestartNote": "Beim 1-Klick-Update wird das neueste Container-Image geladen, der Container aktualisiert und das Spiel beim Start auf die neueste Version gebracht.",
+    "updatePreBackup": "Vor dem Update automatisch ein Sicherheits-Backup anlegen (empfohlen)",
+    "updateManual": "1-Klick-Update starten",
     "tab": {
       "console": "Konsole",
       "files": "Dateien",
@@ -428,6 +432,11 @@
   "servers": {
     "allGames": "Alle Spiele",
     "allStates": "Alle Zustände",
+    "allTags": "Alle Tags",
+    "favAdd": "Als Favorit anheften",
+    "favRemove": "Aus Favoriten entfernen",
+    "tagAdd": "Tag",
+    "tagRemove": "Tag entfernen",
     "col": {
       "address": "Adresse",
       "game": "Spiel",
@@ -453,8 +462,8 @@
     "you": "Du"
   },
   "settings": {
-    "autoRestart": "Nach Absturz automatisch neu starten",
-    "autoRestartHint": "Höchstens fünfmal in zehn Minuten, danach bleibt der Server aus und die Zeitachse sagt warum.",
+    "autoRestart": "Auto-Start (Nach Absturz bis zu 5× automatisch neu starten)",
+    "autoRestartHint": "Versucht den Server bei einem Absturz bis zu 5-mal automatisch neu zu starten. Stürzt er auch beim 5. Mal ab, bleibt er aus und wird direkt am Panel als „Nicht startbar“ angezeigt.",
     "game": "Spiel-Einstellungen",
     "gameHint": "Dieselben Felder wie beim Anlegen. Gilt ab dem nächsten Start.",
     "general": "Allgemein",
@@ -470,6 +479,10 @@
     "stopFirst": "Spiel-Einstellungen, Java-Version und Ports lassen sich nur ändern, solange der Server gestoppt ist. Spielstände bleiben dabei erhalten."
   },
   "status": {
+    "autoStartAttempt": "Auto-Start ({count}/5)",
+    "autoStartHint": "Startet den Server bei Absturz bis zu 5-mal automatisch neu. Nach 5 Fehlversuchen bleibt er als „Nicht startbar“ ausgeschaltet.",
+    "autoStartOff": "Auto-Start: Aus",
+    "autoStartOn": "Auto-Start: An",
     "crashed": "Abgestürzt",
     "install_failed": "Installation fehlgeschlagen",
     "installing": "Installiert",
@@ -477,7 +490,9 @@
     "running": "Läuft",
     "starting": "Startet",
     "stopping": "Stoppt",
-    "suspended": "Gesperrt"
+    "suspended": "Gesperrt",
+    "unstartable": "Nicht startbar (5/5 Abstürze)",
+    "unstartableBanner": "Nicht startbar: Dieser Server ist 5-mal hintereinander abgestürzt und wurde automatisch abgeschaltet. Prüfe die Konsole oder Zeitachse auf Fehler, bevor du ihn erneut startest."
   },
   "backups": {
     "checksum": "Prüfsumme",
@@ -561,8 +576,11 @@
     "title": "Steam-Konten"
   },
   "timeline": {
+    "activityEmpty": "Noch keine Benutzer-Aktivitäten für diesen Server protokolliert.",
+    "activityTab": "Benutzer-Aktivität (Audit)",
     "by": "durch {name}",
     "empty": "Noch keine Ereignisse.",
+    "eventsTab": "Ereignisse (Zeitachse)",
     "lastLines": "Letzte Logzeilen"
   },
   "version": {
@@ -712,6 +730,16 @@
   },
   "eggImport": {
     "button": "Spiel importieren (JSON)",
+    "catalogButton": "Online-Katalog durchsuchen (260+ Spiele)",
+    "catalogClose": "Katalog schließen",
+    "catalogTitle": "Online-Egg-Katalog (Pelican & Pterodactyl)",
+    "catalogSearch": "Spiel im Online-Katalog suchen (z. B. Conan, DayZ, FiveM, Bungeecord) …",
+    "catalogAll": "Alle",
+    "catalogEmpty": "Kein passendes Spiel im Katalog gefunden.",
+    "catalogInstall": "Importieren & anpassen",
+    "catalogInstalled": "Installiert",
+    "catalogDirectUrl": "Oder direkten GitHub-JSON-Link einfügen …",
+    "catalogDirectBtn": "Von URL importieren",
     "done": "„{name}“ ist jetzt in der Auswahl.",
     "hint": "Eigene Vorlage oder Egg von Pterodactyl/Pelican – Ports, Startmuster und Rechte passt der Import an.",
     "notJson": "Die Datei ist kein gültiges JSON."
@@ -728,6 +756,13 @@
     "usageTotal": "Unterordner zusammen: {size}",
     "partial": "Messung abgebrochen (zu groß), Werte unvollständig",
     "noFolders": "Keine Unterordner.",
+    "readOnly": "Schreibgeschützt",
+    "readOnlyHint": "Dieser Ordner ist schreibgeschützt eingebunden (read-only). Dateien können angesehen und heruntergeladen, aber nicht verändert werden.",
     "serversHint": "Die Dateien der installierten Server liegen unter „volumes“ – jeder Server hat dort einen Ordner, daneben steht sein Name."
+  },
+  "notif": {
+    "title": "Benachrichtigungen",
+    "markAllRead": "Alle gelesen",
+    "empty": "Keine neuen Warnungen oder Ereignisse."
   }
 }
