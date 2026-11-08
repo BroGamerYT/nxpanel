@@ -18,7 +18,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-4 mb-6">
       {host && <HostCard host={host} />}
-      <section aria-label={t('dash.totals')} className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      <section aria-label={t('dash.totals')} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <Stat icon={Server} label={t('dash.running')} value={`${totals.running} / ${totals.servers}`}
           tip="Laufende Gameserver im Verhältnis zu allen angelegten Servern." />
         <Stat icon={Cpu} label={t('dash.cpuAll')} value={`${totals.cpuPercent.toFixed(0)} %`}

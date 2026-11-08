@@ -166,8 +166,9 @@ function ProxmoxRules({ node }: { node: NodeInfo }) {
 function AllocationTable({ rows, host }: { rows: AllocationRow[]; host: string | null }) {
   if (!rows.length) return <p className="text-sm text-dim">{t('network.noPorts')}</p>;
   return (
-    <div className="rounded-lg border border-seam overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="rounded-lg border border-seam bg-rack overflow-hidden shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[580px]">
         <thead className="bg-rack text-dim text-left">
           <tr>
             <th className="font-medium px-4 py-2.5">{t('network.col.port')}</th>
@@ -197,6 +198,7 @@ function AllocationTable({ rows, host }: { rows: AllocationRow[]; host: string |
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

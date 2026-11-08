@@ -283,13 +283,31 @@ export function ServerList() {
         </div>
 
         {sidebarOpen && servers.length > 0 && (
-          <div className="hidden lg:block sticky top-6">
-            <DashboardSidebar
-              servers={servers}
-              liveMap={liveMap}
-              onClose={() => toggleSidebar(false)}
-            />
-          </div>
+          <>
+            {/* Desktop Sticky Sidebar */}
+            <div className="hidden lg:block sticky top-6">
+              <DashboardSidebar
+                servers={servers}
+                liveMap={liveMap}
+                onClose={() => toggleSidebar(false)}
+              />
+            </div>
+
+            {/* Mobile / Tablet Drawer */}
+            <div className="fixed inset-0 z-50 lg:hidden">
+              <div
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in"
+                onClick={() => toggleSidebar(false)}
+              />
+              <div className="fixed inset-y-0 right-0 w-80 max-w-[85vw] bg-rack border-l border-seam p-4 shadow-2xl z-50 overflow-y-auto animate-in slide-in-from-right duration-200">
+                <DashboardSidebar
+                  servers={servers}
+                  liveMap={liveMap}
+                  onClose={() => toggleSidebar(false)}
+                />
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

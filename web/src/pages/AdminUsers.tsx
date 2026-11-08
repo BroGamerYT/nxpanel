@@ -192,18 +192,19 @@ export function AdminUsers() {
       </div>
 
       {/* Nutzer-Tabelle */}
-      <div className="overflow-hidden rounded-xl border border-seam bg-rack">
-        <table className="w-full text-left border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-seam bg-rack-2/40 text-dim text-xs font-medium uppercase tracking-wider">
-              <th className="px-5 py-3.5">Benutzer</th>
-              <th className="px-5 py-3.5">Rolle / Status</th>
-              <th className="px-5 py-3.5">Server / RAM</th>
-              <th className="px-5 py-3.5">Erlaubte Spiele</th>
-              <th className="px-5 py-3.5 text-right">Aktionen</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-seam">
+      <div className="rounded-xl border border-seam bg-rack overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-sm min-w-[720px]">
+            <thead>
+              <tr className="border-b border-seam bg-rack-2/40 text-dim text-xs font-medium uppercase tracking-wider">
+                <th className="px-5 py-3.5">Benutzer</th>
+                <th className="px-5 py-3.5">Rolle / Status</th>
+                <th className="px-5 py-3.5">Server / RAM</th>
+                <th className="px-5 py-3.5">Erlaubte Spiele</th>
+                <th className="px-5 py-3.5 text-right">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-seam">
             {filteredUsers.map((u) => {
               const roleColors = {
                 admin: 'bg-red-500/15 text-red-400 border-red-500/30',
@@ -293,6 +294,7 @@ export function AdminUsers() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Generiertes Passwort Modal */}

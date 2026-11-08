@@ -178,7 +178,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
       {/* Kopf: die LED-Leiste zeigt den Zustand ueber die ganze Breite - auch aus dem Augenwinkel erkennbar */}
       <header className={`rounded-lg border bg-rack overflow-hidden ${isUnstartable ? 'border-led-crash/60 ring-1 ring-led-crash/30' : 'border-seam'}`}>
         <div className={`h-1 ${STATUS[status].led} ${STATUS[status].busy ? 'led-busy' : ''}`} />
-        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-3.5 sm:px-5 py-3.5 sm:py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <button
@@ -419,7 +419,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-seam px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-8 gap-y-3 border-t border-seam px-3.5 sm:px-5 py-3">
         {(status === 'running' || status === 'starting' || status === 'stopping') && (
           <>
             <div className="flex items-start gap-1">
@@ -627,7 +627,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
         </div>
       )}
 
-      <nav className="flex gap-1 border-b border-seam overflow-x-auto whitespace-nowrap" role="tablist">
+      <nav className="flex gap-1 border-b border-seam overflow-x-auto whitespace-nowrap scrollbar-none px-1" role="tablist">
         {([
           ['konsole', 'server.tab.console', 'control.console'],
           ...(server.egg?.gameKind ? [['spieler', 'server.tab.players', 'control.console'] as const] : []),
