@@ -43,9 +43,9 @@ const RECHECK_MS = 30_000;
 const COMMAND_LIMIT = { max: 20, windowMs: 10_000 };
 
 export type ServerMessage =
-  | { type: 'hello'; status: string; consoleMode: string; canCommand: boolean; name: string }
+  | { type: 'hello'; status: string; consoleMode: string; canCommand: boolean; name: string; startedAt?: string | null }
   | { type: 'log'; lines: string[]; history?: boolean; dropped?: number }
-  | { type: 'status'; status: string }
+  | { type: 'status'; status: string; startedAt?: string | null }
   | { type: 'event'; event: Omit<LiveEvent, 'serverId'> }
   | { type: 'stats'; stats: ContainerStats; ts: number }
   | { type: 'error'; message: string; code?: string };
@@ -99,6 +99,7 @@ export async function consoleRoutes(app: FastifyInstance, opts: { engine: Consol
 
     send({
       type: 'hello', status, consoleMode, name: target.server.name,
+      startedAt: target.server.started_at ? new Date(target.server.started_at).toISOString() : null,
       canCommand: consoleMode === 'full' && can(actor, access, 'control.command'),
     });
 
@@ -198,7 +199,8 @@ export async function consoleRoutes(app: FastifyInstance, opts: { engine: Consol
       if (e.kind === 'status_change' && typeof e.payload?.to === 'string') {
         const to = e.payload.to;
         status = to as typeof status;
-        send({ type: 'status', status: to });
+        const startedAt = to === 'running' || to === 'starting' ? new Date().toISOString() : null;
+        send({ type: 'status', status: to, startedAt });
         // Neuer Containerlauf = neuer Log-Strom; der alte endete mit dem Prozess.
         if (to === 'starting' || to === 'installing') void attachLogs(false);
         if (to === 'starting' || to === 'running') void attachStats();

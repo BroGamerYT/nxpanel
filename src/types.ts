@@ -33,6 +33,7 @@ export interface ServerRecord {
   suspended: boolean;
   tags?: string[];
   is_favorite?: boolean;
+  started_at?: Date | null;
 }
 
 export interface PortBinding {

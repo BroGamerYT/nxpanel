@@ -12,6 +12,7 @@ export interface ServerListItem {
   ramMb: number; cpuPercent: number; diskMb: number; autoRestart?: boolean; crashCount?: number; unstartable?: boolean;
   suspended: boolean; primaryPort: number | null; publicHost: string | null;
   isOwner: boolean; permissions: string[];
+  startedAt?: string | null;
   gameVersion?: string | null;
   serverType?: string | null;
   modpackName?: string | null;
@@ -23,6 +24,7 @@ export interface ServerListItem {
 export interface ServerDetail {
   server: {
     id: string; shortId: string; name: string; status: ServerStatus; ownerId: string;
+    startedAt?: string | null;
     egg: { id: string; name: string; consoleMode: 'full' | 'readonly' | 'none'; webInterface: unknown; hints?: ConsoleHint[]; gameKind?: string | null } | null;
     limits: { ramMb: number; swapMb: number; cpuPercent: number; diskMb: number };
     diskUsedMb?: number | null;

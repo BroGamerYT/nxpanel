@@ -122,7 +122,9 @@ export function setLocale(code: string) {
   const l = resolveLocale(code);
   current = l;
   try { localStorage.setItem(STORE, l); } catch { /* egal */ }
-  document.documentElement.lang = l;
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = l;
+  }
   if (catalogs[l]) {
     notify();
   } else {

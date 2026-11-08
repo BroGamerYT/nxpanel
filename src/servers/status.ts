@@ -51,7 +51,15 @@ export async function setStatus(
     return false;
   }
 
-  await sql`UPDATE servers SET status = ${next} WHERE id = ${serverId}`;
+  if (next === 'running') {
+    await sql`UPDATE servers SET status = ${next}, started_at = COALESCE(started_at, NOW()) WHERE id = ${serverId}`;
+  } else if (next === 'starting') {
+    await sql`UPDATE servers SET status = ${next}, started_at = NOW() WHERE id = ${serverId}`;
+  } else if (next === 'offline' || next === 'crashed' || next === 'install_failed') {
+    await sql`UPDATE servers SET status = ${next}, started_at = NULL WHERE id = ${serverId}`;
+  } else {
+    await sql`UPDATE servers SET status = ${next} WHERE id = ${serverId}`;
+  }
 
   log.info({ serverId, name: row.name, from: current, to: next, reason: opts.reason }, 'Status');
 

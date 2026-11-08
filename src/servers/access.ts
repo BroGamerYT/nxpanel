@@ -85,6 +85,7 @@ export interface ServerListItem {
   createdAt: Date;
   isOwner: boolean;
   permissions: string[];
+  startedAt: string | null;
   gameVersion: string | null;
   serverType: string | null;
   modpackName: string | null;
@@ -167,12 +168,12 @@ export async function listServersForActor(actor: Actor): Promise<ServerListItem[
     id: string; short_id: string; name: string; status: string; owner_id: string; owner_name: string;
     egg_name: string; egg_id: string; egg_raw: unknown; egg_cover: string | null; egg_cover_version: string | null; ram_mb: number; cpu_percent: number; disk_mb: number;
     auto_restart: boolean; crash_count: number; suspended: boolean;
-    primary_port: number | null; public_host: string | null; port_from: number | null; port_to: number | null; created_at: Date; subuser_flags: string[] | null;
+    primary_port: number | null; public_host: string | null; port_from: number | null; port_to: number | null; created_at: Date; started_at: Date | null; subuser_flags: string[] | null;
     variables: Record<string, string>; tags: string[] | null; is_favorite: boolean | null;
   }[]>`
     SELECT s.id, s.short_id, s.name, s.status, s.owner_id, u.username AS owner_name,
            e.name AS egg_name, s.egg_id, e.raw_egg AS egg_raw, e.cover AS egg_cover, e.cover_version AS egg_cover_version,
-           s.ram_mb, s.cpu_percent, s.disk_mb, s.auto_restart, s.crash_count, s.suspended, s.created_at,
+           s.ram_mb, s.cpu_percent, s.disk_mb, s.auto_restart, s.crash_count, s.suspended, s.created_at, s.started_at,
            s.variables, s.tags, s.is_favorite, su.permissions AS subuser_flags, n.public_host, n.port_from, n.port_to,
            (SELECT a.port FROM allocations a WHERE a.server_id = s.id AND a.is_primary LIMIT 1) AS primary_port
     FROM servers s
@@ -205,6 +206,7 @@ export async function listServersForActor(actor: Actor): Promise<ServerListItem[
       primaryPort: r.primary_port,
       publicHost: publicHostFor(r.public_host, r.port_from, r.port_to, r.primary_port),
       createdAt: r.created_at,
+      startedAt: r.started_at ? new Date(r.started_at).toISOString() : null,
       isOwner: r.owner_id === actor.id,
       permissions: effectiveFlags(actor, { ownerId: r.owner_id, subuserFlags: r.subuser_flags }),
       gameVersion: info.gameVersion,

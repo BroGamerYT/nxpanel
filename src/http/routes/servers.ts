@@ -385,6 +385,7 @@ export async function serverRoutes(
         shortId: server.short_id,
         name: server.name,
         status: server.status,
+        startedAt: server.started_at ? new Date(server.started_at).toISOString() : null,
         ownerId: server.owner_id,
         egg: egg ? { id: server.egg_id, name: egg.name, consoleMode: egg.console_mode, webInterface: egg.web_interface, hints: cleanHints(egg.hints), gameKind: egg.game_kind } : null,
         limits: { ramMb: server.ram_mb, swapMb: server.swap_mb, cpuPercent: server.cpu_percent, diskMb: server.disk_mb },

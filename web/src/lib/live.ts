@@ -4,9 +4,9 @@ import { t } from './i18n';
 import type { ServerStatus, Stats, TimelineEvent } from './types';
 
 type Msg =
-  | { type: 'hello'; status: ServerStatus; consoleMode: string; canCommand: boolean; name: string }
+  | { type: 'hello'; status: ServerStatus; consoleMode: string; canCommand: boolean; name: string; startedAt?: string | null }
   | { type: 'log'; lines: string[]; history?: boolean; dropped?: number }
-  | { type: 'status'; status: ServerStatus }
+  | { type: 'status'; status: ServerStatus; startedAt?: string | null }
   | { type: 'event'; event: TimelineEvent }
   | { type: 'stats'; stats: Stats; ts: number }
   | { type: 'error'; message: string; code?: string };
@@ -21,6 +21,7 @@ const MAX_POINTS = 90; // 3 Minuten bei einem Wert alle 2 s
  */
 export function useLive(serverId: string, onLines: (lines: string[], meta: { history?: boolean; dropped?: number }) => void) {
   const [status, setStatus] = useState<ServerStatus | null>(null);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
   const [canCommand, setCanCommand] = useState(false);
   const [connected, setConnected] = useState(false);
   const [stats, setStats] = useState<StatPoint[]>([]);
@@ -46,10 +47,16 @@ export function useLive(serverId: string, onLines: (lines: string[], meta: { his
         ws.onmessage = (e) => {
           const m = JSON.parse(e.data as string) as Msg;
           switch (m.type) {
-            case 'hello': setStatus(m.status); setCanCommand(m.canCommand); setLastError(null); break;
+            case 'hello':
+              setStatus(m.status);
+              if (m.startedAt !== undefined) setStartedAt(m.startedAt);
+              setCanCommand(m.canCommand);
+              setLastError(null);
+              break;
             case 'log': onLinesRef.current(m.lines, { ...(m.history ? { history: true } : {}), ...(m.dropped ? { dropped: m.dropped } : {}) }); break;
             case 'status':
               setStatus(m.status);
+              if (m.startedAt !== undefined) setStartedAt(m.startedAt);
               if (m.status === 'running' || m.status === 'starting') setLastError(null);
               break;
             case 'event':
@@ -91,5 +98,5 @@ export function useLive(serverId: string, onLines: (lines: string[], meta: { his
     return true;
   }, []);
 
-  return { status, canCommand, connected, stats, events, lastError, sendCommand, clearError: () => setLastError(null) };
+  return { status, startedAt, canCommand, connected, stats, events, lastError, sendCommand, clearError: () => setLastError(null) };
 }

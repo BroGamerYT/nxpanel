@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle, Star, Tag, Plus, X, RefreshCw, Archive } from 'lucide-react';
+import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, CheckCircle2, AlertTriangle, Star, Tag, Plus, X, RefreshCw, Archive, Clock } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLive } from '../lib/live';
 import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
-import { POWER_ALLOWED, STATUS, formatMb } from '../lib/status';
+import { POWER_ALLOWED, STATUS, formatMb, formatUptime } from '../lib/status';
 import type { ServerDetail, ServerStatus, TimelineEvent, ServerActivityItem, ActiveTask } from '../lib/types';
 import { Console, type ConsoleHandle } from '../components/Console';
 import { ServerSettings } from '../components/ServerSettings';
@@ -66,6 +66,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
 
   const live = useLive(server.id, (lines, meta) => consoleRef.current?.write(lines, meta));
   const status: ServerStatus = live.status ?? server.status;
+  const startedAt = live.startedAt ?? server.startedAt;
   const game = useGameStatus(server.id, !!server.egg?.gameKind && status === 'running');
   const power = usePower(server.id);
   const [confirmKill, setConfirmKill] = useState(false);
@@ -200,6 +201,14 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                 <Tooltip content={STATUS_TOOLTIPS[status] ?? STATUS[status].label} side="bottom">
                   <span className="inline-flex items-center gap-2 text-ink cursor-help">
                     <Led status={status} />{STATUS[status].label}
+                  </span>
+                </Tooltip>
+              )}
+              {status === 'running' && startedAt && (
+                <Tooltip content={`Gestartet am ${new Date(startedAt).toLocaleString()} (Laufzeit: ${formatUptime(startedAt)})`} side="bottom">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 cursor-help">
+                    <Clock className="size-3 shrink-0" />
+                    <span>Laufzeit: {formatUptime(startedAt)}</span>
                   </span>
                 </Tooltip>
               )}

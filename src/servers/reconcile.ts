@@ -66,6 +66,17 @@ export async function reconcile(): Promise<void> {
       corrected++;
     }
 
+    // Bei laufenden Containern die exakte Startzeit aus Docker abgleichen
+    if (actual === 'running') {
+      try {
+        const inspect = await engine.inspect(container.id);
+        if (inspect?.startedAt) {
+          const startedAt = new Date(inspect.startedAt);
+          await sql`UPDATE servers SET started_at = ${startedAt} WHERE id = ${server.id} AND (started_at IS NULL OR started_at > ${startedAt})`;
+        }
+      } catch {}
+    }
+
   }
 
   log.info(

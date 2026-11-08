@@ -6,7 +6,7 @@ import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, 
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
 import { useAuth } from '../lib/auth';
-import { POWER_ALLOWED, STATUS, formatMb, formatRate } from '../lib/status';
+import { POWER_ALLOWED, STATUS, formatMb, formatRate, formatUptime } from '../lib/status';
 import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
 import type { DashboardData, ServerListItem, ServerLive, ServerStatus } from '../lib/types';
 import { Dashboard, Bar } from '../components/Dashboard';
@@ -207,7 +207,7 @@ export function ServerList() {
                             <Star className={`size-4 ${s.isFavorite ? 'fill-amber' : ''}`} />
                           </button>
                           <Link to={`/server/${s.shortId}`} className="flex items-center gap-2.5 group min-w-0 flex-1">
-                            <Tooltip content={STATUS[s.status]?.label ?? s.status} side="right">
+                            <Tooltip content={s.status === 'running' && s.startedAt ? `${STATUS[s.status]?.label ?? s.status} (seit ${formatUptime(s.startedAt)})` : (STATUS[s.status]?.label ?? s.status)} side="right">
                               <span className="cursor-help inline-flex shrink-0"><Led status={s.status} /></span>
                             </Tooltip>
                             <GameCover cover={s.cover} seed={s.eggId ?? s.id} className="w-12 rounded shrink-0 hidden sm:block" />
@@ -225,6 +225,7 @@ export function ServerList() {
                               ) : (
                                 <span className="block text-xs text-dim">
                                   {STATUS[s.status].label}
+                                  {s.status === 'running' && s.startedAt ? ` · seit ${formatUptime(s.startedAt)}` : ''}
                                   {!s.isOwner && s.ownerName ? ` · ${s.ownerName}` : ''}
                                 </span>
                               )}
@@ -456,8 +457,16 @@ function Tile({
                 {t('status.unstartable')}
               </span>
             ) : (
-              <Tooltip content={st.label} side="top">
-                <span className="inline-flex items-center gap-1.5 cursor-help"><Led status={s.status} />{st.label}</span>
+              <Tooltip content={s.status === 'running' && s.startedAt ? `Gestartet: ${new Date(s.startedAt).toLocaleString()} · Laufzeit: ${formatUptime(s.startedAt)}` : st.label} side="top">
+                <span className="inline-flex items-center gap-1.5 cursor-help">
+                  <Led status={s.status} />
+                  <span>{st.label}</span>
+                  {s.status === 'running' && s.startedAt && (
+                    <span className="text-[11px] text-emerald-400 font-mono">
+                      ({formatUptime(s.startedAt)})
+                    </span>
+                  )}
+                </span>
               </Tooltip>
             )}
             {!isUnstartable && (s.crashCount ?? 0) > 0 && (s.status === 'crashed' || s.status === 'starting') && (

@@ -34,3 +34,40 @@ export function formatRate(bytesPerS: number) {
   if (bits >= 1e3) return `${Math.round(bits / 1e3)} kbit/s`;
   return `${Math.round(bits)} bit/s`;
 }
+
+/**
+ * Berechnet die vergangene Laufzeit lesbar formatiert.
+ * z. B. "4 Std 12 Min", "32 Min", "45 Sek" oder "2 T 5 Std".
+ */
+export function formatUptime(startedAt: string | Date | null | undefined, now = Date.now()): string | null {
+  if (!startedAt) return null;
+  const started = typeof startedAt === 'string' ? new Date(startedAt).getTime() : startedAt.getTime();
+  if (isNaN(started) || started <= 0) return null;
+  const s = Math.max(0, Math.floor((now - started) / 1000));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+
+  if (d > 0) return `${d} T ${h} Std`;
+  if (h > 0) return `${h} Std ${m} Min`;
+  if (m > 0) return `${m} Min`;
+  return `${sec} Sek`;
+}
+
+/** Kompakte Laufzeit z. B. "4h 12m", "15m", "45s", "2d 5h" */
+export function formatUptimeCompact(startedAt: string | Date | null | undefined, now = Date.now()): string | null {
+  if (!startedAt) return null;
+  const started = typeof startedAt === 'string' ? new Date(startedAt).getTime() : startedAt.getTime();
+  if (isNaN(started) || started <= 0) return null;
+  const s = Math.max(0, Math.floor((now - started) / 1000));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${sec}s`;
+}
