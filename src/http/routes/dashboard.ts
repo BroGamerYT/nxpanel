@@ -64,6 +64,48 @@ export async function dashboardRoutes(app: FastifyInstance, opts: { stats: Stats
     };
   });
 
+  /** Chronologischer Aktivitaetsfeed aller Server fuer die Dashboard-Sidebar */
+  app.get('/dashboard/activity', { preHandler: requireAuth }, async (req) => {
+    const actor = req.actor!;
+    const servers = await listServersForActor(actor);
+    if (servers.length === 0) return { items: [] };
+    const serverIds = servers.map((s) => s.id);
+    const serverMap = new Map(servers.map((s) => [s.id, { name: s.name, shortId: s.shortId }]));
+
+    const rows = await sql<{
+      id: number;
+      server_id: string;
+      ts: Date;
+      kind: string;
+      severity: 'info' | 'warn' | 'error';
+      summary: string;
+      payload: Record<string, unknown> | null;
+    }[]>`
+      SELECT id::int AS id, server_id, ts, kind, severity, summary, payload
+      FROM events
+      WHERE server_id IN ${sql(serverIds)}
+      ORDER BY id DESC
+      LIMIT 40
+    `;
+
+    return {
+      items: rows.map((r) => {
+        const srv = serverMap.get(r.server_id);
+        return {
+          id: r.id,
+          serverId: r.server_id,
+          serverName: srv?.name ?? r.server_id.slice(0, 8),
+          shortId: srv?.shortId ?? r.server_id.slice(0, 8),
+          ts: r.ts,
+          kind: r.kind,
+          severity: r.severity,
+          summary: r.summary,
+          payload: r.payload,
+        };
+      }),
+    };
+  });
+
   app.get('/dashboard', { preHandler: requireAuth }, async (req) => {
     const actor = req.actor!;
     const servers = await listServersForActor(actor);

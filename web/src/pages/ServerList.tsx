@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GameCover } from '../components/GameCover';
-import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical, RotateCcw, AlertTriangle, Star, Tag, Play, Square } from 'lucide-react';
+import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical, RotateCcw, AlertTriangle, Star, Tag, Play, Square, Activity } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
 import { useAuth } from '../lib/auth';
@@ -10,6 +10,7 @@ import { POWER_ALLOWED, STATUS, formatMb, formatRate } from '../lib/status';
 import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
 import type { DashboardData, ServerListItem, ServerLive, ServerStatus } from '../lib/types';
 import { Dashboard, Bar } from '../components/Dashboard';
+import { DashboardSidebar } from '../components/DashboardSidebar';
 import { ErrorBox, Input, Led, Select, Spinner, StatusLabel } from '../components/ui';
 import { t } from '../lib/i18n';
 import { Tooltip } from '../components/Tooltip';
@@ -48,8 +49,22 @@ export function ServerList() {
   const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<DashboardData>('/dashboard'), refetchInterval: 5_000 });
   const [view, setView] = useState<View>(loadView);
   const pick = (v: View) => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* egal */ } };
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(loadSidebar);
+  const toggleSidebar = (open: boolean) => {
+    setSidebarOpen(open);
+    try { localStorage.setItem(SIDEBAR_KEY, String(open)); } catch { /* egal */ }
+  };
+
   const servers = data?.servers ?? [];
   const liveOf = (id: string) => dash.data?.perServer[id];
+  const liveMap = useMemo(() => {
+    const map = new Map<string, ServerLive>();
+    for (const s of servers) {
+      const l = liveOf(s.id);
+      if (l) map.set(s.id, l);
+    }
+    return map;
+  }, [servers, dash.data]);
   const games = useMemo(() => [...new Set(servers.map((s) => s.eggName))].sort(), [servers]);
   const allTags = useMemo(() => [...new Set(servers.flatMap((s) => s.tags ?? []))].sort(), [servers]);
   const shown = servers.filter((s) =>
@@ -61,13 +76,26 @@ export function ServerList() {
   const running = servers.filter((s) => s.status === 'running').length;
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-[1720px] w-full">
       <header className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t('servers.title')}</h1>
           {servers.length > 0 && <p className="text-dim text-sm mt-1">{t('servers.runningOf', { running, count: servers.length })}</p>}
         </div>
         <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => toggleSidebar(!sidebarOpen)}
+          className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium transition-colors ${
+            sidebarOpen
+              ? 'border-amber/50 bg-amber/15 text-amber'
+              : 'border-seam bg-rack hover:bg-rack-2 text-dim hover:text-ink'
+          }`}
+          title="Aktivitäten- & Schnellzugriffs-Sidebar ein-/ausklappen"
+        >
+          <Activity className="size-4" />
+          <span className="hidden sm:inline">Aktivitäten</span>
+        </button>
         <div role="radiogroup" aria-label={t('servers.view')} className="inline-flex rounded-md border border-seam bg-rack p-0.5">
           {([['list', ListIcon, 'servers.viewList'], ['tiles', LayoutGrid, 'servers.viewTiles']] as const).map(([v, Icon, label]) => (
             <button key={v} role="radio" aria-checked={view === v} title={t(label)} onClick={() => pick(v)}
@@ -94,161 +122,175 @@ export function ServerList() {
         </div>
       </header>
 
-      {dash.data && servers.length > 0 && <Dashboard data={dash.data} />}
+      <div className="flex gap-6 items-start">
+        <div className="flex-1 min-w-0">
+          {dash.data && servers.length > 0 && <Dashboard data={dash.data} />}
 
-      {servers.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          <div className="relative flex-1 min-w-52">
-            <Search className="size-4 text-dim absolute left-3 top-1/2 -translate-y-1/2" aria-hidden />
-            <Input aria-label={t('common.search')} placeholder={t('servers.searchPlaceholder')} value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
-          </div>
-          <Select aria-label={t('servers.col.status')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="w-auto">
-            <option value="alle">{t('servers.allStates')}</option>
-            {(Object.keys(STATUS) as ServerStatus[]).map((s) => <option key={s} value={s}>{STATUS[s].label}</option>)}
-          </Select>
-          {games.length > 1 && (
-            <Select aria-label={t('servers.col.game')} value={game} onChange={(e) => setGame(e.target.value)} className="w-auto">
-              <option value="alle">{t('servers.allGames')}</option>
-              {games.map((g) => <option key={g}>{g}</option>)}
-            </Select>
+          {servers.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              <div className="relative flex-1 min-w-52">
+                <Search className="size-4 text-dim absolute left-3 top-1/2 -translate-y-1/2" aria-hidden />
+                <Input aria-label={t('common.search')} placeholder={t('servers.searchPlaceholder')} value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+              </div>
+              <Select aria-label={t('servers.col.status')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="w-auto">
+                <option value="alle">{t('servers.allStates')}</option>
+                {(Object.keys(STATUS) as ServerStatus[]).map((s) => <option key={s} value={s}>{STATUS[s].label}</option>)}
+              </Select>
+              {games.length > 1 && (
+                <Select aria-label={t('servers.col.game')} value={game} onChange={(e) => setGame(e.target.value)} className="w-auto">
+                  <option value="alle">{t('servers.allGames')}</option>
+                  {games.map((g) => <option key={g}>{g}</option>)}
+                </Select>
+              )}
+              {allTags.length > 0 && (
+                <Select aria-label="Tag" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="w-auto">
+                  <option value="alle">{t('servers.allTags')}</option>
+                  {allTags.map((tg) => <option key={tg} value={tg}>#{tg}</option>)}
+                </Select>
+              )}
+            </div>
           )}
-          {allTags.length > 0 && (
-            <Select aria-label="Tag" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="w-auto">
-              <option value="alle">{t('servers.allTags')}</option>
-              {allTags.map((tg) => <option key={tg} value={tg}>#{tg}</option>)}
-            </Select>
+
+          {isLoading && <Spinner />}
+          {error && <ErrorBox>{t('servers.loadError', { message: (error as Error).message })}</ErrorBox>}
+
+          {!isLoading && servers.length === 0 && (
+            <div className="rounded-lg border border-dashed border-seam px-6 py-12 text-center">
+              <p className="text-ink font-medium">{t('servers.empty')}</p>
+              <p className="text-dim text-sm mt-1">
+                {me?.permissions['server.create'] ? t('servers.emptyCreate') : t('servers.emptyInvite')}
+              </p>
+            </div>
           )}
-        </div>
-      )}
 
-      {isLoading && <Spinner />}
-      {error && <ErrorBox>{t('servers.loadError', { message: (error as Error).message })}</ErrorBox>}
-
-      {!isLoading && servers.length === 0 && (
-        <div className="rounded-lg border border-dashed border-seam px-6 py-12 text-center">
-          <p className="text-ink font-medium">{t('servers.empty')}</p>
-          <p className="text-dim text-sm mt-1">
-            {me?.permissions['server.create'] ? t('servers.emptyCreate') : t('servers.emptyInvite')}
-          </p>
-        </div>
-      )}
-
-      {shown.length > 0 && view === 'tiles' && (
-        <ul className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {shown.map((s) => (
-            <li key={s.id}>
-              <Tile
-                s={s}
-                live={liveOf(s.id)}
-                diskMb={dash.data?.diskUsed[s.id]}
-                onToggleAutoStart={(autoRestart) => toggleAutoStart.mutate({ id: s.id, autoRestart })}
-                onToggleFavorite={(isFavorite) => toggleFavorite.mutate({ id: s.id, isFavorite })}
-                onSelectTag={(tg) => setTagFilter((prev) => (prev === tg ? 'alle' : tg))}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {shown.length > 0 && view === 'list' && (
-        <div className="rounded-lg border border-seam overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-rack text-dim text-left">
-              <tr>
-                <th className="font-medium px-3 py-2.5">{t('servers.col.name')}</th>
-                <th className="font-medium px-3 py-2.5 hidden sm:table-cell">{t('servers.col.game')}</th>
-                <th className="font-medium px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{t('servers.col.address')}</th>
-                <th className="font-medium px-3 py-2.5 hidden lg:table-cell whitespace-nowrap">{t('servers.col.load')}</th>
-                <th className="font-medium px-3 py-2.5 hidden xl:table-cell whitespace-nowrap">{t('res.disk')}</th>
-                <th className="font-medium px-3 py-2.5 text-right whitespace-nowrap">{t('files.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-seam">
+          {shown.length > 0 && view === 'tiles' && (
+            <ul className={`grid gap-3.5 ${sidebarOpen ? 'sm:grid-cols-2 xl:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'}`}>
               {shown.map((s) => (
-                <tr key={s.id} className="hover:bg-rack/70">
-                  <td className="px-3 py-2.5 max-w-[240px]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => toggleFavorite.mutate({ id: s.id, isFavorite: !s.isFavorite })}
-                        title={s.isFavorite ? t('servers.favRemove') : t('servers.favAdd')}
-                        className={`shrink-0 p-1 rounded hover:bg-rack-2 transition-colors ${s.isFavorite ? 'text-amber' : 'text-dim/40 hover:text-dim'}`}
-                      >
-                        <Star className={`size-4 ${s.isFavorite ? 'fill-amber' : ''}`} />
-                      </button>
-                      <Link to={`/server/${s.shortId}`} className="flex items-center gap-2.5 group min-w-0 flex-1">
-                        <Tooltip content={STATUS[s.status]?.label ?? s.status} side="right">
-                          <span className="cursor-help inline-flex shrink-0"><Led status={s.status} /></span>
-                        </Tooltip>
-                        <GameCover cover={s.cover} seed={s.eggId ?? s.id} className="w-12 rounded shrink-0 hidden sm:block" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium group-hover:text-amber truncate" title={s.name}>{s.name}</span>
-                          {s.unstartable || (s.status === 'crashed' && (s.crashCount ?? 0) >= 5) ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-led-crash">
-                              <AlertTriangle className="size-3 shrink-0" />
-                              {t('status.unstartable')}
-                            </span>
-                          ) : (s.crashCount ?? 0) > 0 && (s.status === 'crashed' || s.status === 'starting') ? (
-                            <span className="block text-xs text-amber font-medium">
-                              {STATUS[s.status].label} · {t('status.autoStartAttempt', { count: s.crashCount ?? 0 })}
-                            </span>
-                          ) : (
-                            <span className="block text-xs text-dim">
-                              {STATUS[s.status].label}
-                              {!s.isOwner && s.ownerName ? ` · ${s.ownerName}` : ''}
-                            </span>
-                          )}
-                          {s.tags && s.tags.length > 0 && (
-                            <span className="flex flex-wrap gap-1 mt-1">
-                              {s.tags.map((tg) => (
-                                <button
-                                  key={tg}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setTagFilter((prev) => (prev === tg ? 'alle' : tg));
-                                  }}
-                                  className="inline-flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-rack-2 text-dim hover:text-amber border border-seam"
-                                >
-                                  #{tg}
-                                </button>
-                              ))}
-                            </span>
-                          )}
-                        </span>
-                      </Link>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-dim hidden sm:table-cell max-w-[180px]">
-                    <div className="min-w-0">
-                      <span className="block text-ink font-medium truncate">{s.eggName}</span>
-                      {s.modpackName ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-amber font-medium truncate max-w-[170px]" title={s.modpackName}>
-                          <Package className="size-3 shrink-0" aria-hidden />
-                          <span className="truncate">{s.modpackName}</span>
-                          {s.modpackVersion && <span className="text-dim font-mono shrink-0">v{s.modpackVersion}</span>}
-                        </span>
-                      ) : null}
-                      {s.gameVersion ? (
-                        <span className="block text-xs text-dim font-mono truncate">
-                          {s.serverType ? `${s.serverType} ` : ''}{s.gameVersion}
-                        </span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{s.primaryPort ? <Address port={s.primaryPort} host={s.publicHost} /> : <span className="text-dim">–</span>}</td>
-                  <td className="px-3 py-2.5 text-dim hidden lg:table-cell tabular-nums whitespace-nowrap"><LoadCell s={s} live={liveOf(s.id)} /></td>
-                  <td className="px-3 py-2.5 text-dim hidden xl:table-cell tabular-nums whitespace-nowrap">{dash.data?.diskUsed[s.id] !== undefined ? t('server.ramOf', { used: formatMb(dash.data.diskUsed[s.id]!), max: formatMb(s.diskMb) }) : formatMb(s.diskMb)}</td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                    <QuickPowerButtons s={s} compact />
-                  </td>
-                </tr>
+                <li key={s.id}>
+                  <Tile
+                    s={s}
+                    live={liveOf(s.id)}
+                    diskMb={dash.data?.diskUsed[s.id]}
+                    onToggleAutoStart={(autoRestart) => toggleAutoStart.mutate({ id: s.id, autoRestart })}
+                    onToggleFavorite={(isFavorite) => toggleFavorite.mutate({ id: s.id, isFavorite })}
+                    onSelectTag={(tg) => setTagFilter((prev) => (prev === tg ? 'alle' : tg))}
+                  />
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          )}
+
+          {shown.length > 0 && view === 'list' && (
+            <div className="rounded-lg border border-seam overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-rack text-dim text-left">
+                  <tr>
+                    <th className="font-medium px-3 py-2.5">{t('servers.col.name')}</th>
+                    <th className="font-medium px-3 py-2.5 hidden sm:table-cell">{t('servers.col.game')}</th>
+                    <th className="font-medium px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{t('servers.col.address')}</th>
+                    <th className="font-medium px-3 py-2.5 hidden lg:table-cell whitespace-nowrap">{t('servers.col.load')}</th>
+                    <th className="font-medium px-3 py-2.5 hidden xl:table-cell whitespace-nowrap">{t('res.disk')}</th>
+                    <th className="font-medium px-3 py-2.5 text-right whitespace-nowrap">{t('files.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-seam">
+                  {shown.map((s) => (
+                    <tr key={s.id} className="hover:bg-rack/70">
+                      <td className="px-3 py-2.5 max-w-[240px]">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => toggleFavorite.mutate({ id: s.id, isFavorite: !s.isFavorite })}
+                            title={s.isFavorite ? t('servers.favRemove') : t('servers.favAdd')}
+                            className={`shrink-0 p-1 rounded hover:bg-rack-2 transition-colors ${s.isFavorite ? 'text-amber' : 'text-dim/40 hover:text-dim'}`}
+                          >
+                            <Star className={`size-4 ${s.isFavorite ? 'fill-amber' : ''}`} />
+                          </button>
+                          <Link to={`/server/${s.shortId}`} className="flex items-center gap-2.5 group min-w-0 flex-1">
+                            <Tooltip content={STATUS[s.status]?.label ?? s.status} side="right">
+                              <span className="cursor-help inline-flex shrink-0"><Led status={s.status} /></span>
+                            </Tooltip>
+                            <GameCover cover={s.cover} seed={s.eggId ?? s.id} className="w-12 rounded shrink-0 hidden sm:block" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-medium group-hover:text-amber truncate" title={s.name}>{s.name}</span>
+                              {s.unstartable || (s.status === 'crashed' && (s.crashCount ?? 0) >= 5) ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-led-crash">
+                                  <AlertTriangle className="size-3 shrink-0" />
+                                  {t('status.unstartable')}
+                                </span>
+                              ) : (s.crashCount ?? 0) > 0 && (s.status === 'crashed' || s.status === 'starting') ? (
+                                <span className="block text-xs text-amber font-medium">
+                                  {STATUS[s.status].label} · {t('status.autoStartAttempt', { count: s.crashCount ?? 0 })}
+                                </span>
+                              ) : (
+                                <span className="block text-xs text-dim">
+                                  {STATUS[s.status].label}
+                                  {!s.isOwner && s.ownerName ? ` · ${s.ownerName}` : ''}
+                                </span>
+                              )}
+                              {s.tags && s.tags.length > 0 && (
+                                <span className="flex flex-wrap gap-1 mt-1">
+                                  {s.tags.map((tg) => (
+                                    <button
+                                      key={tg}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setTagFilter((prev) => (prev === tg ? 'alle' : tg));
+                                      }}
+                                      className="inline-flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded bg-rack-2 text-dim hover:text-amber border border-seam"
+                                    >
+                                      #{tg}
+                                    </button>
+                                  ))}
+                                </span>
+                              )}
+                            </span>
+                          </Link>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-dim hidden sm:table-cell max-w-[180px]">
+                        <div className="min-w-0">
+                          <span className="block text-ink font-medium truncate">{s.eggName}</span>
+                          {s.modpackName ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-amber font-medium truncate max-w-[170px]" title={s.modpackName}>
+                              <Package className="size-3 shrink-0" aria-hidden />
+                              <span className="truncate">{s.modpackName}</span>
+                              {s.modpackVersion && <span className="text-dim font-mono shrink-0">v{s.modpackVersion}</span>}
+                            </span>
+                          ) : null}
+                          {s.gameVersion ? (
+                            <span className="block text-xs text-dim font-mono truncate">
+                              {s.serverType ? `${s.serverType} ` : ''}{s.gameVersion}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{s.primaryPort ? <Address port={s.primaryPort} host={s.publicHost} /> : <span className="text-dim">–</span>}</td>
+                      <td className="px-3 py-2.5 text-dim hidden lg:table-cell tabular-nums whitespace-nowrap"><LoadCell s={s} live={liveOf(s.id)} /></td>
+                      <td className="px-3 py-2.5 text-dim hidden xl:table-cell tabular-nums whitespace-nowrap">{dash.data?.diskUsed[s.id] !== undefined ? t('server.ramOf', { used: formatMb(dash.data.diskUsed[s.id]!), max: formatMb(s.diskMb) }) : formatMb(s.diskMb)}</td>
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <QuickPowerButtons s={s} compact />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {servers.length > 0 && shown.length === 0 && <p className="text-dim text-sm mt-3">{t('servers.noMatch')}</p>}
         </div>
-      )}
-      {servers.length > 0 && shown.length === 0 && <p className="text-dim text-sm">{t('servers.noMatch')}</p>}
+
+        {sidebarOpen && servers.length > 0 && (
+          <div className="hidden lg:block sticky top-6">
+            <DashboardSidebar
+              servers={servers}
+              liveMap={liveMap}
+              onClose={() => toggleSidebar(false)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -310,6 +352,17 @@ type View = 'list' | 'tiles';
 const VIEW_KEY = 'nxp.serverView';
 function loadView(): View {
   try { return localStorage.getItem(VIEW_KEY) === 'tiles' ? 'tiles' : 'list'; } catch { return 'list'; }
+}
+
+const SIDEBAR_KEY = 'nxp.dashSidebar';
+function loadSidebar(): boolean {
+  try {
+    const saved = localStorage.getItem(SIDEBAR_KEY);
+    if (saved !== null) return saved === 'true';
+    return typeof window !== 'undefined' && window.innerWidth >= 1280;
+  } catch {
+    return true;
+  }
 }
 
 /** Liste: zugeteilter RAM, bei laufenden Servern davor der Verbrauch. */
