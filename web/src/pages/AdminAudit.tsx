@@ -482,15 +482,15 @@ export function AdminAudit() {
       ) : (
         <div className="rounded-2xl border border-seam bg-rack shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm min-w-[840px]">
+            <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-seam bg-rack-2/40 text-dim text-xs font-semibold uppercase tracking-wider">
-                  <th className="px-4 py-3.5 w-[160px]">Zeitpunkt</th>
-                  <th className="px-4 py-3.5 w-[160px]">Akteur</th>
-                  <th className="px-4 py-3.5 w-[190px]">Aktion</th>
-                  <th className="px-4 py-3.5 w-[170px]">Server</th>
-                  <th className="px-4 py-3.5">Details</th>
-                  <th className="px-4 py-3.5 text-right w-[90px]">
+                  <th className="px-3.5 py-3 w-[150px] whitespace-nowrap">Zeitpunkt</th>
+                  <th className="px-3.5 py-3 w-[140px] whitespace-nowrap">Akteur</th>
+                  <th className="px-3.5 py-3 w-[180px] whitespace-nowrap">Aktion</th>
+                  <th className="px-3.5 py-3 w-[150px] whitespace-nowrap">Server</th>
+                  <th className="px-3.5 py-3">Details</th>
+                  <th className="px-3.5 py-3 text-right w-[44px]">
                     <span className="sr-only">Details</span>
                   </th>
                 </tr>
@@ -517,13 +517,13 @@ export function AdminAudit() {
                       className="hover:bg-rack-2/40 transition-colors cursor-pointer group"
                     >
                       {/* Zeitpunkt */}
-                      <td className="px-4 py-3 text-xs text-dim whitespace-nowrap font-mono">
+                      <td className="px-3.5 py-2.5 text-xs text-dim whitespace-nowrap font-mono">
                         {date}
                       </td>
 
                       {/* Akteur */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="font-medium text-ink flex items-center gap-2.5">
+                      <td className="px-3.5 py-2.5 whitespace-nowrap">
+                        <div className="font-medium text-ink flex items-center gap-2">
                           <span className={`size-6 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
                             entry.actor_name === 'system'
                               ? 'bg-cyan-500/15 text-cyan-400'
@@ -532,7 +532,7 @@ export function AdminAudit() {
                             {(entry.actor_name ?? 'Sys').slice(0, 2).toUpperCase()}
                           </span>
                           <div className="min-w-0">
-                            <div className="text-xs font-semibold text-ink leading-tight truncate">
+                            <div className="text-xs font-semibold text-ink leading-tight truncate max-w-[100px]">
                               {entry.actor_name ?? 'System'}
                             </div>
                             {entry.ip && (
@@ -545,17 +545,17 @@ export function AdminAudit() {
                       </td>
 
                       {/* Aktion Badge */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${meta.color}`}>
+                      <td className="px-3.5 py-2.5 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium border ${meta.color}`}>
                           <Icon className="size-3.5 shrink-0" />
                           <span>{meta.label}</span>
                         </span>
                       </td>
 
                       {/* Server */}
-                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <td className="px-3.5 py-2.5 text-xs whitespace-nowrap">
                         {entry.server_name ? (
-                          <div className="font-medium text-ink flex items-center gap-1.5 truncate max-w-[170px]" title={entry.server_name}>
+                          <div className="font-medium text-ink flex items-center gap-1.5 truncate max-w-[150px]" title={entry.server_name}>
                             <Server className="size-3.5 text-dim shrink-0" />
                             <span className="truncate">{entry.server_name}</span>
                           </div>
@@ -565,9 +565,9 @@ export function AdminAudit() {
                       </td>
 
                       {/* Details */}
-                      <td className="px-4 py-3 text-xs text-dim">
+                      <td className="px-3.5 py-2.5 text-xs text-dim">
                         {detailsSummary ? (
-                          <span className="font-mono text-slate-300 bg-rack-2/70 px-2 py-0.5 rounded border border-seam/80 inline-block truncate max-w-md">
+                          <span className="font-mono text-slate-300 bg-rack-2/70 px-2 py-0.5 rounded border border-seam/80 inline-block truncate max-w-sm">
                             {detailsSummary}
                           </span>
                         ) : (
@@ -576,18 +576,13 @@ export function AdminAudit() {
                       </td>
 
                       {/* Info Button */}
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedEntry(entry);
-                          }}
-                          className="px-2.5 py-1 rounded text-xs font-medium bg-rack-2 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center gap-1"
+                      <td className="px-3.5 py-2.5 text-right whitespace-nowrap w-[44px]">
+                        <div
+                          title="Details anzeigen"
+                          className="size-7 rounded-md bg-rack-2/80 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center justify-center"
                         >
                           <Eye className="size-3.5" />
-                          <span>Details</span>
-                        </button>
+                        </div>
                       </td>
                     </tr>
                   );
