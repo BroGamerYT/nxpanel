@@ -105,10 +105,10 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 
 ## Phase 7 – Komfort
 
-- [ ] RCON für Spiele ohne Konsole
+- [x] RCON für Spiele ohne Konsole (0.24.1)
 - [x] Benachrichtigungen (Panel, Discord-Webhook bei Absturz) (0.23.0)
 - [x] Befehlspalette Strg+K, Favoriten, Tags (0.23.0)
-- [ ] SFTP mit Panel-Login
+- [x] SFTP mit Panel-Login (0.24.1)
 - [x] Modpacks und Plugins (Modrinth, CurseForge, Workshop) (0.18.0)
 - [ ] Versions-Updater mit Backup und Rücksprung
 - [x] Mobile Ansicht (0.23.0)
@@ -117,6 +117,8 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 
 ## Optimierung und Sicherheit
 
+- [x] WebAuthn / FIDO2 Passkeys für passwortlose und biometrische Anmeldung (0.24.1)
+- [x] 2FA bleibt freiwillig / optional (kein Zwangsaussperren) (0.24.1)
 - [x] Geheime Werte nur an Nutzer mit Änderungsrecht (0.18.1)
 - [x] Minecraft-RCON nicht mehr am Host freigegeben (0.18.1)
 - [x] RCON von ARK und Palworld ebenfalls nur intern (0.19.0)

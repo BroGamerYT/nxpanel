@@ -657,7 +657,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
             ref={consoleRef}
             canCommand={live.canCommand && (status === 'running' || status === 'starting')}
             readonlyReason={
-              consoleMode !== 'full' ? t('console.noCommands')
+              !live.canCommand && consoleMode !== 'full' ? t('console.noCommands')
                 : !live.canCommand ? t('console.onlyRead')
                 : t('console.notRunning')
             }
@@ -666,7 +666,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
           />
         )}
       </div>
-      {tab === 'dateien' && <FileManager serverId={server.id} permissions={permissions} />}
+      {tab === 'dateien' && <FileManager serverId={server.id} serverShortId={server.shortId} permissions={permissions} />}
       {tab === 'backups' && <BackupManager serverId={server.id} status={status} permissions={permissions} />}
       {tab === 'zeitplaene' && <ScheduleManager serverId={server.id} canEdit={has('schedule.update')} />}
       {tab === 'mitnutzer' && <SubusersManager serverId={server.id} canManage={has('subuser.create') || has('subuser.update')} />}

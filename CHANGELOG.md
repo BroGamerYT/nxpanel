@@ -21,6 +21,15 @@ Bis 0.4.x wurden Nachträge ohne eigene Nummer ausgespielt; sie sind hier
 nachträglich anhand des Entwicklungslogs eingeordnet. Ab 0.5.0 bekommt
 jede Auslieferung eine eigene Nummer.
 
+## [0.24.1] - 2026-11-09 – Integrierter SFTP-Server, RCON-Konsole & Passkey (WebAuthn/FIDO2) Authentifizierung
+
+### Hinzugefügt
+- **Integrierter SFTP-Server auf Port 2022 (`src/servers/sftp.ts`)**: Eigener SFTP-Dienst mit Panel-Benutzer-Authentifizierung. Ermöglicht Datei-Upload und -Download über FileZilla, WinSCP, Cyberduck oder VSCode. Unterstützt `username.shortId` für direkten Chroot-Zugriff und `username` für Multi-Server-Übersicht. Automatische Erstellung persistenter RSA-Host-Keys und strikte Rechteprüfung (`file.read`, `file.write`, `file.delete`).
+- **1-Klick SFTP-Zugangsdaten im Dateimanager**: Im Datei-Reiter jedes Servers zeigt ein neuer „SFTP“-Button alle Verbindungsdaten (Host, Port, Benutzername, Passwort-Hinweis) und eine fertige Quick-Connect-URL zum Kopieren an.
+- **RCON-Befehlskonsole für spiele ohne Standardkonsole**: Spiele wie Palworld, Rust, ARK oder 7 Days to Die, die standardmäßig keine interaktive STDIN-Konsole besitzen, nehmen nun Befehle in der Panel-Konsole entgegen und leiten sie automatisch per RCON weiter. Befehlseingaben und Antworten werden live in das Terminal gestreamt.
+- **Passkeys (WebAuthn / FIDO2) für biometrische & passwortlose Anmeldung**: Nutzer können unter „Konto → Sicherheit“ Passkeys (Touch ID, Windows Hello, Face ID, YubiKey) hinzufügen und verwalten. Auf der Anmeldeseite ermöglicht ein neuer Button „Mit Passkey anmelden“ den blitzschnellen 1-Klick-Login.
+- **Freiwillige 2FA-Nutzung**: 2FA bleibt auf Wunsch freiwillig (optional), ohne erzwungenes Aussperren von Administratoren.
+
 ## [0.24.0] - 2026-11-09 – DDNS, Gameserver-Subdomains & SRV-Records, Bandbreiten-Limit und Steam-Login
 
 ### Hinzugefügt

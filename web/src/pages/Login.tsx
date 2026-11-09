@@ -22,7 +22,7 @@ import {
  * Passwort-Umschalter, Feststelltasten-Erkennung und interaktivem Core-Logo.
  */
 export function Login() {
-  const { login } = useAuth();
+  const { login, loginWithPasskey } = useAuth();
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,6 +32,7 @@ export function Login() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
 
   // Spielerische Logo-Animation & Easter-Egg
   const [logoSpin, setLogoSpin] = useState(false);
@@ -338,6 +339,31 @@ export function Login() {
               <span className="flex-shrink mx-3 text-xs text-dim uppercase tracking-wider font-medium">Oder</span>
               <div className="flex-grow border-t border-seam" />
             </div>
+
+            {/* Passkey 1-Click Login Button */}
+            <Button
+              type="button"
+              variant="quiet"
+              disabled={busy || passkeyBusy}
+              busy={passkeyBusy}
+              onClick={async () => {
+                setPasskeyBusy(true);
+                setError(null);
+                try {
+                  await loginWithPasskey(name.trim() || undefined);
+                } catch (err: unknown) {
+                  const errorObj = err as { name?: string; message?: string };
+                  if (errorObj?.name === 'NotAllowedError') return;
+                  setError(err instanceof Error ? err.message : 'Passkey-Anmeldung fehlgeschlagen');
+                } finally {
+                  setPasskeyBusy(false);
+                }
+              }}
+              className="w-full h-11 px-4 rounded-lg bg-rack-2 hover:bg-rack border border-seam text-ink font-semibold text-sm transition-all flex items-center justify-center gap-2.5 shadow-sm"
+            >
+              <KeyRound className="size-4 text-amber shrink-0" />
+              <span>Mit Passkey anmelden</span>
+            </Button>
 
             {/* Steam 1-Click Login Button */}
             <a

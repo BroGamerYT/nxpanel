@@ -11,6 +11,7 @@ import type { ContainerStats } from '../../docker/client.js';
 import { requireServer } from '../auth.js';
 import { followFile, logFilePath, tailFile } from '../../servers/logfile.js';
 import { statsCollector } from '../../servers/stats.js';
+import { querySpec, rconCommand } from '../../games/status.js';
 
 /**
  * Live-Verbindung zu einem Server: Konsole, Statuswechsel, Auslastung.
@@ -96,10 +97,14 @@ export async function consoleRoutes(app: FastifyInstance, opts: { engine: Consol
     let status = target.server.status;
     let access = target.access;
 
+    const qSpec = await querySpec(target.server.egg_id);
+    const hasRcon = Boolean(qSpec?.rcon);
+    const canCmd = (consoleMode === 'full' || hasRcon) && can(actor, access, 'control.command');
+
     send({
-      type: 'hello', status, consoleMode, name: target.server.name,
+      type: 'hello', status, consoleMode: (consoleMode === 'full' || hasRcon) ? 'full' : consoleMode, name: target.server.name,
       startedAt: target.server.started_at ? new Date(target.server.started_at).toISOString() : null,
-      canCommand: consoleMode === 'full' && can(actor, access, 'control.command'),
+      canCommand: canCmd,
     });
 
     // ---- Log: Verlauf, dann live, gebuendelt
@@ -225,7 +230,7 @@ export async function consoleRoutes(app: FastifyInstance, opts: { engine: Consol
 
       const cmd = typeof msg.data === 'string' ? msg.data.replace(/[\r\n]+/g, ' ').trim() : '';
       if (!cmd || cmd.length > 1024) return send({ type: 'error', message: 'Befehl leer oder zu lang', code: 'invalid_command' });
-      if (consoleMode !== 'full') return send({ type: 'error', message: 'Dieses Spiel nimmt keine Konsolenbefehle an', code: 'console_readonly' });
+      if (consoleMode !== 'full' && !hasRcon) return send({ type: 'error', message: 'Dieses Spiel nimmt keine Konsolenbefehle an', code: 'console_readonly' });
 
       // Frisch pruefen - Rechte koennen sich seit dem Verbindungsaufbau geaendert haben.
       const a = await loadAuthContext(t.userId, t.sessionId);
@@ -240,12 +245,25 @@ export async function consoleRoutes(app: FastifyInstance, opts: { engine: Consol
       if (++cmdWindow.count > COMMAND_LIMIT.max) return send({ type: 'error', message: 'Zu viele Befehle - kurz warten', code: 'rate_limited' });
 
       try {
-        await engine.sendToStdin(tg.server.container_id!, cmd);
-        // Echo, damit man in der Konsole sieht, wer was eingegeben hat.
-        pushLine(`> ${cmd}`);
-        await writeAudit({ userId: a.id, serverId, actorName: a.username, action: 'server.command', ip, metadata: { command: cmd } });
+        if (consoleMode === 'full') {
+          await engine.sendToStdin(tg.server.container_id!, cmd);
+          pushLine(`> ${cmd}`);
+          await writeAudit({ userId: a.id, serverId, actorName: a.username, action: 'server.command', ip, metadata: { command: cmd } });
+        } else if (hasRcon && qSpec) {
+          pushLine(`> ${cmd}`);
+          const res = await rconCommand(tg.server, qSpec, cmd);
+          if (res) {
+            for (const line of res.split(/\r?\n/)) {
+              if (line.trim()) pushLine(line);
+            }
+          }
+          await writeAudit({ userId: a.id, serverId, actorName: a.username, action: 'server.command_rcon', ip, metadata: { command: cmd } });
+        }
       } catch (err) {
         send({ type: 'error', message: `Befehl nicht zugestellt: ${err instanceof Error ? err.message : err}` });
+        if (hasRcon && consoleMode !== 'full') {
+          pushLine(`[RCON Fehler] ${err instanceof Error ? err.message : err}`);
+        }
       }
     });
 

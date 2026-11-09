@@ -52,9 +52,11 @@ services:
       BACKUP_ROOT: /var/lib/panel/backups
       ADMIN_FILE_ROOTS: ${ADMIN_FILE_ROOTS:-Panel-Installation=/opt/nxpanel:ro}
       PORT_RANGE: ${PORT_RANGE:-25500-25600}
+      SFTP_PORT: ${SFTP_PORT:-2022}
       TZ: ${TZ:-Europe/Berlin}
     ports:
       - "${PANEL_PORT:-8080}:8080"
+      - "${SFTP_PORT:-2022}:2022"
     volumes:
       # Der Panel-Dienst steuert Docker - das ist Root-gleichwertig auf dem Host.
       # Deshalb gehoert dieser Stack auf eine eigene VM oder einen eigenen CT.

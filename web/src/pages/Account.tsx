@@ -20,7 +20,9 @@ import {
   Layers,
   Sparkles,
   Info,
+  Fingerprint,
 } from 'lucide-react';
+import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { api, currentToken } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Button, Input, Field, Spinner } from '../components/ui';
@@ -94,6 +96,53 @@ export function Account() {
     queryKey: ['user-sessions'],
     queryFn: () => api('/auth/sessions'),
   });
+
+  // Query: Passkeys
+  const [passkeyModalOpen, setPasskeyModalOpen] = useState(false);
+  const [passkeyDeviceName, setPasskeyDeviceName] = useState('');
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeyAdding, setPasskeyAdding] = useState(false);
+
+  const { data: passkeysData, isLoading: passkeysLoading, refetch: refetchPasskeys } = useQuery<{
+    passkeys: Array<{ id: string; device_name: string; created_at: string; last_used_at: string | null }>;
+  }>({
+    queryKey: ['passkeys'],
+    queryFn: () => api('/auth/passkeys'),
+    enabled: activeTab === 'security',
+  });
+
+  const deletePasskeyMutation = useMutation({
+    mutationFn: (id: string) => api(`/auth/passkeys/${id}`, { method: 'DELETE' }),
+    onSuccess: () => refetchPasskeys(),
+  });
+
+  async function handleAddPasskey() {
+    setPasskeyAdding(true);
+    setPasskeyError(null);
+    try {
+      const opts = await api<{ challengeId: string; options: PublicKeyCredentialCreationOptionsJSON }>('/auth/passkeys/register-options', {
+        method: 'POST',
+      });
+      const attResp = await startRegistration({ optionsJSON: opts.options });
+      await api('/auth/passkeys/register-verify', {
+        method: 'POST',
+        body: {
+          challengeId: opts.challengeId,
+          response: attResp,
+          deviceName: passkeyDeviceName.trim() || undefined,
+        },
+      });
+      setPasskeyDeviceName('');
+      setPasskeyModalOpen(false);
+      await refetchPasskeys();
+    } catch (err: unknown) {
+      const errorObj = err as { name?: string; message?: string };
+      if (errorObj?.name === 'NotAllowedError') return;
+      setPasskeyError(err instanceof Error ? err.message : 'Passkey konnte nicht hinzugefügt werden');
+    } finally {
+      setPasskeyAdding(false);
+    }
+  }
 
   // Mutation: Profile Update
   const updateProfileMutation = useMutation({
@@ -1101,6 +1150,118 @@ export function Account() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* ================= Passkeys (WebAuthn / FIDO2) ================= */}
+          <div className="p-6 rounded-2xl border border-seam bg-rack space-y-5 md:col-span-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-ink flex items-center gap-2">
+                  <Fingerprint className="size-5 text-amber" />
+                  Passkeys & Biometrie (WebAuthn / FIDO2)
+                </h2>
+                <p className="text-xs text-dim mt-1">
+                  Melde dich blitzschnell und ohne Passwort mit Touch ID, Windows Hello, Face ID oder einem YubiKey an.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setPasskeyError(null);
+                  setPasskeyModalOpen(true);
+                }}
+              >
+                <Plus className="size-4" />
+                Passkey hinzufügen
+              </Button>
+            </div>
+
+            {passkeyError && (
+              <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs">
+                {passkeyError}
+              </div>
+            )}
+
+            {passkeysLoading ? (
+              <div className="py-6 flex justify-center"><Spinner /></div>
+            ) : !passkeysData?.passkeys || passkeysData.passkeys.length === 0 ? (
+              <div className="p-4 rounded-xl border border-dashed border-seam bg-rack-2/40 text-center text-xs text-dim">
+                Noch kein Passkey eingerichtet. Füge deinen Computer, dein Smartphone oder deinen Hardware-Schlüssel hinzu.
+              </div>
+            ) : (
+              <div className="divide-y divide-seam border border-seam rounded-xl overflow-hidden">
+                {passkeysData.passkeys.map((pk) => (
+                  <div key={pk.id} className="p-4 flex items-center justify-between gap-3 bg-rack">
+                    <div className="flex items-center gap-3">
+                      <div className="size-9 rounded-xl bg-amber/10 text-amber flex items-center justify-center shrink-0 border border-amber/20">
+                        <KeyRound className="size-5" />
+                      </div>
+                      <div className="text-xs space-y-0.5">
+                        <div className="font-semibold text-ink">{pk.device_name}</div>
+                        <div className="text-[11px] text-dim flex items-center gap-2">
+                          <span>Erstellt: {new Date(pk.created_at).toLocaleDateString('de-DE')}</span>
+                          {pk.last_used_at && (
+                            <>
+                              <span>•</span>
+                              <span>Zuletzt genutzt: {new Date(pk.last_used_at).toLocaleDateString('de-DE')}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="quiet"
+                      className="text-xs text-rose-400 hover:text-rose-300"
+                      onClick={() => {
+                        if (confirm(`Passkey "${pk.device_name}" wirklich entfernen?`)) {
+                          deletePasskeyMutation.mutate(pk.id);
+                        }
+                      }}
+                      busy={deletePasskeyMutation.isPending}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Passkey hinzufügen */}
+      {passkeyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-rack border border-seam rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-ink flex items-center gap-2">
+              <Fingerprint className="size-5 text-amber" />
+              Neuen Passkey einrichten
+            </h3>
+            <p className="text-xs text-dim">
+              Gib dem Passkey einen Namen (z. B. "MacBook Touch ID" oder "Windows PC"), damit du deine Schlüssel auseinanderhalten kannst.
+            </p>
+            <Field label="Gerätename">
+              <Input
+                value={passkeyDeviceName}
+                onChange={(e) => setPasskeyDeviceName(e.target.value)}
+                placeholder="z. B. Mein Arbeitsrechner"
+                className="text-xs"
+                autoFocus
+              />
+            </Field>
+            {passkeyError && (
+              <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs">
+                {passkeyError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="quiet" onClick={() => setPasskeyModalOpen(false)}>
+                Abbrechen
+              </Button>
+              <Button variant="primary" onClick={handleAddPasskey} busy={passkeyAdding}>
+                Sicherheitsschlüssel aktivieren
+              </Button>
+            </div>
           </div>
         </div>
       )}

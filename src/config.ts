@@ -62,6 +62,8 @@ const schema = z.object({
    */
   ADMIN_FILE_ROOTS: z.string().default(''),
 
+  SFTP_PORT: z.coerce.number().int().min(1).max(65535).default(2022),
+  SFTP_ENABLED: envBool(true),
   PORT_RANGE: z.string().regex(/^\d+-\d+$/, 'PORT_RANGE muss z. B. 25500-25600 sein').default('25500-25600'),
   TZ: z.string().default('Europe/Berlin'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),

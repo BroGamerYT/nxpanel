@@ -14,6 +14,16 @@ import {
   startTotpSetup, enableTotp, disableTotp, regenerateRecoveryCodes, checkSecondFactor, TwoFactorError,
 } from '../../auth/twofactor.js';
 import { getSteamOpenIdUrl, verifySteamOpenId, fetchSteamProfile } from '../../auth/steam-openid.js';
+import {
+  createPasskeyRegistrationOptions,
+  verifyPasskeyRegistrationResult,
+  createPasskeyAuthenticationOptions,
+  verifyPasskeyAuthenticationResult,
+  listPasskeysForUser,
+  deletePasskeyForUser,
+  renamePasskeyForUser,
+} from '../../auth/passkeys.js';
+import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 export const REFRESH_COOKIE = 'nxp_refresh';
 const COOKIE_PATH = '/api/v1/auth';
@@ -470,6 +480,135 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
     const codes = await regenerateRecoveryCodes(req.actor!.id);
     await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'auth.recovery_codes_regenerated', ip: req.ip });
     return { recoveryCodes: codes };
+  });
+
+  // ---------------------------------------------------------- Passkeys (WebAuthn / FIDO2)
+
+  /** Registrierungs-Optionen fuer einen neuen Passkey im Konto */
+  app.post('/auth/passkeys/register-options', { preHandler: requireAuth }, async (req) => {
+    const [u] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${req.actor!.id}`;
+    if (!u) throw new HttpError(404, 'Benutzer nicht gefunden', 'not_found');
+    return createPasskeyRegistrationOptions(u, req.headers.host);
+  });
+
+  /** Registrierung eines neuen Passkeys abschliessen */
+  app.post('/auth/passkeys/register-verify', { preHandler: requireAuth }, async (req) => {
+    const schema = z.object({
+      challengeId: z.string().min(10),
+      response: z.any(),
+      deviceName: z.string().max(100).optional(),
+    });
+    const body = schema.parse(req.body);
+    const [u] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${req.actor!.id}`;
+    if (!u) throw new HttpError(404, 'Benutzer nicht gefunden', 'not_found');
+
+    try {
+      const passkey = await verifyPasskeyRegistrationResult(
+        u,
+        body.challengeId,
+        body.response as RegistrationResponseJSON,
+        body.deviceName ?? 'Sicherheitsschlüssel / Passkey',
+        req.headers.host
+      );
+      await writeAudit({
+        userId: req.actor!.id,
+        actorName: req.actor!.username,
+        action: 'user.passkey_registered',
+        ip: req.ip,
+        metadata: { passkeyId: passkey.id, deviceName: passkey.device_name },
+      });
+      return { ok: true, passkey };
+    } catch (err) {
+      throw new HttpError(400, err instanceof Error ? err.message : 'Passkey-Registrierung fehlgeschlagen', 'passkey_failed');
+    }
+  });
+
+  /** Passkeys des angemeldeten Benutzers auflisten */
+  app.get('/auth/passkeys', { preHandler: requireAuth }, async (req) => {
+    const list = await listPasskeysForUser(req.actor!.id);
+    return { passkeys: list };
+  });
+
+  /** Passkey umbenennen */
+  app.patch<{ Params: { id: string } }>('/auth/passkeys/:id', { preHandler: requireAuth }, async (req) => {
+    const { deviceName } = z.object({ deviceName: z.string().min(1).max(100) }).parse(req.body);
+    const updated = await renamePasskeyForUser(req.actor!.id, req.params.id, deviceName);
+    if (!updated) throw new HttpError(404, 'Passkey nicht gefunden', 'not_found');
+    return { ok: true, passkey: updated };
+  });
+
+  /** Passkey löschen */
+  app.delete<{ Params: { id: string } }>('/auth/passkeys/:id', { preHandler: requireAuth }, async (req) => {
+    const ok = await deletePasskeyForUser(req.actor!.id, req.params.id);
+    if (!ok) throw new HttpError(404, 'Passkey nicht gefunden', 'not_found');
+    await writeAudit({
+      userId: req.actor!.id,
+      actorName: req.actor!.username,
+      action: 'user.passkey_deleted',
+      ip: req.ip,
+      metadata: { passkeyId: req.params.id },
+    });
+    return { ok: true };
+  });
+
+  /** Challenge fuer Login mit Passkey anfordern */
+  app.post('/auth/passkeys/login-options', async (req) => {
+    const { username } = z.object({ username: z.string().max(254).optional() }).parse(req.body ?? {});
+    return createPasskeyAuthenticationOptions(username, req.headers.host);
+  });
+
+  /** Passkey-Login verifizieren und Sitzung ausstellen */
+  app.post('/auth/passkeys/login-verify', async (req, reply) => {
+    const schema = z.object({
+      challengeId: z.string().min(10),
+      response: z.any(),
+      client: z.enum(['web', 'app']).default('web'),
+    });
+    const body = schema.parse(req.body);
+
+    const ipKey = `login:ip:${req.ip}`;
+    const state = await limiter.isBlocked(ipKey, LIMITS.loginIp);
+    if (state.blocked) {
+      reply.header('Retry-After', String(state.retryAfterS));
+      throw new HttpError(429, `Zu viele Fehlversuche. Erneut in ${Math.ceil(state.retryAfterS / 60)} Min.`, 'rate_limited');
+    }
+
+    try {
+      const { user, passkey } = await verifyPasskeyAuthenticationResult(
+        body.challengeId,
+        body.response as AuthenticationResponseJSON,
+        req.headers.host
+      );
+
+      if (user.suspended) {
+        await writeAudit({ userId: user.id, actorName: user.username, action: 'auth.login_suspended', ip: req.ip });
+        throw new HttpError(403, 'Konto gesperrt', 'suspended');
+      }
+
+      await sql`UPDATE users SET last_login_at = now() WHERE id = ${user.id}`;
+      const session = await createSession(user.id, meta(req));
+      const accessToken = await signAccessToken({ sub: user.id, sid: session.sessionId });
+
+      await writeAudit({
+        userId: user.id,
+        actorName: user.username,
+        action: 'auth.login',
+        ip: req.ip,
+        metadata: { client: body.client, via: 'passkey', passkeyId: passkey.id, deviceName: passkey.device_name },
+      });
+
+      if (body.client === 'web') setRefreshCookie(reply, session.refreshToken);
+      return {
+        accessToken,
+        expiresIn: ACCESS_TOKEN_TTL_S,
+        ...(body.client === 'app' ? { refreshToken: session.refreshToken } : {}),
+        user: publicUser(user),
+      };
+    } catch (err) {
+      await limiter.consume(ipKey, LIMITS.loginIp);
+      if (err instanceof HttpError) throw err;
+      throw new HttpError(401, err instanceof Error ? err.message : 'Passkey-Anmeldung fehlgeschlagen', 'invalid_credentials');
+    }
   });
 
   /** Katalog der Rechte fuer die Oberflaeche - Flags, Beschriftungen, Presets. */

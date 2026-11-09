@@ -23,7 +23,11 @@ import {
   Code2,
   Eye,
   Sliders,
+  HardDrive,
+  Copy,
+  Check,
 } from 'lucide-react';
+import { useAuth } from '../lib/auth';
 import { FileRevisionsModal } from './FileRevisionsModal';
 import { MarkdownViewer } from './MarkdownViewer';
 import { ConfigFormEditor } from './ConfigFormEditor';
@@ -91,14 +95,17 @@ function getFileIcon(name: string, isDir: boolean) {
 
 export function FileManager({
   serverId,
+  serverShortId,
   permissions,
   apiBase,
 }: {
   serverId: string;
+  serverShortId?: string;
   permissions: string[];
   /** Andere Datei-API, z. B. /admin/files/panel-daten (Admin-Dateimanager). Ohne: Dateien des Servers. */
   apiBase?: string;
 }) {
+  const { me } = useAuth();
   const filesBase = apiBase ?? `/servers/${serverId}/files`;
   const qc = useQueryClient();
   const [currentPath, setCurrentPath] = useState('');
@@ -108,6 +115,8 @@ export function FileManager({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Dialog-Zustände
+  const [showSftpModal, setShowSftpModal] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -379,6 +388,17 @@ export function FileManager({
 
         {/* Aktionsleiste */}
         <div className="flex items-center gap-2 shrink-0">
+          {!apiBase && (
+            <Button
+              variant="quiet"
+              className="h-8 text-xs px-2.5 text-amber hover:text-amber"
+              onClick={() => setShowSftpModal(true)}
+              title="SFTP-Zugangsdaten anzeigen"
+            >
+              <HardDrive className="size-3.5 mr-1.5" />
+              SFTP
+            </Button>
+          )}
           {canWrite && (
             <>
               <input
@@ -620,6 +640,130 @@ export function FileManager({
                 busy={deleteMut.isPending}
               >
                 {t('files.delete')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SFTP Zugangsdaten Modal */}
+      {showSftpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-rack border border-seam rounded-2xl p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-ink flex items-center gap-2">
+                <HardDrive className="size-5 text-amber" />
+                SFTP-Zugangsdaten
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSftpModal(false)}
+                className="text-dim hover:text-ink text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-dim leading-relaxed">
+              Verbinde dich mit jedem SFTP-Client (z. B. FileZilla, WinSCP, Cyberduck oder VSCode), um Dateien schnell per Drag & Drop hoch- und herunterzuladen.
+            </p>
+
+            <div className="space-y-3 font-mono text-xs">
+              <div className="p-3 rounded-xl bg-rack-2 border border-seam flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">SFTP Host / Server</div>
+                  <div className="text-ink font-semibold mt-0.5">{window.location.hostname}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.hostname);
+                    setCopiedField('host');
+                    setTimeout(() => setCopiedField(null), 2000);
+                  }}
+                  className="p-1.5 rounded hover:bg-rack text-dim hover:text-ink"
+                  title="Host kopieren"
+                >
+                  {copiedField === 'host' ? <Check className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-rack-2 border border-seam flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">Port</div>
+                    <div className="text-ink font-semibold mt-0.5">2022</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('2022');
+                      setCopiedField('port');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="p-1.5 rounded hover:bg-rack text-dim hover:text-ink"
+                    title="Port kopieren"
+                  >
+                    {copiedField === 'port' ? <Check className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
+                  </button>
+                </div>
+
+                <div className="p-3 rounded-xl bg-rack-2 border border-seam flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">Passwort</div>
+                    <div className="text-ink font-sans text-xs mt-0.5">Dein NexusPanel Passwort</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-rack-2 border border-seam flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">Benutzername</div>
+                  <div className="text-ink font-semibold mt-0.5">
+                    {me?.user.username}.{serverShortId || serverId}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = `${me?.user.username}.${serverShortId || serverId}`;
+                    navigator.clipboard.writeText(u);
+                    setCopiedField('user');
+                    setTimeout(() => setCopiedField(null), 2000);
+                  }}
+                  className="p-1.5 rounded hover:bg-rack text-dim hover:text-ink"
+                  title="Benutzername kopieren"
+                >
+                  {copiedField === 'user' ? <Check className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-rack-2 border border-seam flex items-center justify-between">
+                <div className="truncate mr-2">
+                  <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">SFTP-Adresse (1-Klick FileZilla)</div>
+                  <div className="text-amber truncate text-[11px] mt-0.5">
+                    sftp://{me?.user.username}.{serverShortId || serverId}@{window.location.hostname}:2022/
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `sftp://${me?.user.username}.${serverShortId || serverId}@${window.location.hostname}:2022/`;
+                    navigator.clipboard.writeText(url);
+                    setCopiedField('url');
+                    setTimeout(() => setCopiedField(null), 2000);
+                  }}
+                  className="p-1.5 rounded hover:bg-rack text-dim hover:text-ink shrink-0"
+                  title="Komplette URL kopieren"
+                >
+                  {copiedField === 'url' ? <Check className="size-4 text-emerald-400" /> : <Copy className="size-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button variant="primary" onClick={() => setShowSftpModal(false)}>
+                Schließen
               </Button>
             </div>
           </div>

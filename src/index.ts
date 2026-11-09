@@ -14,6 +14,7 @@ import { startScheduleWorker, stopScheduleWorker } from './servers/schedules.js'
 import { startAutoSleep, stopAutoSleep } from './servers/auto-sleep.js';
 import { startDdnsBackgroundService } from './network/dns.js';
 import { resumeTestRunnerIfInterrupted, stopTestRunner } from './servers/test-runner.js';
+import { startSftpService } from './servers/sftp.js';
 
 function hint(lines: string[]): void {
   const width = Math.max(...lines.map((l) => l.length)) + 2;
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
   startScheduleWorker();
   startAutoSleep();
   startDdnsBackgroundService();
+  const sftp = await startSftpService();
 
   const app = await buildServer();
   await app.listen({ port: config.PANEL_PORT, host: '0.0.0.0' });
@@ -65,6 +67,7 @@ async function main(): Promise<void> {
       log.info({ signal }, 'Beende');
       // Falls offene Browser-WebSockets app.close() aufhalten, nach 1.5s sauber beenden
       setTimeout(() => process.exit(0), 1500).unref();
+      void sftp?.close();
       void stopTestRunner();
       stopSupervisor();
       statsCollector.stop();

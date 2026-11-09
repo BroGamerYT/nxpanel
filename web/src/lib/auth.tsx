@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { startAuthentication } from '@simplewebauthn/browser';
+import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api, ApiError, refreshSession, setAccessToken, onAuthChange } from './api';
 import type { Me } from './types';
 import { setLocale, getLocale, takeChoiceBeforeLogin } from './i18n';
@@ -12,6 +14,7 @@ interface AuthState {
   me: Me | null;
   ready: boolean;
   login: (login: string, password: string, code?: { totp?: string; recoveryCode?: string }) => Promise<void>;
+  loginWithPasskey: (username?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   impersonatorAdmin: ImpersonatorAdmin | null;
@@ -66,6 +69,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadMe();
   }, [loadMe]);
 
+  const loginWithPasskey = useCallback<AuthState['loginWithPasskey']>(async (username?: string) => {
+    const opts = await api<{ challengeId: string; options: PublicKeyCredentialRequestOptionsJSON }>(
+      '/auth/passkeys/login-options',
+      { method: 'POST', body: { username: username || undefined } }
+    );
+    const asseResp = await startAuthentication({ optionsJSON: opts.options });
+    const r = await api<{ accessToken: string }>('/auth/passkeys/login-verify', {
+      method: 'POST',
+      body: { challengeId: opts.challengeId, response: asseResp, client: 'web' },
+    });
+    setAccessToken(r.accessToken);
+    sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
+    setImpersonatorAdmin(null);
+    await loadMe();
+  }, [loadMe]);
+
   const logout = useCallback(async () => {
     try { await api('/auth/logout', { method: 'POST' }); } catch (e) { if (!(e instanceof ApiError)) throw e; }
     sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
@@ -102,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         me,
         ready,
         login,
+        loginWithPasskey,
         logout,
         refreshMe: loadMe,
         impersonatorAdmin,
