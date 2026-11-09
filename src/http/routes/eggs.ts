@@ -28,7 +28,8 @@ export async function eggRoutes(app: FastifyInstance) {
 
     const filtered = rows.filter((r) => {
       if (actor.role === 'admin') return true;
-      if (!actor.allowedEggs || actor.allowedEggs.length === 0) return true;
+      if (actor.allowedEggs === null || actor.allowedEggs === undefined) return true;
+      if (actor.allowedEggs.length === 0) return false;
       return actor.allowedEggs.includes(r.id) || actor.allowedEggs.includes(r.name);
     });
 
@@ -111,8 +112,8 @@ export async function eggRoutes(app: FastifyInstance) {
     if (!egg) throw new HttpError(404, 'Egg nicht gefunden', 'not_found');
 
     const actor = req.actor!;
-    if (actor.role !== 'admin' && actor.allowedEggs && actor.allowedEggs.length > 0) {
-      const allowed = actor.allowedEggs.includes(egg.id) || actor.allowedEggs.includes(egg.name);
+    if (actor.role !== 'admin' && actor.allowedEggs !== null && actor.allowedEggs !== undefined) {
+      const allowed = actor.allowedEggs.length > 0 && (actor.allowedEggs.includes(egg.id) || actor.allowedEggs.includes(egg.name));
       if (!allowed) throw new HttpError(404, 'Egg nicht gefunden', 'not_found');
     }
 

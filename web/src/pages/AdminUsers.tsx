@@ -42,7 +42,7 @@ export function AdminUsers() {
   const [newRole, setNewRole] = useState<'admin' | 'moderator' | 'user'>('user');
   const [newCanCreate, setNewCanCreate] = useState(false);
   const [newGlobalPerms, setNewGlobalPerms] = useState<string[]>([]);
-  const [newAllowedEggs, setNewAllowedEggs] = useState<string[]>([]);
+  const [newAllowedEggs, setNewAllowedEggs] = useState<string[] | null>(null);
   const [newEggSearch, setNewEggSearch] = useState('');
 
   // Formular-Zustände für Bearbeitung
@@ -55,7 +55,7 @@ export function AdminUsers() {
   const [editServerLimit, setEditServerLimit] = useState(0);
   const [editRamLimitMb, setEditRamLimitMb] = useState(0);
   const [editDiskLimitMb, setEditDiskLimitMb] = useState(0);
-  const [editAllowedEggs, setEditAllowedEggs] = useState<string[]>([]);
+  const [editAllowedEggs, setEditAllowedEggs] = useState<string[] | null>(null);
   const [editEggSearch, setEditEggSearch] = useState('');
 
   const { data: usersData, isLoading } = useQuery<{ users: AdminUserItem[] }>({
@@ -117,7 +117,7 @@ export function AdminUsers() {
     setNewRole('user');
     setNewCanCreate(false);
     setNewGlobalPerms([]);
-    setNewAllowedEggs([]);
+    setNewAllowedEggs(null);
     setNewEggSearch('');
     setErrorMsg(null);
   }
@@ -136,7 +136,7 @@ export function AdminUsers() {
     setEditServerLimit(u.serverLimit);
     setEditRamLimitMb(u.ramLimitMb);
     setEditDiskLimitMb(u.diskLimitMb);
-    setEditAllowedEggs(u.allowedEggs ? [...u.allowedEggs] : []);
+    setEditAllowedEggs(u.allowedEggs === null || u.allowedEggs === undefined ? null : [...u.allowedEggs]);
     setEditEggSearch('');
     setErrorMsg(null);
   }
@@ -167,7 +167,7 @@ export function AdminUsers() {
       role: newRole,
       canCreateServers: perms.includes('server.create'),
       globalPermissions: perms,
-      allowedEggs: newAllowedEggs.length > 0 ? newAllowedEggs : null,
+      allowedEggs: newAllowedEggs,
     });
   }
 
@@ -186,20 +186,22 @@ export function AdminUsers() {
         serverLimit: Number(editServerLimit),
         ramLimitMb: Number(editRamLimitMb),
         diskLimitMb: Number(editDiskLimitMb),
-        allowedEggs: editAllowedEggs.length > 0 ? editAllowedEggs : null,
+        allowedEggs: editAllowedEggs,
       },
     });
   }
 
   function toggleAllowedEgg(eggId: string, isNew: boolean) {
     if (isNew) {
-      setNewAllowedEggs((prev) =>
-        prev.includes(eggId) ? prev.filter((e) => e !== eggId) : [...prev, eggId]
-      );
+      setNewAllowedEggs((prev) => {
+        const list = prev ?? [];
+        return list.includes(eggId) ? list.filter((e) => e !== eggId) : [...list, eggId];
+      });
     } else {
-      setEditAllowedEggs((prev) =>
-        prev.includes(eggId) ? prev.filter((e) => e !== eggId) : [...prev, eggId]
-      );
+      setEditAllowedEggs((prev) => {
+        const list = prev ?? [];
+        return list.includes(eggId) ? list.filter((e) => e !== eggId) : [...list, eggId];
+      });
     }
   }
 
@@ -264,8 +266,12 @@ export function AdminUsers() {
               }[u.role];
 
               const allowedText =
-                !u.allowedEggs || u.allowedEggs.length === 0
+                !u.canCreateServers
+                  ? 'Keine Spiele (Server erstellen aus)'
+                  : u.allowedEggs === null
                   ? 'Alle Spiele erlaubt'
+                  : u.allowedEggs.length === 0
+                  ? 'Keine Spiele erlaubt (0)'
                   : `${u.allowedEggs.length} Spiel(e) freigegeben`;
 
               return (
@@ -572,24 +578,64 @@ export function AdminUsers() {
                       Erlaubte Spiele / Vorlagen (Whitelisting)
                     </label>
                     <p className="text-xs text-dim mt-0.5">
-                      Wähle aus, welche Spiele dieser Nutzer anlegen darf. Bleibt nichts gewählt, darf er alle installierten Vorlagen nutzen.
+                      {newAllowedEggs === null
+                        ? 'Alle installierten Vorlagen sind für diesen Nutzer freigegeben.'
+                        : newAllowedEggs.length === 0
+                        ? 'Dieser Nutzer darf keine Spiele-Vorlagen verwenden (0 Vorlagen erlaubt).'
+                        : `Nur die ${newAllowedEggs.length} ausgewählten Spiele-Vorlagen sind freigegeben.`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-amber bg-amber/10 border border-amber/30 px-2 py-0.5 rounded">
-                      {newAllowedEggs.length === 0 ? 'Alle Spiele erlaubt' : `${newAllowedEggs.length} ausgewählt`}
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded border ${
+                      newAllowedEggs === null
+                        ? 'text-amber bg-amber/10 border-amber/30'
+                        : newAllowedEggs.length === 0
+                        ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                        : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                    }`}>
+                      {newAllowedEggs === null
+                        ? 'Alle Spiele erlaubt'
+                        : newAllowedEggs.length === 0
+                        ? 'Keine Spiele erlaubt (0)'
+                        : `${newAllowedEggs.length} ausgewählt`}
                     </span>
-                    {newAllowedEggs.length > 0 && (
+                    {newAllowedEggs !== null ? (
+                      <button
+                        type="button"
+                        onClick={() => setNewAllowedEggs(null)}
+                        className="text-xs text-amber hover:underline font-medium"
+                      >
+                        Alle erlauben
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setNewAllowedEggs([])}
+                        className="text-xs text-red-400 hover:underline font-medium"
+                      >
+                        Keine erlauben
+                      </button>
+                    )}
+                    {newAllowedEggs !== null && newAllowedEggs.length > 0 && (
                       <button
                         type="button"
                         onClick={() => setNewAllowedEggs([])}
                         className="text-xs text-dim hover:text-ink underline"
                       >
-                        Auswahl aufheben
+                        Auswahl leeren
                       </button>
                     )}
                   </div>
                 </div>
+
+                {!newGlobalPerms.includes('server.create') && newRole !== 'admin' && (
+                  <div className="p-2.5 rounded-lg bg-rack-2/60 border border-seam text-xs text-dim flex items-center gap-2">
+                    <AlertTriangle className="size-4 text-amber shrink-0" />
+                    <span>
+                      Hinweis: Das Modul <strong>Server erstellen</strong> ist oben deaktiviert. Dieser Nutzer darf generell keine neuen Server anlegen.
+                    </span>
+                  </div>
+                )}
 
                 {/* Suche für Vorlagen */}
                 <div className="relative">
@@ -621,7 +667,7 @@ export function AdminUsers() {
                       egg.id.toLowerCase().includes(newEggSearch.toLowerCase())
                     )
                     .map((egg) => {
-                      const checked = newAllowedEggs.includes(egg.id) || newAllowedEggs.includes(egg.name);
+                      const checked = Boolean(newAllowedEggs && (newAllowedEggs.includes(egg.id) || newAllowedEggs.includes(egg.name)));
                       return (
                         <label
                           key={egg.id}
@@ -854,24 +900,64 @@ export function AdminUsers() {
                       Erlaubte Spiele / Vorlagen (Whitelisting)
                     </label>
                     <p className="text-xs text-dim mt-0.5">
-                      Wähle aus, welche Spiele dieser Nutzer anlegen darf. Bleibt nichts gewählt, darf er alle installierten Vorlagen nutzen.
+                      {editAllowedEggs === null
+                        ? 'Alle Vorlagen sind für diesen Nutzer freigegeben.'
+                        : editAllowedEggs.length === 0
+                        ? 'Dieser Nutzer darf keine Spiele-Vorlagen verwenden (0 Vorlagen erlaubt).'
+                        : `Nur die ${editAllowedEggs.length} ausgewählten Spiele-Vorlagen sind freigegeben.`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-amber bg-amber/10 border border-amber/30 px-2 py-0.5 rounded">
-                      {editAllowedEggs.length === 0 ? 'Alle Spiele erlaubt' : `${editAllowedEggs.length} ausgewählt`}
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded border ${
+                      editAllowedEggs === null
+                        ? 'text-amber bg-amber/10 border-amber/30'
+                        : editAllowedEggs.length === 0
+                        ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                        : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                    }`}>
+                      {editAllowedEggs === null
+                        ? 'Alle Spiele erlaubt'
+                        : editAllowedEggs.length === 0
+                        ? 'Keine Spiele erlaubt (0)'
+                        : `${editAllowedEggs.length} ausgewählt`}
                     </span>
-                    {editAllowedEggs.length > 0 && (
+                    {editAllowedEggs !== null ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditAllowedEggs(null)}
+                        className="text-xs text-amber hover:underline font-medium"
+                      >
+                        Alle erlauben
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditAllowedEggs([])}
+                        className="text-xs text-red-400 hover:underline font-medium"
+                      >
+                        Keine erlauben
+                      </button>
+                    )}
+                    {editAllowedEggs !== null && editAllowedEggs.length > 0 && (
                       <button
                         type="button"
                         onClick={() => setEditAllowedEggs([])}
                         className="text-xs text-dim hover:text-ink underline"
                       >
-                        Alle erlauben
+                        Auswahl leeren
                       </button>
                     )}
                   </div>
                 </div>
+
+                {!editGlobalPerms.includes('server.create') && editRole !== 'admin' && (
+                  <div className="p-2.5 rounded-lg bg-rack-2/60 border border-seam text-xs text-dim flex items-center gap-2">
+                    <AlertTriangle className="size-4 text-amber shrink-0" />
+                    <span>
+                      Hinweis: Das Modul <strong>Server erstellen</strong> ist oben deaktiviert. Dieser Nutzer darf generell keine neuen Server anlegen.
+                    </span>
+                  </div>
+                )}
 
                 {/* Suche für Vorlagen */}
                 <div className="relative">
@@ -903,7 +989,7 @@ export function AdminUsers() {
                       egg.id.toLowerCase().includes(editEggSearch.toLowerCase())
                     )
                     .map((egg) => {
-                      const checked = editAllowedEggs.includes(egg.id) || editAllowedEggs.includes(egg.name);
+                      const checked = Boolean(editAllowedEggs && (editAllowedEggs.includes(egg.id) || editAllowedEggs.includes(egg.name)));
                       return (
                         <label
                           key={egg.id}

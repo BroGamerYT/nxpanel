@@ -223,7 +223,8 @@ export function canCreateServer(actor: Actor, eggIdentifier?: string): boolean {
   if (actor.role === 'admin') return true;
   if (!actor.canCreateServers) return false;
   if (!eggIdentifier) return true;
-  if (!actor.allowedEggs || actor.allowedEggs.length === 0) return true;
+  if (actor.allowedEggs === null || actor.allowedEggs === undefined) return true;
+  if (actor.allowedEggs.length === 0) return false;
   return actor.allowedEggs.includes(eggIdentifier);
 }
 

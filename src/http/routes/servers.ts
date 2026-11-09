@@ -139,8 +139,8 @@ export async function serverRoutes(
     const [eggRow] = await sql<{ id: string; name: string }[]>`SELECT id, name FROM eggs WHERE id = ${body.eggId}`;
     if (!eggRow) throw new HttpError(400, 'Spielvorlage nicht gefunden', 'invalid_input');
 
-    if (actor.role !== 'admin' && actor.allowedEggs && actor.allowedEggs.length > 0) {
-      const allowed = actor.allowedEggs.includes(eggRow.id) || actor.allowedEggs.includes(eggRow.name);
+    if (actor.role !== 'admin' && actor.allowedEggs !== null && actor.allowedEggs !== undefined) {
+      const allowed = actor.allowedEggs.length > 0 && (actor.allowedEggs.includes(eggRow.id) || actor.allowedEggs.includes(eggRow.name));
       if (!allowed) {
         throw new HttpError(403, `Du hast keine Berechtigung, einen Server mit der Spielvorlage "${eggRow.name}" zu erstellen`, 'forbidden');
       }
