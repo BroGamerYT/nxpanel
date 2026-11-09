@@ -29,6 +29,7 @@ export function AdminUsers() {
   const [newRole, setNewRole] = useState<'admin' | 'moderator' | 'user'>('user');
   const [newCanCreate, setNewCanCreate] = useState(true);
   const [newAllowedEggs, setNewAllowedEggs] = useState<string[]>([]);
+  const [newEggSearch, setNewEggSearch] = useState('');
 
   // Formular-Zustände für Bearbeitung
   const [editEmail, setEditEmail] = useState('');
@@ -40,6 +41,7 @@ export function AdminUsers() {
   const [editRamLimitMb, setEditRamLimitMb] = useState(0);
   const [editDiskLimitMb, setEditDiskLimitMb] = useState(0);
   const [editAllowedEggs, setEditAllowedEggs] = useState<string[]>([]);
+  const [editEggSearch, setEditEggSearch] = useState('');
 
   const { data: usersData, isLoading } = useQuery<{ users: AdminUserItem[] }>({
     queryKey: ['admin-users'],
@@ -100,6 +102,7 @@ export function AdminUsers() {
     setNewRole('user');
     setNewCanCreate(true);
     setNewAllowedEggs([]);
+    setNewEggSearch('');
     setErrorMsg(null);
   }
 
@@ -114,6 +117,7 @@ export function AdminUsers() {
     setEditRamLimitMb(u.ramLimitMb);
     setEditDiskLimitMb(u.diskLimitMb);
     setEditAllowedEggs(u.allowedEggs ? [...u.allowedEggs] : []);
+    setEditEggSearch('');
     setErrorMsg(null);
   }
 
@@ -379,7 +383,7 @@ export function AdminUsers() {
       {/* Modal: Benutzer anlegen */}
       {addModalOpen && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-3 sm:p-6 backdrop-blur-md">
-          <div className="bg-rack-1 border border-seam rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="bg-rack-1 border border-seam rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-seam bg-rack-2/50 shrink-0">
               <h3 className="text-base font-semibold text-ink flex items-center gap-2">
                 <UserPlus className="size-5 text-amber" />
@@ -473,38 +477,88 @@ export function AdminUsers() {
               </div>
 
               {/* Erlaubte Spiele (Egg Whitelist) */}
-              <div className="space-y-2 pt-2 border-t border-seam">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-dim">
-                    Erlaubte Spiele / Vorlagen (Whitelisting)
-                  </label>
-                  <span className="text-xs text-amber">
-                    {newAllowedEggs.length === 0 ? 'Alle Spiele erlaubt' : `${newAllowedEggs.length} ausgewählt`}
-                  </span>
-                </div>
-                <p className="text-xs text-dim">
-                  Wähle aus, welche Spiele dieser Nutzer anlegen darf. Bleibt nichts gewählt, darf er alle installierten Vorlagen nutzen.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 rounded-lg bg-rack-2/40 border border-seam">
-                  {eggs.map((egg) => {
-                    const checked = newAllowedEggs.includes(egg.id) || newAllowedEggs.includes(egg.name);
-                    return (
-                      <label
-                        key={egg.id}
-                        className={`flex items-center gap-2 p-1.5 rounded border text-xs cursor-pointer ${
-                          checked ? 'bg-amber/15 border-amber/50 text-ink' : 'bg-rack-1/50 border-seam/50 text-dim'
-                        }`}
+              <div className="space-y-2.5 pt-3 border-t border-seam">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-dim">
+                      Erlaubte Spiele / Vorlagen (Whitelisting)
+                    </label>
+                    <p className="text-xs text-dim mt-0.5">
+                      Wähle aus, welche Spiele dieser Nutzer anlegen darf. Bleibt nichts gewählt, darf er alle installierten Vorlagen nutzen.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-amber bg-amber/10 border border-amber/30 px-2 py-0.5 rounded">
+                      {newAllowedEggs.length === 0 ? 'Alle Spiele erlaubt' : `${newAllowedEggs.length} ausgewählt`}
+                    </span>
+                    {newAllowedEggs.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setNewAllowedEggs([])}
+                        className="text-xs text-dim hover:text-ink underline"
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleAllowedEgg(egg.name, true)}
-                          className="size-3.5 rounded border-seam accent-amber"
-                        />
-                        <span className="truncate">{egg.name}</span>
-                      </label>
-                    );
-                  })}
+                        Auswahl aufheben
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Suche für Vorlagen */}
+                <div className="relative">
+                  <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-dim pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Spiele / Vorlagen filtern..."
+                    value={newEggSearch}
+                    onChange={(e) => setNewEggSearch(e.target.value)}
+                    className="pl-8 text-xs py-1.5 h-8"
+                  />
+                  {newEggSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setNewEggSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dim hover:text-ink text-xs p-1"
+                      title="Suche leeren"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2.5 rounded-lg bg-rack-2/40 border border-seam">
+                  {eggs
+                    .filter((egg) =>
+                      egg.name.toLowerCase().includes(newEggSearch.toLowerCase()) ||
+                      egg.id.toLowerCase().includes(newEggSearch.toLowerCase())
+                    )
+                    .map((egg) => {
+                      const checked = newAllowedEggs.includes(egg.id) || newAllowedEggs.includes(egg.name);
+                      return (
+                        <label
+                          key={egg.id}
+                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            checked ? 'bg-amber/15 border-amber/50 text-ink shadow-sm' : 'bg-rack-1/50 border-seam/50 text-dim hover:text-ink hover:border-seam'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleAllowedEgg(egg.name, true)}
+                            className="size-3.5 rounded border-seam accent-amber shrink-0"
+                          />
+                          <span className="truncate font-medium">{egg.name}</span>
+                        </label>
+                      );
+                    })}
+                  {eggs.filter((egg) =>
+                    egg.name.toLowerCase().includes(newEggSearch.toLowerCase()) ||
+                    egg.id.toLowerCase().includes(newEggSearch.toLowerCase())
+                  ).length === 0 && (
+                    <div className="col-span-full py-6 text-center text-xs text-dim italic">
+                      Keine Vorlage gefunden für &quot;{newEggSearch}&quot;
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -525,7 +579,7 @@ export function AdminUsers() {
       {/* Modal: Benutzer bearbeiten */}
       {editUser && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-3 sm:p-6 backdrop-blur-md">
-          <div className="bg-rack-1 border border-seam rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="bg-rack-1 border border-seam rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-seam bg-rack-2/50 shrink-0">
               <h3 className="text-base font-semibold text-ink flex items-center gap-2">
                 <Edit2 className="size-5 text-amber" />
@@ -650,42 +704,88 @@ export function AdminUsers() {
               </div>
 
               {/* Erlaubte Spiele (Egg Whitelist) */}
-              <div className="space-y-2 pt-3 border-t border-seam">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-dim">
-                    Erlaubte Spiele / Vorlagen (Whitelisting)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setEditAllowedEggs([])}
-                    className="text-xs text-amber hover:underline"
-                  >
-                    Alle erlauben
-                  </button>
-                </div>
-                <p className="text-xs text-dim">
-                  Ermöglicht es, festzulegen, dass Dominik oder Simon z. B. nur Minecraft und Sons of the Forest anlegen darf.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 rounded-lg bg-rack-2/40 border border-seam">
-                  {eggs.map((egg) => {
-                    const checked = editAllowedEggs.includes(egg.id) || editAllowedEggs.includes(egg.name);
-                    return (
-                      <label
-                        key={egg.id}
-                        className={`flex items-center gap-2 p-2 rounded border text-xs cursor-pointer transition-colors ${
-                          checked ? 'bg-amber/15 border-amber/50 text-ink' : 'bg-rack-1/50 border-seam/50 text-dim hover:text-ink'
-                        }`}
+              <div className="space-y-2.5 pt-3 border-t border-seam">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-dim">
+                      Erlaubte Spiele / Vorlagen (Whitelisting)
+                    </label>
+                    <p className="text-xs text-dim mt-0.5">
+                      Wähle aus, welche Spiele dieser Nutzer anlegen darf. Bleibt nichts gewählt, darf er alle installierten Vorlagen nutzen.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-amber bg-amber/10 border border-amber/30 px-2 py-0.5 rounded">
+                      {editAllowedEggs.length === 0 ? 'Alle Spiele erlaubt' : `${editAllowedEggs.length} ausgewählt`}
+                    </span>
+                    {editAllowedEggs.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setEditAllowedEggs([])}
+                        className="text-xs text-dim hover:text-ink underline"
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleAllowedEgg(egg.name, false)}
-                          className="size-3.5 rounded border-seam accent-amber"
-                        />
-                        <span className="truncate">{egg.name}</span>
-                      </label>
-                    );
-                  })}
+                        Alle erlauben
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Suche für Vorlagen */}
+                <div className="relative">
+                  <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-dim pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Spiele / Vorlagen filtern..."
+                    value={editEggSearch}
+                    onChange={(e) => setEditEggSearch(e.target.value)}
+                    className="pl-8 text-xs py-1.5 h-8"
+                  />
+                  {editEggSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setEditEggSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dim hover:text-ink text-xs p-1"
+                      title="Suche leeren"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2.5 rounded-lg bg-rack-2/40 border border-seam">
+                  {eggs
+                    .filter((egg) =>
+                      egg.name.toLowerCase().includes(editEggSearch.toLowerCase()) ||
+                      egg.id.toLowerCase().includes(editEggSearch.toLowerCase())
+                    )
+                    .map((egg) => {
+                      const checked = editAllowedEggs.includes(egg.id) || editAllowedEggs.includes(egg.name);
+                      return (
+                        <label
+                          key={egg.id}
+                          className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            checked ? 'bg-amber/15 border-amber/50 text-ink shadow-sm' : 'bg-rack-1/50 border-seam/50 text-dim hover:text-ink hover:border-seam'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleAllowedEgg(egg.name, false)}
+                            className="size-3.5 rounded border-seam accent-amber shrink-0"
+                          />
+                          <span className="truncate font-medium">{egg.name}</span>
+                        </label>
+                      );
+                    })}
+                  {eggs.filter((egg) =>
+                    egg.name.toLowerCase().includes(editEggSearch.toLowerCase()) ||
+                    egg.id.toLowerCase().includes(editEggSearch.toLowerCase())
+                  ).length === 0 && (
+                    <div className="col-span-full py-6 text-center text-xs text-dim italic">
+                      Keine Vorlage gefunden für &quot;{editEggSearch}&quot;
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
