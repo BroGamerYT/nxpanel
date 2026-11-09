@@ -8,6 +8,7 @@ interface AuthState {
   ready: boolean;
   login: (login: string, password: string, code?: { totp?: string; recoveryCode?: string }) => Promise<void>;
   logout: () => Promise<void>;
+  refreshMe: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -50,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
   }, []);
 
-  return <Ctx.Provider value={{ me, ready, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ me, ready, login, logout, refreshMe: loadMe }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {

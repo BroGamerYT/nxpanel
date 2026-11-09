@@ -236,12 +236,12 @@ async function testSingleEgg(
   try {
     // Spezifische Behandlung für Arma 3 (benötigt echten Steam-Account)
     if (eggSlug === 'arma-3' || eggSlug.includes('arma-3')) {
-      const [steamAcc] = await sql<{ username: string; password_encrypted: string }[]>`
-        SELECT username, password_encrypted FROM steam_accounts LIMIT 1
+      const [steamAcc] = await sql<{ account_name: string; encrypted_password: string }[]>`
+        SELECT account_name, encrypted_password FROM steam_accounts LIMIT 1
       `;
       if (steamAcc) {
-        customVars.STEAM_USER = steamAcc.username;
-        customVars.STEAM_PASS = steamAcc.password_encrypted;
+        customVars.STEAM_USER = steamAcc.account_name;
+        customVars.STEAM_PASS = steamAcc.encrypted_password;
       } else {
         console.log(`  ℹ Hinweis: Arma 3 Dedicated Server benötigt einen lizenzierten Steam-Account (App 233780)`);
         return {

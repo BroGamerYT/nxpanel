@@ -12,6 +12,7 @@ import { t, fmtDateTime } from '../lib/i18n';
 import { LanguagePicker } from './LanguagePicker';
 import { CommandPalette } from './CommandPalette';
 import { GlobalTaskProgress } from './GlobalTaskProgress';
+import { UserAvatar } from './UserAvatar';
 import { Spinner } from './ui';
 
 interface NotificationItem {
@@ -274,10 +275,22 @@ export function Shell() {
         </nav>
 
         <div className="flex flex-col gap-1 border-t border-seam pt-3">
-          <div className="hidden lg:block px-3 text-sm">
-            <div className="text-ink truncate font-medium">{me?.user.username}</div>
-            <div className="text-dim text-xs">{t(`role.${me?.user.role ?? 'user'}`)}</div>
-          </div>
+          <NavLink
+            to="/account"
+            className="flex items-center md:justify-center lg:justify-start gap-2.5 px-3 py-1.5 rounded-lg text-sm text-dim hover:text-ink hover:bg-rack-2/60 transition-colors group"
+            title="Mein Konto & Profil"
+          >
+            <UserAvatar avatar={me?.user.avatar} username={me?.user.username ?? 'User'} size="xs" />
+            <div className="hidden lg:block min-w-0 flex-1 text-left">
+              <div className="text-ink truncate font-semibold text-xs leading-tight group-hover:text-amber transition-colors">
+                {me?.user.username}
+              </div>
+              <div className="text-dim text-[10px] leading-tight flex items-center gap-1">
+                <span>{t(`role.${me?.user.role ?? 'user'}`)}</span>
+                {me?.user.steamId && <span className="text-cyan-400">• Steam</span>}
+              </div>
+            </div>
+          </NavLink>
           <VersionLink />
           <div className="hidden lg:block">
             <LanguagePicker className="inline-flex px-3 py-1" />
@@ -391,10 +404,17 @@ export function Shell() {
             </div>
 
             <div className="flex flex-col gap-2 border-t border-seam pt-4">
-              <div className="px-3 text-sm">
-                <div className="text-ink font-medium">{me?.user.username}</div>
-                <div className="text-dim text-xs">{t(`role.${me?.user.role ?? 'user'}`)}</div>
-              </div>
+              <NavLink
+                to="/account"
+                onClick={closeMobile}
+                className="flex items-center gap-3 px-3 py-2 rounded-xl bg-rack-2/40 border border-seam text-ink hover:border-amber transition-colors"
+              >
+                <UserAvatar avatar={me?.user.avatar} username={me?.user.username ?? 'User'} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-ink font-semibold text-sm leading-tight">{me?.user.username}</div>
+                  <div className="text-dim text-xs leading-tight">{t(`role.${me?.user.role ?? 'user'}`)}</div>
+                </div>
+              </NavLink>
               <VersionLink mobile />
               <LanguagePicker className="inline-flex px-3 py-1" />
               <button

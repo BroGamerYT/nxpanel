@@ -17,7 +17,7 @@
     "ghcr.io/parkervcp/steamcmd:proton": "ghcr.io/parkervcp/steamcmd:proton"
   },
   "file_denylist": [],
-  "startup": "proton run ./Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe",
+  "startup": "WINEDLLOVERRIDES=\"xalia=d\" PROTON_USE_WINED3D=1 DISPLAY=:42 proton run ./Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe -nullrhi -nosound",
   "tmp": "disk",
   "config": {
     "files": "{\r\n    \"Astro/Saved/Config/WindowsServer/Engine.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"url.Port\": \"{{server.build.default.port}}\",\r\n            \"[SystemSettings].net.AllowEncryption\":\"false\"\r\n        }\r\n    },\r\n    \"Astro/Saved/Config/WindowsServer/AstroServerSettings.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"[/Script/Astro.AstroServerSettings].PublicIP\": \"{{env.PUBLIC_IP}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerName\": \"{{env.OWNER_NAME}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerGuid\": \"{{env.OWNER_GUID}}\",\r\n            \"[/Script/Astro.AstroServerSettings].PlayerProperties\": \"(PlayerFirstJoinName=\\\"{{env.OWNER_NAME}}\\\",PlayerCategory=Admin,PlayerGuid=\\\"{{env.OWNER_GUID}}\\\",PlayerRecentJoinName=\\\"\\\")\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerPassword\": \"{{env.SERVER_PWD}}\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerName\": \"{{env.SERVER_NAME}}\"\r\n        }\r\n    }\r\n}",

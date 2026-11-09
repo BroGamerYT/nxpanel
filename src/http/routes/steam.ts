@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, requireAdmin, requireAuth } from '../auth.js';
+import { HttpError, requireAuth } from '../auth.js';
 import {
   listSteamAccounts,
   saveSteamAccount,
@@ -10,9 +10,12 @@ import {
 import { writeAudit } from '../../audit.js';
 
 const saveSchema = z.object({
+  id: z.string().uuid().optional(),
+  label: z.string().trim().max(100).optional(),
   accountName: z.string().trim().min(2).max(100),
   password: z.string().min(1).optional(),
   steamId: z.string().trim().max(50).optional(),
+  isShared: z.boolean().optional(),
 });
 
 const guardSchema = z.object({
@@ -20,28 +23,32 @@ const guardSchema = z.object({
 });
 
 export async function steamRoutes(app: FastifyInstance) {
-  // Liste aller Steam-Konten (ohne Passwort, aber mit Guard-Status)
-  app.get('/steam/accounts', { preHandler: requireAuth }, async () => {
-    const accounts = await listSteamAccounts();
+  // Liste aller Steam-Konten (eigene + vom Team freigegebene, ohne Klartextpasswort)
+  app.get('/steam/accounts', { preHandler: requireAuth }, async (req) => {
+    const accounts = await listSteamAccounts(req.actor!);
     return { accounts };
   });
 
-  // Steam-Konto anlegen oder aktualisieren (nur Admins)
-  app.post('/steam/accounts', { preHandler: requireAdmin() }, async (req, reply) => {
+  // Steam-Konto anlegen oder eigenes/geteiltes aktualisieren
+  app.post('/steam/accounts', { preHandler: requireAuth }, async (req, reply) => {
     const parsed = saveSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new HttpError(400, 'Ungültige Angaben zum Steam-Konto', 'invalid_input');
     }
-    const acc = await saveSteamAccount(parsed.data);
-    await writeAudit({
-      userId: req.actor!.id,
-      actorName: req.actor!.username,
-      action: 'steam.account_save',
-      ip: req.ip,
-      metadata: { accountName: acc.accountName },
-    });
-    reply.code(201);
-    return { account: acc };
+    try {
+      const acc = await saveSteamAccount(req.actor!, parsed.data);
+      await writeAudit({
+        userId: req.actor!.id,
+        actorName: req.actor!.username,
+        action: parsed.data.id ? 'steam.account_update' : 'steam.account_save',
+        ip: req.ip,
+        metadata: { accountName: acc.accountName, isShared: acc.isShared, label: acc.label },
+      });
+      reply.code(201);
+      return { account: acc };
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message, 'save_failed');
+    }
   });
 
   // Steam-Guard-Code eingeben
@@ -54,7 +61,7 @@ export async function steamRoutes(app: FastifyInstance) {
       throw new HttpError(400, 'Steam-Guard-Code muss 4-10 Zeichen lang sein', 'invalid_input');
     }
     try {
-      const acc = await submitSteamGuard(req.params.id, parsed.data.code);
+      const acc = await submitSteamGuard(req.actor!, req.params.id, parsed.data.code);
       await writeAudit({
         userId: req.actor!.id,
         actorName: req.actor!.username,
@@ -64,24 +71,28 @@ export async function steamRoutes(app: FastifyInstance) {
       });
       return { account: acc };
     } catch {
-      throw new HttpError(404, 'Konto nicht gefunden', 'not_found');
+      throw new HttpError(404, 'Konto nicht gefunden oder keine Berechtigung', 'not_found');
     }
   });
 
-  // Steam-Konto löschen (nur Admins)
-  app.delete<{ Params: { id: string } }>('/steam/accounts/:id', { preHandler: requireAdmin() }, async (req) => {
+  // Steam-Konto löschen (nur Eigentümer oder Admins)
+  app.delete<{ Params: { id: string } }>('/steam/accounts/:id', { preHandler: requireAuth }, async (req) => {
     if (!z.string().uuid().safeParse(req.params.id).success) {
       throw new HttpError(404, 'Konto nicht gefunden', 'not_found');
     }
-    const ok = await deleteSteamAccount(req.params.id);
-    if (!ok) throw new HttpError(404, 'Konto nicht gefunden', 'not_found');
-    await writeAudit({
-      userId: req.actor!.id,
-      actorName: req.actor!.username,
-      action: 'steam.account_delete',
-      ip: req.ip,
-      metadata: { id: req.params.id },
-    });
-    return { ok: true };
+    try {
+      const ok = await deleteSteamAccount(req.actor!, req.params.id);
+      if (!ok) throw new HttpError(404, 'Konto nicht gefunden', 'not_found');
+      await writeAudit({
+        userId: req.actor!.id,
+        actorName: req.actor!.username,
+        action: 'steam.account_delete',
+        ip: req.ip,
+        metadata: { id: req.params.id },
+      });
+      return { ok: true };
+    } catch (err) {
+      throw new HttpError(403, (err as Error).message, 'delete_forbidden');
+    }
   });
 }

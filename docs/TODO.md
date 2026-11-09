@@ -21,6 +21,13 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 
 ## Als Nächstes
 
+- [x] Benutzer-Account-Übersicht & Profilseite (`/account`): Klick auf eigenen Namen unten links (0.24.0)
+  - [x] Profil & PB-Auswahl: Benutzername, E-Mail ändern, Profilbild (12 Gaming-Avatare, Steam-Avatar, Custom URL, Initialen) (0.24.0)
+  - [x] Sicherheit: Eigenes Passwort ändern, Zwei-Faktor-Authentifizierung (2FA/TOTP mit QR-Code & Recovery-Codes), Aktive Sitzungen/Geräte beenden (0.24.0)
+  - [x] Offizieller Steam-Login ("Mit Steam anmelden" 1-Klick-Button via OpenID 2.0 auf Login & Profilseite) (0.24.0)
+  - [x] Multi-Steam-Accounts & Team-Sharing: Mehrere Steam-Konten hinterlegen (z. B. Hauptaccount, Bot, Zweitaccount für Farming Simulator 25) und optional für Mitnutzer/Team freigeben (0.24.0)
+  - [x] Steam-Account-Nutzung gezielt nur bei Spielen mit Steam-Pflicht (z. B. Farming Simulator 25, Arma 3) – alle anderen Spiele bleiben anonym (0.24.0)
+  - [x] Audit-Log Tabelle voll responsive für Handy, Tablet & Desktop (mobile Card-View, kein Überlaufen oder Abschneiden von Spalten) (0.24.0)
 - [x] Online-Spieler je Server anzeigen – Minecraft (0.13.0)
 - [x] Online-Spieler für weitere Spiele: ARK und Palworld mit Kicken/Bannen, Valheim/7DTD/SotF/CS2 anzeigen (0.15.0)
 - [x] Spieler kicken, bannen (mit Begründung und Dauer) sowie Bann- und Whitelists im Panel verwalten – Minecraft (0.13.0)

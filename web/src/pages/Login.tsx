@@ -284,6 +284,33 @@ export function Login() {
 
             {error && <ErrorBox>{error}</ErrorBox>}
 
+            {/* Steam Login Fehlermeldung aus URL Parametern */}
+            {(() => {
+              const p = new URLSearchParams(window.location.search);
+              const err = p.get('error');
+              if (err === 'steam_not_linked') {
+                return (
+                  <div className="p-3 rounded-lg bg-amber/15 border border-amber/40 text-amber text-xs space-y-1">
+                    <div className="font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="size-4 shrink-0" />
+                      Steam-Konto nicht verknüpft
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-amber/90">
+                      Dieses Steam-Konto ist noch keinem NexusPanel-Benutzer zugeordnet. Melde dich bitte mit deinem Passwort an und verknüpfe Steam in deinen Kontoeinstellungen.
+                    </p>
+                  </div>
+                );
+              }
+              if (err === 'steam_verify_failed') {
+                return (
+                  <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs">
+                    Steam-Anmeldung fehlgeschlagen oder abgebrochen.
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {/* Anmelde-Button mit Pfeil-Animation */}
             <Button
               type="submit"
@@ -294,6 +321,24 @@ export function Login() {
               <span>{t('login.submit')}</span>
               <ArrowRight className="size-4 group-hover:translate-x-1 transition-transform" />
             </Button>
+
+            {/* Trennlinie */}
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-seam" />
+              <span className="flex-shrink mx-3 text-xs text-dim uppercase tracking-wider font-medium">Oder</span>
+              <div className="flex-grow border-t border-seam" />
+            </div>
+
+            {/* Steam 1-Click Login Button */}
+            <a
+              href="/api/v1/auth/steam/login?action=login"
+              className="w-full h-11 px-4 rounded-lg bg-[#171a21] hover:bg-[#2a475e] text-white border border-[#2a475e] shadow-md flex items-center justify-center gap-2.5 font-semibold text-sm transition-all group"
+            >
+              <svg className="size-5 text-[#66c0f4] group-hover:scale-110 transition-transform shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 0 0-10 10c0 4.7 3.2 8.6 7.6 9.7l2.5-3.6a3.5 3.5 0 0 1-1.6-2.9 3.5 3.5 0 0 1 .4-1.6L7.4 11.2a4.8 4.8 0 0 1-4.8-4.8 4.8 4.8 0 0 1 4.8-4.8 4.8 4.8 0 0 1 4.8 4.8c0 .2 0 .4-.1.6l2.4 3.5a3.5 3.5 0 0 1 1.6-.4 3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5 3.5 3.5 0 0 1-2.9-1.5l-3.7 2.5A10 10 0 0 0 12 22a10 10 0 0 0 10-10A10 10 0 0 0 12 2z" />
+              </svg>
+              <span>Mit Steam anmelden</span>
+            </a>
           </form>
 
           {/* Footer mit Sicherheits-Hinweis */}

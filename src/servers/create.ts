@@ -13,6 +13,7 @@ import { validateVariables, substitute, fillGeneratedValues, isGeneratedDefault,
 import { patchConfigFile, type ConfigFileSpec } from '../eggs/config-files.js';
 import { filterCapabilities } from '../eggs/capabilities.js';
 import { CURSEFORGE_KEY, getSetting } from '../settings.js';
+import { getSteamCredentials } from './steam.js';
 import type { ServerRecord } from '../types.js';
 
 export interface CreateServerInput {
@@ -28,6 +29,7 @@ export interface CreateServerInput {
   autoRestart?: boolean;
   autoSleepMinutes?: number;
   actorId?: string | null;
+  steamAccountId?: string;
 }
 
 export class ValidationError extends Error {
@@ -78,6 +80,16 @@ export class NotFoundError extends Error {}
  */
 export async function prepareServer(input: CreateServerInput): Promise<ServerRecord> {
   const egg = await loadEgg(input.eggId);
+
+  // Falls ein Steam-Konto ausgewaehlt wurde (fuer Spiele mit Steam-Pflicht), Zugangsdaten hinterlegen
+  if (input.steamAccountId) {
+    const creds = await getSteamCredentials(input.steamAccountId);
+    if (creds) {
+      input.variables = input.variables ?? {};
+      input.variables.STEAM_USER = creds.username;
+      if (creds.password) input.variables.STEAM_PASS = creds.password;
+    }
+  }
 
   const defs = await sql<{
     env_variable: string; default_value: string | null; rules: string | null; user_editable: boolean;

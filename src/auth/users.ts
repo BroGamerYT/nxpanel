@@ -12,12 +12,21 @@ export interface UserRow {
   allowed_eggs: string[] | null;
   totp_enabled: boolean;
   suspended: boolean;
+  avatar?: string | null;
+  steam_id?: string | null;
+  steam_name?: string | null;
   created_at: Date;
   last_login_at: Date | null;
 }
 
 /** Oeffentliche Sicht auf einen Nutzer - nie Hash oder TOTP-Geheimnis herausgeben. */
-export function publicUser(u: Pick<UserRow, 'id' | 'email' | 'username' | 'role' | 'can_create_servers' | 'totp_enabled'> & { locale?: string | null; allowed_eggs?: string[] | null }) {
+export function publicUser(u: Pick<UserRow, 'id' | 'email' | 'username' | 'role' | 'can_create_servers' | 'totp_enabled'> & {
+  locale?: string | null;
+  allowed_eggs?: string[] | null;
+  avatar?: string | null;
+  steam_id?: string | null;
+  steam_name?: string | null;
+}) {
   return {
     locale: u.locale ?? null,
     id: u.id,
@@ -27,6 +36,9 @@ export function publicUser(u: Pick<UserRow, 'id' | 'email' | 'username' | 'role'
     canCreateServers: u.can_create_servers,
     allowedEggs: u.allowed_eggs ?? null,
     totpEnabled: u.totp_enabled,
+    avatar: u.avatar ?? null,
+    steamId: u.steam_id ?? null,
+    steamName: u.steam_name ?? null,
   };
 }
 

@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../../config.js';
 import { verifyPassword, getDummyHash, needsRehash, hashPassword } from '../../auth/password.js';
-import { signAccessToken, ACCESS_TOKEN_TTL_S, REFRESH_TOKEN_TTL_S } from '../../auth/tokens.js';
+import { signAccessToken, verifyAccessToken, ACCESS_TOKEN_TTL_S, REFRESH_TOKEN_TTL_S } from '../../auth/tokens.js';
 import { createSession, rotateSession, revokeSessionFamily, revokeAllUserSessions, listActiveSessions } from '../../auth/sessions.js';
-import { findUserForLogin, publicUser, setPassword, UserInputError } from '../../auth/users.js';
+import { findUserForLogin, publicUser, setPassword, UserInputError, type UserRow } from '../../auth/users.js';
 import { globalPermissions, SERVER_FLAGS, FLAG_LABELS, PRESETS } from '../../auth/permissions.js';
 import { LIMITS, type RateLimiter } from '../../auth/ratelimit.js';
 import { writeAudit } from '../../audit.js';
@@ -13,6 +13,7 @@ import { HttpError, requireAuth } from '../auth.js';
 import {
   startTotpSetup, enableTotp, disableTotp, regenerateRecoveryCodes, checkSecondFactor, TwoFactorError,
 } from '../../auth/twofactor.js';
+import { getSteamOpenIdUrl, verifySteamOpenId, fetchSteamProfile } from '../../auth/steam-openid.js';
 
 export const REFRESH_COOKIE = 'nxp_refresh';
 const COOKIE_PATH = '/api/v1/auth';
@@ -36,8 +37,12 @@ export const loginBody = z.object({
 
 export const refreshBody = z.object({ refreshToken: z.string().min(20).max(200).optional() }).default({});
 
-/** Sprachcode wie "de", "en" oder "pt-BR". */
-export const meBody = z.object({ locale: z.string().regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Ungueltiger Sprachcode') });
+export const meBody = z.object({
+  locale: z.string().regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Ungueltiger Sprachcode').optional(),
+  avatar: z.string().max(1000).nullable().optional(),
+  email: z.string().email('Ungueltige E-Mail-Adresse').optional(),
+  username: z.string().regex(/^[a-zA-Z0-9_.-]{3,32}$/, 'Benutzername: 3-32 Zeichen, nur Buchstaben, Ziffern, _ . -').optional(),
+});
 
 export const passwordBody = z.object({
   currentPassword: z.string().min(1).max(256),
@@ -186,15 +191,166 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
 
   app.get('/auth/me', { preHandler: requireAuth }, async (req) => {
     const [u] = await sql<Parameters<typeof publicUser>[0][]>`
-      SELECT id, email, username, role, can_create_servers, totp_enabled, locale FROM users WHERE id = ${req.actor!.id}`;
+      SELECT id, email, username, role, can_create_servers, totp_enabled, locale, avatar, steam_id, steam_name FROM users WHERE id = ${req.actor!.id}`;
     return { user: publicUser(u!), permissions: globalPermissions(req.actor!) };
   });
 
-  /** Eigene Einstellungen - bisher nur die Sprache. */
+  /** Eigene Profileinstellungen aktualisieren (Sprache, Avatar, Benutzername, E-Mail). */
   app.patch('/auth/me', { preHandler: requireAuth }, async (req) => {
     const body = meBody.parse(req.body);
-    await sql`UPDATE users SET locale = ${body.locale} WHERE id = ${req.actor!.id}`;
-    return { ok: true, locale: body.locale };
+    if (body.email !== undefined) {
+      const emailLower = body.email.trim().toLowerCase();
+      const [existing] = await sql`SELECT id FROM users WHERE lower(email) = ${emailLower} AND id != ${req.actor!.id}`;
+      if (existing) throw new HttpError(400, 'E-Mail-Adresse wird bereits verwendet', 'email_taken');
+      await sql`UPDATE users SET email = ${body.email.trim()} WHERE id = ${req.actor!.id}`;
+    }
+    if (body.username !== undefined) {
+      const usernameLower = body.username.trim().toLowerCase();
+      const [existing] = await sql`SELECT id FROM users WHERE lower(username) = ${usernameLower} AND id != ${req.actor!.id}`;
+      if (existing) throw new HttpError(400, 'Benutzername wird bereits verwendet', 'username_taken');
+      await sql`UPDATE users SET username = ${body.username.trim()} WHERE id = ${req.actor!.id}`;
+    }
+    if (body.locale !== undefined) {
+      await sql`UPDATE users SET locale = ${body.locale} WHERE id = ${req.actor!.id}`;
+    }
+    if (body.avatar !== undefined) {
+      await sql`UPDATE users SET avatar = ${body.avatar} WHERE id = ${req.actor!.id}`;
+    }
+    const [u] = await sql<Parameters<typeof publicUser>[0][]>`
+      SELECT id, email, username, role, can_create_servers, totp_enabled, locale, avatar, steam_id, steam_name FROM users WHERE id = ${req.actor!.id}`;
+    await writeAudit({
+      userId: req.actor!.id,
+      actorName: req.actor!.username,
+      action: 'user.profile_update',
+      ip: req.ip,
+      metadata: { changed: Object.keys(body) },
+    });
+    return { ok: true, user: publicUser(u!) };
+  });
+
+  // ---------------------------------------------------------- Steam OpenID 2.0
+
+  /** Zu Steam weiterleiten fuer Login oder Profil-Verknuepfung */
+  app.get('/auth/steam/login', async (req, reply) => {
+    const action = (req.query as { action?: string }).action === 'link' ? 'link' : 'login';
+    let linkUserId: string | null = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const res = await verifyAccessToken(authHeader.slice(7));
+        if (res.ok) linkUserId = res.claims.sub;
+      } catch {}
+    }
+    // Auch pruefen ob ueber Query-Token mitgegeben (z. B. wenn der Browser direkt per Link navigiert)
+    const tokenQuery = (req.query as { token?: string }).token;
+    if (!linkUserId && tokenQuery) {
+      try {
+        const res = await verifyAccessToken(tokenQuery);
+        if (res.ok) linkUserId = res.claims.sub;
+      } catch {}
+    }
+
+    const returnUrl = new URL(`${config.PANEL_URL}/api/v1/auth/steam/callback`);
+    returnUrl.searchParams.set('action', action);
+    if (linkUserId) returnUrl.searchParams.set('uid', linkUserId);
+
+    const redirectUrl = getSteamOpenIdUrl(returnUrl.toString(), config.PANEL_URL);
+    return reply.redirect(redirectUrl);
+  });
+
+  /** Rueckkehr von Steam: Signatur pruefen und anmelden oder verknuepfen */
+  app.get('/auth/steam/callback', async (req, reply) => {
+    const query = req.query as Record<string, string | undefined>;
+    const action = query.action;
+    const uid = query.uid;
+
+    const steamId = await verifySteamOpenId(query);
+    if (!steamId) {
+      return reply.redirect(action === 'link' ? '/account?error=steam_verify_failed' : '/login?error=steam_verify_failed');
+    }
+
+    const profile = await fetchSteamProfile(steamId);
+
+    if (action === 'link') {
+      const targetUserId = uid;
+      if (!targetUserId) {
+        return reply.redirect('/account?error=unauthenticated');
+      }
+
+      // Pruefen ob die SteamID bereits verknuepft ist
+      const [existing] = await sql<{ id: string; username: string }[]>`
+        SELECT id, username FROM users WHERE steam_id = ${steamId} AND id != ${targetUserId}
+      `;
+      if (existing) {
+        return reply.redirect('/account?error=steam_already_linked');
+      }
+
+      await sql`
+        UPDATE users
+        SET steam_id = ${steamId},
+            steam_name = ${profile?.personaName ?? null},
+            avatar = COALESCE(avatar, ${profile?.avatarUrl ?? null})
+        WHERE id = ${targetUserId}
+      `;
+
+      await writeAudit({
+        userId: targetUserId,
+        actorName: profile?.personaName ?? 'SteamUser',
+        action: 'user.steam_linked',
+        ip: req.ip,
+        metadata: { steamId, personaName: profile?.personaName },
+      });
+
+      return reply.redirect('/account?steam=linked');
+    }
+
+    // action === 'login'
+    const [user] = await sql<UserRow[]>`
+      SELECT * FROM users WHERE steam_id = ${steamId} LIMIT 1
+    `;
+
+    if (!user) {
+      return reply.redirect(`/login?error=steam_not_linked&steamId=${encodeURIComponent(steamId)}&name=${encodeURIComponent(profile?.personaName ?? '')}`);
+    }
+
+    if (user.suspended) {
+      return reply.redirect('/login?error=suspended');
+    }
+
+    if (profile?.personaName || profile?.avatarUrl) {
+      await sql`
+        UPDATE users
+        SET steam_name = COALESCE(${profile.personaName}, steam_name),
+            avatar = COALESCE(avatar, ${profile.avatarUrl})
+        WHERE id = ${user.id}
+      `;
+    }
+
+    await sql`UPDATE users SET last_login_at = now() WHERE id = ${user.id}`;
+    const session = await createSession(user.id, meta(req));
+    setRefreshCookie(reply, session.refreshToken);
+
+    await writeAudit({
+      userId: user.id,
+      actorName: user.username,
+      action: 'auth.steam_login',
+      ip: req.ip,
+      metadata: { steamId },
+    });
+
+    return reply.redirect('/?login=steam');
+  });
+
+  /** Steam-Verknuepfung trennen */
+  app.post('/auth/steam/unlink', { preHandler: requireAuth }, async (req) => {
+    await sql`UPDATE users SET steam_id = NULL, steam_name = NULL WHERE id = ${req.actor!.id}`;
+    await writeAudit({
+      userId: req.actor!.id,
+      actorName: req.actor!.username,
+      action: 'user.steam_unlinked',
+      ip: req.ip,
+    });
+    return { ok: true };
   });
 
   app.get('/auth/sessions', { preHandler: requireAuth }, async (req) => {

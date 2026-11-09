@@ -22,6 +22,7 @@ const AdminAudit = page(() => import('./pages/AdminAudit'), 'AdminAudit');
 const GameTestReport = page(() => import('./pages/GameTestReport'), 'GameTestReport');
 const Integrations = page(() => import('./pages/Integrations'), 'Integrations');
 const AdminFiles = page(() => import('./pages/AdminFiles'), 'AdminFiles');
+const Account = page(() => import('./pages/Account'), 'Account');
 import { Spinner } from './components/ui';
 import { I18nProvider, i18nReady, t } from './lib/i18n';
 
@@ -43,6 +44,7 @@ function App() {
         <Route path="hilfe" element={<About />} />
         <Route path="docs" element={<About />} />
         <Route path="community" element={<Community />} />
+        <Route path="account" element={<Account />} />
         <Route path="server/:id" element={<ServerPage />} />
         {me.permissions['admin.nodes'] && <Route path="netzwerk" element={<Network />} />}
         {me.permissions['admin.users'] && <Route path="admin/users" element={<AdminUsers />} />}

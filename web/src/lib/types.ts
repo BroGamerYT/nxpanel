@@ -3,6 +3,33 @@ export type ServerStatus = 'installing' | 'install_failed' | 'offline' | 'starti
 export interface User {
   id: string; email: string; username: string; role: 'admin' | 'moderator' | 'user'; locale?: string | null;
   canCreateServers: boolean; totpEnabled: boolean; allowedEggs?: string[] | null;
+  avatar?: string | null; steamId?: string | null; steamName?: string | null;
+}
+
+export interface SteamAccount {
+  id: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  isOwner: boolean;
+  isShared: boolean;
+  label: string;
+  accountName: string;
+  steamId: string | null;
+  hasPassword: boolean;
+  guardStatus: 'none' | 'needed' | 'ok' | 'failed';
+  guardType: 'none' | 'email' | 'app';
+  guardPrompt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface UserSession {
+  id: string;
+  user_agent: string | null;
+  ip: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  current?: boolean;
 }
 
 export interface Me { user: User; permissions: Record<string, boolean> }

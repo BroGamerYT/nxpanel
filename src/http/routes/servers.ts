@@ -72,6 +72,7 @@ export const createBody = z.object({
   variables: z.record(z.string().max(64), z.string().max(4096)).default({}),
   autoRestart: z.boolean().default(true),
   autoSleepMinutes: z.number().int().min(0).max(1440).default(0),
+  steamAccountId: z.string().uuid().optional(),
   /** Nur Admins: Server direkt fuer jemand anderen anlegen. */
   ownerId: z.string().uuid().optional(),
   /** Backup aus dem Import-Ordner, das nach der Installation uebernommen wird. */
@@ -195,6 +196,7 @@ export async function serverRoutes(
         variables: body.variables,
         autoRestart: body.autoRestart,
         autoSleepMinutes: body.autoSleepMinutes,
+        ...(body.steamAccountId ? { steamAccountId: body.steamAccountId } : {}),
         actorId: actor.id,
       });
     } catch (err) {

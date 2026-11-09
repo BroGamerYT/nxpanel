@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, FileArchive, Image as ImageIcon, LayoutGrid, List as ListIcon, Package, Search } from 'lucide-react';
 import { api, ApiError, currentToken, refreshSession } from '../lib/api';
 import { formatMb } from '../lib/status';
-import type { EggDetail, EggSummary, EggVariable } from '../lib/types';
+import type { EggDetail, EggSummary, EggVariable, SteamAccount } from '../lib/types';
 import { Button, ErrorBox, Field, Input, Select, Spinner } from '../components/ui';
 import { VariableField, visible } from '../components/VariableField';
 import { FromBackup, sourceLabel, type BackupPreset } from '../components/FromBackup';
@@ -230,6 +230,16 @@ function Form({ egg, step, setStep, preset, pack }: { egg: EggDetail; step: numb
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // Steam-Konto nur bei Spielen pruefen & anbieten, die es wirklich erfordern
+  const requiresSteam = egg.variables.some((v) => v.env === 'STEAM_USER' || v.env === 'STEAM_PASS');
+  const [selectedSteamAccountId, setSelectedSteamAccountId] = useState<string>('');
+
+  const { data: steamData } = useQuery<{ accounts: SteamAccount[] }>({
+    queryKey: ['steam-accounts'],
+    queryFn: () => api('/steam/accounts'),
+    enabled: requiresSteam,
+  });
+
   const create = useMutation({
     mutationFn: () => api<{ server: { id: string; shortId: string } }>('/servers', {
       method: 'POST',
@@ -237,6 +247,7 @@ function Form({ egg, step, setStep, preset, pack }: { egg: EggDetail; step: numb
         name, eggId: egg.id, ramMb, cpuPercent: cpu, diskMb: diskGb * 1024,
         ...(imageKey !== defaultImage ? { imageKey } : {}),
         ...(preset ? { importFile: preset.file } : {}),
+        ...(selectedSteamAccountId ? { steamAccountId: selectedSteamAccountId } : {}),
         variables: Object.fromEntries(Object.entries(vals).filter(([k]) => {
           const v = editable.find((e) => e.env === k);
           return v && visible(v, vals) && !(v.secret && vals[k] === '');
@@ -314,6 +325,58 @@ function Form({ egg, step, setStep, preset, pack }: { egg: EggDetail; step: numb
     <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); setFieldErrors({}); create.mutate(); }}>
       <BackTo onClick={() => setStep(1)} label={t('create.backToResources')} />
       {preset && <p className="text-sm text-dim">{t('create.prefilled')}</p>}
+
+      {/* Steam-Konto Auswahl (NUR wenn das Spiel explizit einen lizenzierten Steam-Account verlangt) */}
+      {requiresSteam && (
+        <div className="p-4 rounded-xl border border-[#2a475e] bg-[#171a21]/90 space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="size-8 rounded-lg bg-[#1b2838] border border-[#2a475e] flex items-center justify-center shrink-0">
+              <svg className="size-4 text-[#66c0f4]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 0 0-10 10c0 4.7 3.2 8.6 7.6 9.7l2.5-3.6a3.5 3.5 0 0 1-1.6-2.9 3.5 3.5 0 0 1 .4-1.6L7.4 11.2a4.8 4.8 0 0 1-4.8-4.8 4.8 4.8 0 0 1 4.8-4.8 4.8 4.8 0 0 1 4.8 4.8c0 .2 0 .4-.1.6l2.4 3.5a3.5 3.5 0 0 1 1.6-.4 3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5 3.5 3.5 0 0 1-2.9-1.5l-3.7 2.5A10 10 0 0 0 12 22a10 10 0 0 0 10-10A10 10 0 0 0 12 2z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-white">Steam-Konto erforderlich</div>
+              <div className="text-[11px] text-slate-400">
+                Für {egg.name} verlangt Valve einen lizenzierten Steam-Account. Wähle ein eigenes oder geteiltes Konto.
+              </div>
+            </div>
+          </div>
+
+          {steamData?.accounts && steamData.accounts.length > 0 ? (
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-slate-300">Steam-Account auswählen</label>
+              <select
+                value={selectedSteamAccountId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSelectedSteamAccountId(id);
+                  const acc = steamData.accounts.find((a) => a.id === id);
+                  if (acc) {
+                    setVals((p) => ({ ...p, STEAM_USER: acc.accountName }));
+                  }
+                }}
+                className="w-full h-10 rounded-md bg-rack-2 border border-seam px-3 text-ink text-xs focus:border-amber focus:outline-none"
+              >
+                <option value="">– Bitte Steam-Konto auswählen –</option>
+                {steamData.accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.label} ({acc.accountName}) {acc.isShared ? (acc.isOwner ? '· Team-Freigabe' : `· Geteilt von ${acc.ownerName}`) : '· Privat'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-amber/15 border border-amber/40 text-amber text-xs flex items-center justify-between gap-3">
+              <span>Kein Steam-Konto hinterlegt. Bitte füge in deinen Profileinstellungen ein Konto hinzu.</span>
+              <a href="/account" target="_blank" rel="noreferrer" className="underline font-semibold shrink-0">
+                Zu den Steam-Einstellungen →
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
       {shown.length === 0 && <p className="text-dim text-sm">{t('create.noFields')}</p>}
       {shown.map((v) => (
         <div key={v.env}>

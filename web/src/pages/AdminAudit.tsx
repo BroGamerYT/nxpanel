@@ -292,7 +292,7 @@ export function AdminAudit() {
   };
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="w-full space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-2xl border border-seam bg-rack shadow-sm">
         <div>
@@ -481,18 +481,85 @@ export function AdminAudit() {
         </div>
       ) : (
         <div className="rounded-2xl border border-seam bg-rack shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile Karten-Ansicht (< md): Passt auf jedes Handy & Tablet, kein Abschneiden! */}
+          <div className="md:hidden divide-y divide-seam">
+            {filteredEntries.map((entry) => {
+              const dateObj = new Date(entry.created_at);
+              const date = dateObj.toLocaleString('de-DE', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              });
+              const meta = getActionMeta(entry.action);
+              const Icon = meta.icon;
+              const detailsSummary = formatSummaryDetails(entry.metadata);
+
+              return (
+                <div
+                  key={entry.id}
+                  onClick={() => setSelectedEntry(entry)}
+                  className="p-3.5 hover:bg-rack-2/40 transition-colors cursor-pointer space-y-2.5 active:bg-rack-2/70"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${meta.color}`}>
+                      <Icon className="size-3.5 shrink-0" />
+                      <span>{meta.label}</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono text-dim">{date}</span>
+                      <div className="size-6 rounded-md bg-rack-2 text-dim flex items-center justify-center shrink-0">
+                        <Eye className="size-3" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`size-5 rounded-full text-[9px] font-bold flex items-center justify-center shrink-0 ${
+                        entry.actor_name === 'system'
+                          ? 'bg-cyan-500/15 text-cyan-400'
+                          : 'bg-amber/15 text-amber'
+                      }`}>
+                        {(entry.actor_name ?? 'Sys').slice(0, 2).toUpperCase()}
+                      </span>
+                      <span className="font-semibold text-ink">{entry.actor_name ?? 'System'}</span>
+                      {entry.ip && <span className="font-mono text-[10px] text-dim/70">({entry.ip})</span>}
+                    </div>
+
+                    {entry.server_name && (
+                      <div className="flex items-center gap-1 text-dim font-medium">
+                        <Server className="size-3 text-dim shrink-0" />
+                        <span className="text-ink">{entry.server_name}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {detailsSummary && (
+                    <div className="text-xs">
+                      <span className="font-mono text-slate-300 bg-rack-2/80 px-2 py-0.5 rounded border border-seam inline-block max-w-full truncate text-[11px]">
+                        {detailsSummary}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop & Tablet Tabellen-Ansicht (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-b border-seam bg-rack-2/40 text-dim text-xs font-semibold uppercase tracking-wider">
                   <th className="px-3.5 py-3 w-[150px] whitespace-nowrap">Zeitpunkt</th>
                   <th className="px-3.5 py-3 w-[140px] whitespace-nowrap">Akteur</th>
                   <th className="px-3.5 py-3 w-[180px] whitespace-nowrap">Aktion</th>
-                  <th className="px-3.5 py-3 w-[150px] whitespace-nowrap">Server</th>
-                  <th className="px-3.5 py-3">Details</th>
-                  <th className="px-3.5 py-3 text-right w-[44px]">
-                    <span className="sr-only">Details</span>
-                  </th>
+                  <th className="px-3.5 py-3 w-[160px] whitespace-nowrap">Server</th>
+                  <th className="px-3.5 py-3 min-w-[160px]">Details</th>
+                  <th className="px-3 py-3 text-right w-[48px] shrink-0"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-seam">
@@ -576,10 +643,10 @@ export function AdminAudit() {
                       </td>
 
                       {/* Info Button */}
-                      <td className="px-3.5 py-2.5 text-right whitespace-nowrap w-[44px]">
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap w-[48px] shrink-0">
                         <div
                           title="Details anzeigen"
-                          className="size-7 rounded-md bg-rack-2/80 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center justify-center"
+                          className="size-7 rounded-md bg-rack-2/80 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center justify-center ml-auto"
                         >
                           <Eye className="size-3.5" />
                         </div>
