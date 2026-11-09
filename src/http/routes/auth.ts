@@ -67,19 +67,27 @@ function meta(req: FastifyRequest) {
 }
 
 export function setRefreshCookie(reply: FastifyReply, token: string) {
+  const req = reply.request;
+  const isHttps = config.PANEL_URL.startsWith('https://') || req?.protocol === 'https' || req?.headers['x-forwarded-proto'] === 'https';
   reply.setCookie(REFRESH_COOKIE, token, {
     httpOnly: true,
     // Nach HTTPS richten, nicht nach NODE_ENV: im LAN ueber http://10.0.0.x
     // wuerde ein Secure-Cookie sonst still verworfen.
-    secure: config.PANEL_URL.startsWith('https://'),
-    sameSite: 'strict',
+    secure: isHttps,
+    sameSite: 'lax',
     path: COOKIE_PATH,
     maxAge: REFRESH_TOKEN_TTL_S,
   });
 }
 
 function clearRefreshCookie(reply: FastifyReply) {
-  reply.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATH });
+  const req = reply.request;
+  const isHttps = config.PANEL_URL.startsWith('https://') || req?.protocol === 'https' || req?.headers['x-forwarded-proto'] === 'https';
+  reply.clearCookie(REFRESH_COOKIE, {
+    path: COOKIE_PATH,
+    secure: isHttps,
+    sameSite: 'lax',
+  });
 }
 
 export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimiter }) {

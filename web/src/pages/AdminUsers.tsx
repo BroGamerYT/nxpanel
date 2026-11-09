@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { t } from '../lib/i18n';
@@ -23,6 +24,7 @@ const PANEL_MODULES = [
 ] as const;
 
 export function AdminUsers() {
+  const nav = useNavigate();
   const { me, impersonateUser } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -333,7 +335,7 @@ export function AdminUsers() {
                           onClick={async () => {
                             try {
                               await impersonateUser(u.id);
-                              window.location.href = '/';
+                              nav('/');
                             } catch (err: any) {
                               setErrorMsg(err?.message || 'Fehler beim Starten der Sichtprüfung');
                             }
@@ -399,7 +401,7 @@ export function AdminUsers() {
                   if (targetId) {
                     setGeneratedPw(null);
                     await impersonateUser(targetId);
-                    window.location.href = '/';
+                    nav('/');
                   }
                 }}
               >

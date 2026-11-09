@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { startAuthentication } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { api, ApiError, refreshSession, setAccessToken, onAuthChange } from './api';
@@ -27,6 +28,7 @@ const Ctx = createContext<AuthState | null>(null);
 const IMPERSONATOR_STORAGE_KEY = 'nxp.impersonator';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [me, setMe] = useState<Me | null>(null);
   const [ready, setReady] = useState(false);
   const [impersonatorAdmin, setImpersonatorAdmin] = useState<ImpersonatorAdmin | null>(() => {
@@ -94,7 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
     setImpersonatorAdmin(null);
     setAccessToken(null);
-  }, []);
+    qc.clear();
+  }, [qc]);
 
   const impersonateUser = useCallback(async (userId: string) => {
     const res = await api<{ accessToken: string; user: any; originalAdmin: ImpersonatorAdmin }>(
@@ -104,8 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem(IMPERSONATOR_STORAGE_KEY, JSON.stringify(res.originalAdmin));
     setImpersonatorAdmin(res.originalAdmin);
     setAccessToken(res.accessToken);
+    qc.clear();
     await loadMe();
-  }, [loadMe]);
+  }, [loadMe, qc]);
 
   const stopImpersonation = useCallback(async () => {
     if (!impersonatorAdmin) return;
@@ -116,8 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
     setImpersonatorAdmin(null);
     setAccessToken(res.accessToken);
+    qc.clear();
     await loadMe();
-  }, [impersonatorAdmin, loadMe]);
+  }, [impersonatorAdmin, loadMe, qc]);
 
   return (
     <Ctx.Provider

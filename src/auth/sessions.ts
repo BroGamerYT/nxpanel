@@ -57,6 +57,7 @@ interface SessionRow {
   expires_at: Date;
   revoked_at: Date | null;
   rotated_at: Date | null;
+  replaced_by: string | null;
   created_at: Date;
   suspended: boolean;
   password_changed_at: Date;
@@ -67,7 +68,7 @@ export async function rotateSession(refreshToken: string, meta: SessionMeta): Pr
     // FOR UPDATE: zwei gleichzeitige Refreshes mit demselben Token werden
     // nacheinander abgearbeitet - nur einer bekommt einen neuen Token.
     const [s] = await tx<SessionRow[]>`
-      SELECT s.id, s.user_id, s.family_id, s.expires_at, s.revoked_at, s.rotated_at, s.created_at,
+      SELECT s.id, s.user_id, s.family_id, s.expires_at, s.revoked_at, s.rotated_at, s.replaced_by, s.created_at,
              u.suspended, u.password_changed_at
       FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.refresh_token = ${hashToken(refreshToken)}
@@ -76,7 +77,22 @@ export async function rotateSession(refreshToken: string, meta: SessionMeta): Pr
     if (!s) return { ok: false, reason: 'unknown' } as const;
 
     if (s.rotated_at) {
-      if (Date.now() - s.rotated_at.getTime() < GRACE_MS) return { ok: false, reason: 'race' } as const;
+      if (Date.now() - s.rotated_at.getTime() < GRACE_MS) {
+        if (s.replaced_by) {
+          const [rep] = await tx<{ id: string; user_id: string; expires_at: Date }[]>`
+            SELECT id, user_id, expires_at FROM sessions
+            WHERE id = ${s.replaced_by} AND (revoked_at IS NULL OR revoke_reason = 'rotated')
+          `;
+          if (rep && rep.expires_at.getTime() > Date.now()) {
+            return {
+              ok: true,
+              userId: rep.user_id,
+              session: { sessionId: rep.id, refreshToken: '', expiresAt: rep.expires_at },
+            } as const;
+          }
+        }
+        return { ok: false, reason: 'race' } as const;
+      }
       await tx`
         UPDATE sessions SET revoked_at = now(), revoke_reason = 'reuse_detected'
         WHERE family_id = ${s.family_id} AND ${STILL_VALID}

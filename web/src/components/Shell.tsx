@@ -171,6 +171,7 @@ function VersionLink({ mobile = false }: { mobile?: boolean }) {
  * Rahmen: responsive Seitenleiste (Handy: Drawer, Tablet: kompakte Icon-Leiste, Desktop: volle Breite).
  */
 export function Shell() {
+  const nav = useNavigate();
   const { me, logout, impersonatorAdmin, stopImpersonation } = useAuth();
   const canCreate = me?.permissions['server.create'];
   const [searchOpen, setSearchOpen] = useState(false);
@@ -209,7 +210,7 @@ export function Shell() {
             type="button"
             onClick={async () => {
               await stopImpersonation();
-              window.location.href = '/admin/users';
+              nav('/admin/users');
             }}
             className="px-3 py-1 rounded bg-black text-amber hover:bg-black/85 font-bold transition-all text-xs shrink-0 cursor-pointer ml-auto"
           >
