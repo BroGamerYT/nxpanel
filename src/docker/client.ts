@@ -53,6 +53,8 @@ export interface ContainerEngine {
   prune(opts: { images: boolean; buildCache: boolean }): Promise<{ imagesDeleted: number; reclaimedMb: number }>;
   /** Labels eines Containers, null wenn es ihn nicht gibt. */
   labels(containerId: string): Promise<Record<string, string> | null>;
+  /** Fuehrt einen einmaligen Befehl in einem temporaeren Container aus und faengt die Ausgabe ab. */
+  runOneOff(image: string, cmd: string[], timeoutMs?: number): Promise<{ exitCode: number; output: string }>;
 }
 
 export interface DockerDiskUsage {
@@ -549,6 +551,53 @@ class LocalDockerEngine implements ContainerEngine {
 
     await container.remove({ force: true }).catch(() => {});
     return result.StatusCode as number;
+  }
+
+  async runOneOff(image: string, cmd: string[], timeoutMs = 35000): Promise<{ exitCode: number; output: string }> {
+    if (!(await this.hasImage(image))) {
+      await this.pullImage(image);
+    }
+    const container = await this.docker.createContainer({
+      Image: image,
+      Cmd: cmd,
+      Tty: false,
+      AttachStdout: true,
+      AttachStderr: true,
+      HostConfig: {
+        AutoRemove: false,
+        NetworkMode: 'bridge',
+        Memory: 1024 * 1024 * 1024,
+      },
+    });
+
+    let output = '';
+    const stream = await container.attach({ stream: true, stdout: true, stderr: true });
+    stream.on('data', (chunk: Buffer) => {
+      output += stripFrames(chunk);
+    });
+
+    await container.start();
+
+    let exitCode = -1;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      const waitPromise = container.wait();
+      const timeoutPromise = new Promise<{ StatusCode: number }>((_, reject) => {
+        timer = setTimeout(() => {
+          container.kill().catch(() => {});
+          reject(new Error('Container execution timed out'));
+        }, timeoutMs);
+      });
+      const res = await Promise.race([waitPromise, timeoutPromise]);
+      exitCode = res.StatusCode;
+    } catch {
+      exitCode = -1;
+    } finally {
+      if (timer) clearTimeout(timer);
+      await container.remove({ force: true }).catch(() => {});
+    }
+
+    return { exitCode, output };
   }
 
   /**

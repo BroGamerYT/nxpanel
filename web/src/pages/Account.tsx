@@ -149,6 +149,38 @@ export function Account() {
     },
   });
 
+  // State for Testing Steam Account
+  const [testingAccountId, setTestingAccountId] = useState<string | null>(null);
+  const [testResultFeedback, setTestResultFeedback] = useState<{ id: string; success: boolean; message: string } | null>(null);
+
+  // Mutation: Test Steam Connection & Guard
+  const testSteamAccountMutation = useMutation({
+    mutationFn: (id: string) => {
+      setTestingAccountId(id);
+      return api<{ status: 'ok' | 'needed' | 'failed'; guardType?: 'none' | 'email' | 'app'; message: string; account: SteamAccount }>(
+        `/steam/accounts/${id}/test`,
+        { method: 'POST' }
+      );
+    },
+    onSuccess: async (data, id) => {
+      setTestingAccountId(null);
+      await refetchSteam();
+      if (data.status === 'needed') {
+        setGuardModalAccount(data.account);
+        setGuardCode('');
+        setGuardError(data.message);
+      } else {
+        setTestResultFeedback({ id, success: data.status === 'ok', message: data.message });
+        setTimeout(() => setTestResultFeedback(null), 7000);
+      }
+    },
+    onError: (err: any, id) => {
+      setTestingAccountId(null);
+      setTestResultFeedback({ id, success: false, message: err?.message || 'Verbindungstest fehlgeschlagen' });
+      setTimeout(() => setTestResultFeedback(null), 7000);
+    },
+  });
+
   // Mutation: Delete Steam Account
   const deleteSteamAccountMutation = useMutation({
     mutationFn: (id: string) => api(`/steam/accounts/${id}`, { method: 'DELETE' }),
@@ -160,12 +192,21 @@ export function Account() {
   // Mutation: Submit Steam Guard
   const submitGuardMutation = useMutation({
     mutationFn: ({ id, code }: { id: string; code: string }) =>
-      api(`/steam/accounts/${id}/guard`, { method: 'POST', body: { code } }),
-    onSuccess: async () => {
-      setGuardModalAccount(null);
-      setGuardCode('');
-      setGuardError(null);
+      api<{ status: 'ok' | 'needed' | 'failed'; guardType?: 'none' | 'email' | 'app'; message: string; account: SteamAccount }>(
+        `/steam/accounts/${id}/guard`,
+        { method: 'POST', body: { code } }
+      ),
+    onSuccess: async (data, { id }) => {
       await refetchSteam();
+      if (data.status === 'ok') {
+        setGuardModalAccount(null);
+        setGuardCode('');
+        setGuardError(null);
+        setTestResultFeedback({ id, success: true, message: 'Steam Guard erfolgreich verifiziert und bestätigt!' });
+        setTimeout(() => setTestResultFeedback(null), 7000);
+      } else {
+        setGuardError(data.message || 'Der eingegebene Code war ungültig');
+      }
     },
     onError: (err: any) => {
       setGuardError(err?.message || 'Steam-Guard-Code ungültig');
@@ -592,42 +633,72 @@ export function Account() {
                     {/* Steam Guard Status */}
                     <div className="pt-2">
                       {acc.guardStatus === 'needed' ? (
-                        <div className="p-2.5 rounded-lg bg-amber/15 border border-amber/40 text-amber text-xs space-y-1.5">
+                        <div className="p-3 rounded-xl bg-amber/15 border border-amber/40 text-amber text-xs space-y-2">
                           <div className="font-semibold flex items-center gap-1.5">
-                            <AlertTriangle className="size-3.5" />
+                            <AlertTriangle className="size-4 shrink-0" />
                             Steam-Guard-Code erforderlich!
                           </div>
-                          {acc.guardPrompt && <div className="text-[11px] text-amber/90">{acc.guardPrompt}</div>}
+                          {acc.guardPrompt && <div className="text-[11px] text-amber/90 leading-tight">{acc.guardPrompt}</div>}
                           <Button
                             variant="primary"
-                            className="h-7 text-xs w-full mt-1"
+                            className="h-7 text-xs w-full mt-1 font-semibold"
                             onClick={() => {
                               setGuardModalAccount(acc);
                               setGuardCode('');
                               setGuardError(null);
                             }}
                           >
+                            <KeyRound className="size-3.5" />
                             Code jetzt eingeben
                           </Button>
                         </div>
                       ) : acc.guardStatus === 'ok' ? (
-                        <div className="text-xs text-emerald-400 flex items-center gap-1.5">
+                        <div className="text-xs text-emerald-400 flex items-center gap-1.5 font-medium">
                           <CheckCircle2 className="size-3.5" />
-                          Steam Guard verifiziert
+                          Steam Guard: Verifiziert & Bereit (OK)
+                        </div>
+                      ) : acc.guardStatus === 'failed' ? (
+                        <div className="text-xs text-rose-400 flex items-center gap-1.5 font-medium">
+                          <AlertTriangle className="size-3.5" />
+                          Anmeldung fehlgeschlagen (Passwort/Code ungültig)
                         </div>
                       ) : (
-                        <div className="text-xs text-dim">Steam Guard: Nicht erforderlich</div>
+                        <div className="text-xs text-dim flex items-center gap-1.5">
+                          <Shield className="size-3.5 text-dim/60" />
+                          <span>Steam Guard: Noch nicht verifiziert</span>
+                        </div>
+                      )}
+
+                      {/* Feedback-Banner zum Verbindungstest */}
+                      {testResultFeedback && testResultFeedback.id === acc.id && (
+                        <div className={`mt-2.5 p-2 rounded-lg text-[11px] flex items-start gap-2 border leading-relaxed ${
+                          testResultFeedback.success
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                            : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                        }`}>
+                          {testResultFeedback.success ? <Check className="size-3.5 shrink-0 mt-0.5" /> : <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />}
+                          <span>{testResultFeedback.message}</span>
+                        </div>
                       )}
                     </div>
                   </div>
 
                   {/* Aktionen (nur Eigentümer oder Admin) */}
-                  <div className="flex items-center justify-between pt-3 border-t border-seam text-xs">
-                    <span className="text-[11px] text-dim">
-                      {acc.lastUsedAt ? `Zuletzt genutzt: ${new Date(acc.lastUsedAt).toLocaleDateString('de-DE')}` : 'Noch unbenutzt'}
-                    </span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-seam text-xs">
+                    <Button
+                      variant="quiet"
+                      className="h-7 px-2.5 text-xs text-dim hover:text-ink hover:bg-rack-2"
+                      busy={testingAccountId === acc.id}
+                      disabled={testingAccountId === acc.id}
+                      onClick={() => testSteamAccountMutation.mutate(acc.id)}
+                      title="Verbindung mit SteamCMD und Steam Guard jetzt testen"
+                    >
+                      <RefreshCw className="size-3 text-cyan-400" />
+                      <span>Verbindung testen</span>
+                    </Button>
+
                     {acc.isOwner && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 ml-auto">
                         <Button
                           variant="quiet"
                           className="h-7 px-2 text-xs"

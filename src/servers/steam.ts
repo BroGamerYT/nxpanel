@@ -1,5 +1,6 @@
 import { sql } from '../db/index.js';
 import { encrypt, decrypt } from '../crypto.js';
+import { engine } from '../docker/client.js';
 import type { Actor } from '../auth/permissions.js';
 
 export interface SteamAccountRow {
@@ -142,39 +143,171 @@ export async function saveSteamAccount(
   };
 }
 
-export async function submitSteamGuard(actor: Actor & { username?: string }, id: string, code: string): Promise<SteamAccountPublic> {
+export async function testSteamAccount(
+  actor: Actor & { username?: string },
+  id: string,
+  guardCode?: string,
+): Promise<{
+  status: 'ok' | 'needed' | 'failed';
+  guardType?: 'none' | 'email' | 'app';
+  message: string;
+  account: SteamAccountPublic;
+}> {
   const [existing] = await sql<SteamAccountRow[]>`SELECT * FROM steam_accounts WHERE id = ${id}`;
   if (!existing) throw new Error('Steam-Konto nicht gefunden');
   if (actor.role !== 'admin' && existing.owner_id !== actor.id && !existing.is_shared) {
     throw new Error('Keine Berechtigung fuer dieses Steam-Konto');
   }
 
-  const [row] = await sql<SteamAccountRow[]>`
-    UPDATE steam_accounts
-    SET guard_code = ${code.trim().toUpperCase()},
-        guard_status = 'ok',
-        guard_prompt = NULL,
-        updated_at = now()
-    WHERE id = ${id}
-    RETURNING *
-  `;
-  if (!row) throw new Error('Steam-Konto nicht gefunden');
+  if (!existing.encrypted_password) {
+    throw new Error('Kein Passwort fuer dieses Steam-Konto hinterlegt');
+  }
+
+  const password = decrypt(existing.encrypted_password);
+  const codeToTry = guardCode?.trim().toUpperCase() || existing.guard_code || undefined;
+
+  const cmd = ['+login', existing.account_name, password];
+  if (codeToTry) {
+    cmd.push(codeToTry);
+  }
+  cmd.push('+quit');
+
+  let output = '';
+  try {
+    const res = await engine.runOneOff('steamcmd/steamcmd:latest', cmd, 35000);
+    output = res.output;
+  } catch (err: any) {
+    return {
+      status: 'failed',
+      message: `Testlauf fehlgeschlagen: ${err?.message || 'Verbindungsfehler zu Steam'}`,
+      account: (await listSteamAccounts(actor)).find((a) => a.id === id)!,
+    };
+  }
+
+  const out = output.toLowerCase();
+
+  // 1. Falsches Passwort
+  if (out.includes('invalid password') || out.includes('error (invalid password)')) {
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'failed',
+          guard_prompt = 'Passwort oder Benutzername falsch',
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'failed',
+      message: 'Steam-Passwort oder Benutzername ist falsch (Invalid Password).',
+      account: updated,
+    };
+  }
+
+  // 2. Steam Guard Code war falsch oder abgelaufen
+  if (codeToTry && (out.includes('twofactorcodemismatch') || out.includes('invalid code') || out.includes('code mismatch'))) {
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'needed',
+          guard_type = 'app',
+          guard_prompt = 'Der eingegebene Steam-Guard-Code war ungültig oder abgelaufen',
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'needed',
+      guardType: 'app',
+      message: 'Der Steam-Guard-Code war ungültig oder abgelaufen. Bitte generiere einen neuen Code in der Steam-App.',
+      account: updated,
+    };
+  }
+
+  // 3. Steam Guard wird benötigt
+  const needsGuard =
+    out.includes('twofactorcodemismatch') ||
+    out.includes('accountlogondenied') ||
+    out.includes('steam guard') ||
+    out.includes('two-factor code') ||
+    out.includes('mobile authenticator');
+
+  const loginSuccess =
+    out.includes('waiting for user info...ok') ||
+    out.includes('waiting for license info...ok') ||
+    (out.includes('logging in user') && out.includes('...ok'));
+
+  if (needsGuard && !loginSuccess) {
+    const isApp = out.includes('mobile') || out.includes('twofactor') || out.includes('authenticator');
+    const guardType: 'app' | 'email' = isApp ? 'app' : 'email';
+    const prompt = isApp
+      ? 'Steam Guard Mobile Authenticator Code erforderlich'
+      : 'Steam Guard Bestätigungscode per E-Mail gesendet';
+
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'needed',
+          guard_type = ${guardType},
+          guard_prompt = ${prompt},
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'needed',
+      guardType,
+      message: isApp
+        ? 'Steam Guard ist aktiv! Bitte gib den Code aus deiner Steam-App ein.'
+        : 'Steam Guard ist aktiv! Ein Bestätigungscode wurde per E-Mail gesendet.',
+      account: updated,
+    };
+  }
+
+  // 4. Erfolgreich eingeloggt
+  if (loginSuccess) {
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'ok',
+          guard_code = ${codeToTry ?? null},
+          guard_prompt = NULL,
+          last_used_at = now(),
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'ok',
+      message: 'Steam-Verbindung erfolgreich hergestellt und verifiziert!',
+      account: updated,
+    };
+  }
+
+  // 5. Rate Limit
+  if (out.includes('ratelimitexceeded')) {
+    return {
+      status: 'failed',
+      message: 'Steam meldet zu viele Fehlversuche (RateLimitExceeded). Bitte kurz warten.',
+      account: (await listSteamAccounts(actor)).find((a) => a.id === id)!,
+    };
+  }
+
+  // Fallback
   return {
-    id: row.id,
-    ownerId: row.owner_id,
-    ownerName: actor.username ?? 'Benutzer',
-    isOwner: actor.role === 'admin' || row.owner_id === actor.id,
-    isShared: Boolean(row.is_shared),
-    label: row.label || row.account_name,
-    accountName: row.account_name,
-    steamId: row.steam_id,
-    hasPassword: Boolean(row.encrypted_password),
-    guardStatus: row.guard_status,
-    guardType: row.guard_type,
-    guardPrompt: row.guard_prompt,
-    lastUsedAt: row.last_used_at?.toISOString() ?? null,
-    createdAt: row.created_at.toISOString(),
+    status: 'failed',
+    message: `Unerwartete Steam-Antwort: ${output.slice(0, 150)}`,
+    account: (await listSteamAccounts(actor)).find((a) => a.id === id)!,
   };
+}
+
+export async function submitSteamGuard(
+  actor: Actor & { username?: string },
+  id: string,
+  code: string,
+): Promise<{
+  status: 'ok' | 'needed' | 'failed';
+  guardType?: 'none' | 'email' | 'app';
+  message: string;
+  account: SteamAccountPublic;
+}> {
+  return testSteamAccount(actor, id, code);
 }
 
 export async function requestSteamGuard(accountName: string, prompt: string, type: 'email' | 'app' = 'app'): Promise<void> {

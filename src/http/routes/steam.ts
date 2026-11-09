@@ -4,6 +4,7 @@ import { HttpError, requireAuth } from '../auth.js';
 import {
   listSteamAccounts,
   saveSteamAccount,
+  testSteamAccount,
   submitSteamGuard,
   deleteSteamAccount,
 } from '../../servers/steam.js';
@@ -51,7 +52,27 @@ export async function steamRoutes(app: FastifyInstance) {
     }
   });
 
-  // Steam-Guard-Code eingeben
+  // Verbindung & Steam Guard testen
+  app.post<{ Params: { id: string } }>('/steam/accounts/:id/test', { preHandler: requireAuth }, async (req) => {
+    if (!z.string().uuid().safeParse(req.params.id).success) {
+      throw new HttpError(404, 'Konto nicht gefunden', 'not_found');
+    }
+    try {
+      const result = await testSteamAccount(req.actor!, req.params.id);
+      await writeAudit({
+        userId: req.actor!.id,
+        actorName: req.actor!.username,
+        action: 'steam.test_login',
+        ip: req.ip,
+        metadata: { accountName: result.account.accountName, status: result.status },
+      });
+      return result;
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message, 'test_failed');
+    }
+  });
+
+  // Steam-Guard-Code eingeben und prüfen
   app.post<{ Params: { id: string } }>('/steam/accounts/:id/guard', { preHandler: requireAuth }, async (req) => {
     if (!z.string().uuid().safeParse(req.params.id).success) {
       throw new HttpError(404, 'Konto nicht gefunden', 'not_found');
@@ -61,17 +82,17 @@ export async function steamRoutes(app: FastifyInstance) {
       throw new HttpError(400, 'Steam-Guard-Code muss 4-10 Zeichen lang sein', 'invalid_input');
     }
     try {
-      const acc = await submitSteamGuard(req.actor!, req.params.id, parsed.data.code);
+      const result = await submitSteamGuard(req.actor!, req.params.id, parsed.data.code);
       await writeAudit({
         userId: req.actor!.id,
         actorName: req.actor!.username,
         action: 'steam.guard_submit',
         ip: req.ip,
-        metadata: { accountName: acc.accountName },
+        metadata: { accountName: result.account.accountName, status: result.status },
       });
-      return { account: acc };
-    } catch {
-      throw new HttpError(404, 'Konto nicht gefunden oder keine Berechtigung', 'not_found');
+      return result;
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message, 'guard_failed');
     }
   });
 
