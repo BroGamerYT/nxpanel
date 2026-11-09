@@ -1,6 +1,6 @@
 {
   "name": "nxpanel",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "description": "NexusPanel - Gameserver-Verwaltung ueber Docker",
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -13,7 +13,7 @@
     "start": "node --env-file=.env dist/index.js",
     "migrate": "tsx --env-file=.env src/db/migrate.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "db:up": "docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d postgres redis",
     "db:down": "docker compose --env-file .env -f deploy/docker-compose.yml down",
     "dev:server": "tsx src/cli/dev-server.ts",
@@ -54,8 +54,12 @@
     "@types/node": "^22.9.0",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "eslint": "^10.14.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^5.1.0"
   }
 }

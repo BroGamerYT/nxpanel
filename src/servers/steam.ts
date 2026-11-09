@@ -186,19 +186,39 @@ export async function testSteamAccount(
 
   const out = output.toLowerCase();
 
-  // 1. Falsches Passwort
+  // 1. Falsches Passwort oder Steam Guard 2FA erforderlich
   if (out.includes('invalid password') || out.includes('error (invalid password)')) {
+    // Wenn kein Guard-Code mitgegeben wurde: Bei Steam Mobile Authenticator antwortet Steam
+    // oft mit "Invalid Password" und schickt gleichzeitig den Push-Code ans Smartphone!
+    if (!codeToTry) {
+      await sql`
+        UPDATE steam_accounts
+        SET guard_status = 'needed',
+            guard_type = 'app',
+            guard_prompt = 'Steam verlangt deinen Steam-Guard-Code aus der Steam-App (oder das Passwort ist falsch)',
+            updated_at = now()
+        WHERE id = ${id}
+      `;
+      const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+      return {
+        status: 'needed',
+        guardType: 'app',
+        message: 'Steam Guard ist aktiv! Bitte gib den Code aus deiner Steam-App ein.',
+        account: updated,
+      };
+    }
+
     await sql`
       UPDATE steam_accounts
       SET guard_status = 'failed',
-          guard_prompt = 'Passwort oder Benutzername falsch',
+          guard_prompt = 'Passwort oder Steam-Guard-Code ungültig',
           updated_at = now()
       WHERE id = ${id}
     `;
     const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
     return {
       status: 'failed',
-      message: 'Steam-Passwort oder Benutzername ist falsch (Invalid Password).',
+      message: 'Steam-Anmeldung fehlgeschlagen: Passwort oder eingegebener Guard-Code ist falsch.',
       account: updated,
     };
   }

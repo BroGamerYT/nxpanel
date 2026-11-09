@@ -658,9 +658,26 @@ export function Account() {
                           Steam Guard: Verifiziert & Bereit (OK)
                         </div>
                       ) : acc.guardStatus === 'failed' ? (
-                        <div className="text-xs text-rose-400 flex items-center gap-1.5 font-medium">
-                          <AlertTriangle className="size-3.5" />
-                          Anmeldung fehlgeschlagen (Passwort/Code ungültig)
+                        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs space-y-2">
+                          <div className="font-semibold flex items-center gap-1.5 text-rose-400">
+                            <AlertTriangle className="size-4 shrink-0" />
+                            Anmeldung fehlgeschlagen
+                          </div>
+                          <div className="text-[11px] text-rose-200/80 leading-tight">
+                            {acc.guardPrompt || 'Passwort falsch oder Steam Guard Code erforderlich'}
+                          </div>
+                          <Button
+                            variant="quiet"
+                            className="h-7 text-xs w-full font-medium bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 mt-1"
+                            onClick={() => {
+                              setGuardModalAccount(acc);
+                              setGuardCode('');
+                              setGuardError(null);
+                            }}
+                          >
+                            <KeyRound className="size-3.5" />
+                            Steam-Guard-Code eingeben
+                          </Button>
                         </div>
                       ) : (
                         <div className="text-xs text-dim flex items-center gap-1.5">
