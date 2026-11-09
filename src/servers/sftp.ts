@@ -1,4 +1,6 @@
-import { Server, utils } from 'ssh2';
+import type { Server as SshServer } from 'ssh2';
+import ssh2 from 'ssh2';
+const { Server, utils } = ssh2;
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import { openSync, readSync, writeSync, closeSync } from 'node:fs';
@@ -55,7 +57,7 @@ interface SftpSessionState {
   accessibleServers: ServerListItem[];
 }
 
-export function createSftpServer(): Server | null {
+export function createSftpServer(): SshServer | null {
   if (!config.SFTP_ENABLED) {
     log.info('SFTP-Server ist in der Konfiguration deaktiviert');
     return null;
