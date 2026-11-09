@@ -146,7 +146,7 @@ export function Account() {
 
   // Mutation: Profile Update
   const updateProfileMutation = useMutation({
-    mutationFn: (data: { username?: string; email?: string; avatar?: string | null }) =>
+    mutationFn: (data: { username?: string; email?: string | null; avatar?: string | null }) =>
       api('/auth/me', { method: 'PATCH', body: data }),
     onSuccess: async () => {
       setProfileSuccess(true);
@@ -344,7 +344,11 @@ export function Account() {
                 </span>
               )}
             </div>
-            <p className="text-sm text-dim mt-1 font-mono">{me?.user.email}</p>
+            {me?.user.email ? (
+              <p className="text-sm text-dim mt-1 font-mono">{me.user.email}</p>
+            ) : (
+              <p className="text-sm text-dim/60 mt-1 italic">Keine E-Mail-Adresse hinterlegt</p>
+            )}
           </div>
         </div>
 
@@ -559,7 +563,7 @@ export function Account() {
                 e.preventDefault();
                 updateProfileMutation.mutate({
                   username: username !== me?.user.username ? username : undefined,
-                  email: email !== me?.user.email ? email : undefined,
+                  email: email !== (me?.user.email ?? '') ? (email.trim() || null) : undefined,
                   avatar: selectedAvatar,
                 });
               }}
@@ -576,12 +580,12 @@ export function Account() {
                 />
               </Field>
 
-              <Field label="E-Mail-Adresse">
+              <Field label="E-Mail-Adresse (optional)">
                 <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
+                  placeholder="Optional, z. B. user@example.com"
                   className="text-xs"
                 />
               </Field>

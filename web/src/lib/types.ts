@@ -1,7 +1,7 @@
 export type ServerStatus = 'installing' | 'install_failed' | 'offline' | 'starting' | 'running' | 'stopping' | 'crashed' | 'suspended';
 
 export interface User {
-  id: string; email: string; username: string; role: 'admin' | 'moderator' | 'user'; locale?: string | null;
+  id: string; email: string | null; username: string; role: 'admin' | 'moderator' | 'user'; locale?: string | null;
   canCreateServers: boolean; totpEnabled: boolean; allowedEggs?: string[] | null;
   avatar?: string | null; steamId?: string | null; steamName?: string | null;
 }
@@ -207,7 +207,7 @@ export interface ConsoleHint { match: string; flags: string; level: 'ok' | 'warn
 export interface SubuserItem {
   userId: string;
   username: string;
-  email: string;
+  email: string | null;
   permissions: string[];
   since: string;
 }
@@ -221,7 +221,7 @@ export interface PermissionsCatalog {
 export interface AdminUserItem {
   id: string;
   username: string;
-  email: string;
+  email: string | null;
   role: 'admin' | 'moderator' | 'user';
   canCreateServers: boolean;
   suspended: boolean;

@@ -185,7 +185,10 @@ export async function adminRoutes(app: FastifyInstance) {
 
 export const newUserBody = z.object({
   username: z.string().min(3).max(32),
-  email: z.string().email().max(254),
+  email: z.string().max(254).nullable().optional().refine((val) => {
+    if (!val || !val.trim()) return true;
+    return /^[^\s@]+@[^\s@]+$/.test(val.trim());
+  }, 'Ungueltige E-Mail-Adresse'),
   password: z.string().max(256).optional(),
   steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
   role: z.enum(['admin', 'moderator', 'user']).default('user'),
@@ -194,6 +197,10 @@ export const newUserBody = z.object({
 });
 
 export const patchUserBody = z.object({
+  email: z.string().max(254).nullable().optional().refine((val) => {
+    if (!val || !val.trim()) return true;
+    return /^[^\s@]+@[^\s@]+$/.test(val.trim());
+  }, 'Ungueltige E-Mail-Adresse'),
   role: z.enum(['admin', 'moderator', 'user']).optional(),
   steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
   canCreateServers: z.boolean().optional(),
@@ -219,13 +226,14 @@ export async function adminUserRoutes(app: FastifyInstance) {
 
   app.post('/admin/users', { preHandler: requireAdmin() }, async (req, reply) => {
     const body = newUserBody.parse(req.body);
+    const cleanEmail = body.email?.trim() || null;
     const generated = !body.password;
     const password = body.password ?? randomBytes(18).toString('base64url');
     let u;
     try {
       u = await createUser({
         username: body.username,
-        email: body.email,
+        email: cleanEmail,
         password,
         role: body.role,
         canCreateServers: body.canCreateServers,
@@ -255,13 +263,23 @@ export async function adminUserRoutes(app: FastifyInstance) {
       if (n!.n === 0) throw new HttpError(409, 'Das ist der letzte Admin - erst einen anderen ernennen', 'last_admin');
     }
 
+    if (body.email !== undefined) {
+      const cleanEmail = body.email?.trim() || null;
+      if (cleanEmail) {
+        const [dup] = await sql`SELECT 1 FROM users WHERE lower(email) = ${cleanEmail.toLowerCase()} AND id != ${id}`;
+        if (dup) throw new HttpError(400, 'Diese E-Mail-Adresse wird bereits verwendet', 'email_taken');
+      }
+    }
+
     if (body.steamId) {
       const [dup] = await sql`SELECT 1 FROM users WHERE steam_id = ${body.steamId} AND id != ${id}`;
       if (dup) throw new HttpError(400, 'Diese Steam-ID ist bereits einem anderen Benutzer zugewiesen', 'steam_id_taken');
     }
 
+    const cleanEmail = body.email !== undefined ? (body.email?.trim() || null) : undefined;
     await sql`
       UPDATE users SET
+        email = ${cleanEmail !== undefined ? cleanEmail : sql`email`},
         role = ${body.role ?? sql`role`},
         steam_id = ${body.steamId !== undefined ? (body.steamId?.trim() || null) : sql`steam_id`},
         can_create_servers = ${body.canCreateServers ?? sql`can_create_servers`},

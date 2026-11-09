@@ -160,7 +160,9 @@ export async function createPasskeyAuthenticationOptions(username?: string, host
   let targetUserId: string | undefined;
   if (username) {
     const [u] = await sql<{ id: string }[]>`
-      SELECT id FROM users WHERE lower(username) = lower(${username.trim()}) OR lower(email) = lower(${username.trim()})
+      SELECT id FROM users
+      WHERE lower(username) = lower(${username.trim()})
+         OR (email IS NOT NULL AND lower(email) = lower(${username.trim()}))
     `;
     if (u) {
       targetUserId = u.id;

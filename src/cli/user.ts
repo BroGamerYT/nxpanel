@@ -65,24 +65,25 @@ async function main() {
   switch (cmd) {
     case 'create-admin':
     case 'create': {
-      if (!a || !b) throw new UserInputError(`Aufruf: ${cmd} <benutzername> <email>`);
+      if (!a) throw new UserInputError(`Aufruf: ${cmd} <benutzername> [email] [--can-create]`);
+      const email = b && !b.startsWith('--') ? b : null;
       const pw = passwordFromEnv();
       const admin = cmd === 'create-admin';
       const u = await createUser({
         username: a,
-        email: b,
+        email,
         password: pw.password,
         role: admin ? 'admin' : 'user',
-        canCreateServers: admin || rest.includes('--can-create'),
+        canCreateServers: admin || rest.includes('--can-create') || b === '--can-create',
       });
       await writeAudit({ userId: u.id, actorName: 'cli', action: admin ? 'user.create_admin' : 'user.create', metadata: { via: 'cli' } });
-      console.log(`Angelegt: ${u.username} <${u.email}>  Rolle: ${u.role}  Server anlegen: ${u.can_create_servers ? 'ja' : 'nein'}`);
+      console.log(`Angelegt: ${u.username} <${u.email ?? 'keine E-Mail'}>  Rolle: ${u.role}  Server anlegen: ${u.can_create_servers ? 'ja' : 'nein'}`);
       showPassword(pw);
       break;
     }
 
     case 'list': {
-      const rows = await sql<{ username: string; email: string; role: string; can_create_servers: boolean; suspended: boolean; last_login_at: Date | null; servers: number }[]>`
+      const rows = await sql<{ username: string; email: string | null; role: string; can_create_servers: boolean; suspended: boolean; last_login_at: Date | null; servers: number }[]>`
         SELECT u.username, u.email, u.role, u.can_create_servers, u.suspended, u.last_login_at,
                (SELECT count(*)::int FROM servers s WHERE s.owner_id = u.id) AS servers
         FROM users u ORDER BY u.created_at`;

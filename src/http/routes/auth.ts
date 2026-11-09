@@ -50,7 +50,10 @@ export const refreshBody = z.object({ refreshToken: z.string().min(20).max(200).
 export const meBody = z.object({
   locale: z.string().regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Ungueltiger Sprachcode').optional(),
   avatar: z.string().max(1000).nullable().optional(),
-  email: z.string().email('Ungueltige E-Mail-Adresse').optional(),
+  email: z.string().max(254).nullable().optional().refine((val) => {
+    if (!val || !val.trim()) return true;
+    return /^[^\s@]+@[^\s@]+$/.test(val.trim());
+  }, 'Ungueltige E-Mail-Adresse'),
   username: z.string().regex(/^[a-zA-Z0-9_.-]{3,32}$/, 'Benutzername: 3-32 Zeichen, nur Buchstaben, Ziffern, _ . -').optional(),
 });
 
@@ -209,10 +212,13 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
   app.patch('/auth/me', { preHandler: requireAuth }, async (req) => {
     const body = meBody.parse(req.body);
     if (body.email !== undefined) {
-      const emailLower = body.email.trim().toLowerCase();
-      const [existing] = await sql`SELECT id FROM users WHERE lower(email) = ${emailLower} AND id != ${req.actor!.id}`;
-      if (existing) throw new HttpError(400, 'E-Mail-Adresse wird bereits verwendet', 'email_taken');
-      await sql`UPDATE users SET email = ${body.email.trim()} WHERE id = ${req.actor!.id}`;
+      const emailVal = body.email?.trim() || null;
+      if (emailVal) {
+        const emailLower = emailVal.toLowerCase();
+        const [existing] = await sql`SELECT id FROM users WHERE lower(email) = ${emailLower} AND id != ${req.actor!.id}`;
+        if (existing) throw new HttpError(400, 'E-Mail-Adresse wird bereits verwendet', 'email_taken');
+      }
+      await sql`UPDATE users SET email = ${emailVal} WHERE id = ${req.actor!.id}`;
     }
     if (body.username !== undefined) {
       const usernameLower = body.username.trim().toLowerCase();
@@ -453,8 +459,8 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
   }
 
   app.post('/auth/totp/setup', { preHandler: requireAuth }, async (req) => {
-    const [u] = await sql<{ email: string }[]>`SELECT email FROM users WHERE id = ${req.actor!.id}`;
-    return twoFactor(() => startTotpSetup(req.actor!.id, u!.email));
+    const [u] = await sql<{ email: string | null; username: string }[]>`SELECT email, username FROM users WHERE id = ${req.actor!.id}`;
+    return twoFactor(() => startTotpSetup(req.actor!.id, u?.email || u?.username || 'user'));
   });
 
   app.post('/auth/totp/enable', { preHandler: requireAuth }, async (req) => {

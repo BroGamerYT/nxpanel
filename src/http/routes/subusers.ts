@@ -39,7 +39,7 @@ export async function subuserRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>('/servers/:id/subusers', { preHandler: requireServer('subuser.read') }, async (req) => {
-    const rows = await sql<{ user_id: string; username: string; email: string; permissions: string[]; created_at: Date }[]>`
+    const rows = await sql<{ user_id: string; username: string; email: string | null; permissions: string[]; created_at: Date }[]>`
       SELECT su.user_id, u.username, u.email, su.permissions, su.created_at
       FROM subusers su JOIN users u ON u.id = su.user_id
       WHERE su.server_id = ${req.target!.server.id} ORDER BY u.username`;

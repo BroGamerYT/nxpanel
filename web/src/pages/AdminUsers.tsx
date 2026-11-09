@@ -31,6 +31,7 @@ export function AdminUsers() {
   const [newAllowedEggs, setNewAllowedEggs] = useState<string[]>([]);
 
   // Formular-Zustände für Bearbeitung
+  const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'moderator' | 'user'>('user');
   const [editSteamId, setEditSteamId] = useState('');
   const [editCanCreate, setEditCanCreate] = useState(false);
@@ -104,6 +105,7 @@ export function AdminUsers() {
 
   function openEdit(u: AdminUserItem) {
     setEditUser(u);
+    setEditEmail(u.email ?? '');
     setEditRole(u.role);
     setEditSteamId(u.steamId ?? '');
     setEditCanCreate(u.canCreateServers);
@@ -116,13 +118,13 @@ export function AdminUsers() {
   }
 
   function handleCreate() {
-    if (!newUsername.trim() || !newEmail.trim()) {
-      setErrorMsg('Bitte Benutzername und E-Mail angeben.');
+    if (!newUsername.trim()) {
+      setErrorMsg('Bitte Benutzernamen angeben.');
       return;
     }
     createMutation.mutate({
       username: newUsername.trim(),
-      email: newEmail.trim(),
+      email: newEmail.trim() || undefined,
       password: newPassword ? newPassword : undefined,
       steamId: newSteamId.trim() || undefined,
       role: newRole,
@@ -136,6 +138,7 @@ export function AdminUsers() {
     patchMutation.mutate({
       id: editUser.id,
       body: {
+        email: editEmail.trim() || null,
         role: editRole,
         steamId: editSteamId.trim() || null,
         canCreateServers: editCanCreate,
@@ -166,7 +169,7 @@ export function AdminUsers() {
   const filteredUsers = allUsers.filter(
     (u) =>
       u.username.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
+      (u.email ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -244,7 +247,9 @@ export function AdminUsers() {
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-dim">{u.email}</div>
+                        <div className="text-xs text-dim">
+                          {u.email || <span className="italic text-dim/60">Keine E-Mail</span>}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -401,11 +406,11 @@ export function AdminUsers() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
-                    E-Mail-Adresse
+                    E-Mail-Adresse (optional)
                   </label>
                   <Input
                     type="email"
-                    placeholder="simon@example.com"
+                    placeholder="simon@example.com (optional)"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
                   />
@@ -537,6 +542,17 @@ export function AdminUsers() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
+                    E-Mail-Adresse (optional)
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder="user@example.com (optional)"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
                     Globale Rolle
                   </label>
                   <Select
@@ -548,26 +564,27 @@ export function AdminUsers() {
                     <option value="admin">Administrator</option>
                   </Select>
                 </div>
-                <div className="space-y-2 pt-2">
-                  <label className="flex items-center gap-2.5 text-sm font-medium text-ink cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editCanCreate}
-                      onChange={(e) => setEditCanCreate(e.target.checked)}
-                      className="size-4 rounded border-seam accent-amber"
-                    />
-                    Darf Server anlegen
-                  </label>
-                  <label className="flex items-center gap-2.5 text-sm font-medium text-red-400 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editSuspended}
-                      onChange={(e) => setEditSuspended(e.target.checked)}
-                      className="size-4 rounded border-seam accent-red-500"
-                    />
-                    Konto sperren (Suspended)
-                  </label>
-                </div>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <label className="flex items-center gap-2.5 text-sm font-medium text-ink cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editCanCreate}
+                    onChange={(e) => setEditCanCreate(e.target.checked)}
+                    className="size-4 rounded border-seam accent-amber"
+                  />
+                  Darf Server anlegen
+                </label>
+                <label className="flex items-center gap-2.5 text-sm font-medium text-red-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editSuspended}
+                    onChange={(e) => setEditSuspended(e.target.checked)}
+                    className="size-4 rounded border-seam accent-red-500"
+                  />
+                  Konto sperren (Suspended)
+                </label>
               </div>
 
               {/* Limits / Quotas */}

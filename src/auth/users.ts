@@ -4,7 +4,7 @@ import type { Actor, Role } from './permissions.js';
 
 export interface UserRow {
   id: string;
-  email: string;
+  email: string | null;
   username: string;
   password_hash: string;
   role: Role;
@@ -30,7 +30,7 @@ export function publicUser(u: Pick<UserRow, 'id' | 'email' | 'username' | 'role'
   return {
     locale: u.locale ?? null,
     id: u.id,
-    email: u.email,
+    email: u.email ?? null,
     username: u.username,
     role: u.role,
     canCreateServers: u.can_create_servers,
@@ -45,7 +45,10 @@ export function publicUser(u: Pick<UserRow, 'id' | 'email' | 'username' | 'role'
 export async function findUserForLogin(login: string): Promise<UserRow | null> {
   const l = login.trim().toLowerCase();
   const [u] = await sql<UserRow[]>`
-    SELECT * FROM users WHERE lower(email) = ${l} OR lower(username) = ${l} LIMIT 1
+    SELECT * FROM users
+    WHERE lower(username) = ${l}
+       OR (email IS NOT NULL AND lower(email) = ${l})
+    LIMIT 1
   `;
   return u ?? null;
 }
@@ -53,7 +56,7 @@ export async function findUserForLogin(login: string): Promise<UserRow | null> {
 export class UserInputError extends Error {}
 
 export interface NewUser {
-  email: string;
+  email?: string | null | undefined;
   username: string;
   password: string;
   role?: Role | undefined;
@@ -67,14 +70,22 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+$/;
 
 export async function createUser(n: NewUser): Promise<UserRow> {
   if (!USERNAME_RE.test(n.username)) throw new UserInputError('Benutzername: 3-32 Zeichen, nur Buchstaben, Ziffern, _ . -');
-  if (!EMAIL_RE.test(n.email)) throw new UserInputError('E-Mail-Adresse ungueltig');
+  const cleanEmail = n.email?.trim() || null;
+  if (cleanEmail && !EMAIL_RE.test(cleanEmail)) throw new UserInputError('E-Mail-Adresse ungueltig');
   const policy = checkPasswordPolicy(n.password);
   if (policy) throw new UserInputError(policy);
 
-  const [dupe] = await sql`
-    SELECT 1 FROM users WHERE lower(email) = ${n.email.toLowerCase()} OR lower(username) = ${n.username.toLowerCase()}
-  `;
-  if (dupe) throw new UserInputError('E-Mail oder Benutzername ist schon vergeben');
+  if (cleanEmail) {
+    const [dupe] = await sql`
+      SELECT 1 FROM users WHERE lower(email) = ${cleanEmail.toLowerCase()} OR lower(username) = ${n.username.toLowerCase()}
+    `;
+    if (dupe) throw new UserInputError('E-Mail oder Benutzername ist schon vergeben');
+  } else {
+    const [dupe] = await sql`
+      SELECT 1 FROM users WHERE lower(username) = ${n.username.toLowerCase()}
+    `;
+    if (dupe) throw new UserInputError('Benutzername ist schon vergeben');
+  }
 
   const cleanSteamId = n.steamId?.trim() || null;
   if (cleanSteamId) {
@@ -85,7 +96,7 @@ export async function createUser(n: NewUser): Promise<UserRow> {
   const hash = await hashPassword(n.password);
   const [u] = await sql<UserRow[]>`
     INSERT INTO users (email, username, password_hash, role, can_create_servers, allowed_eggs, steam_id)
-    VALUES (${n.email.trim()}, ${n.username.trim()}, ${hash}, ${n.role ?? 'user'},
+    VALUES (${cleanEmail}, ${n.username.trim()}, ${hash}, ${n.role ?? 'user'},
             ${n.canCreateServers ?? n.role === 'admin'},
             ${n.allowedEggs ? sql.json(n.allowedEggs) : null},
             ${cleanSteamId})

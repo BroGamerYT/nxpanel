@@ -236,7 +236,7 @@ export function SubusersManager({ serverId, canManage }: Props) {
                         </span>
                         <div>
                           <div>{sub.username}</div>
-                          <div className="text-xs text-dim">{sub.email}</div>
+                          {sub.email ? <div className="text-xs text-dim">{sub.email}</div> : null}
                         </div>
                       </div>
                     </td>
