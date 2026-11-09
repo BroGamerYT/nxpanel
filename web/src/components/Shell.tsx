@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   Server, LogOut, Plus, Network as NetIcon, Users, Search, Shield, History,
-  FlaskConical, Blocks, HelpCircle, FolderTree, Bell, Menu, X, AlertTriangle, CheckCircle2, Info, CheckCheck,
+  FlaskConical, Blocks, HelpCircle, FolderTree, Bell, Menu, X, AlertTriangle, CheckCircle2, Info, CheckCheck, Eye,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
@@ -171,7 +171,7 @@ function VersionLink({ mobile = false }: { mobile?: boolean }) {
  * Rahmen: responsive Seitenleiste (Handy: Drawer, Tablet: kompakte Icon-Leiste, Desktop: volle Breite).
  */
 export function Shell() {
-  const { me, logout } = useAuth();
+  const { me, logout, impersonatorAdmin, stopImpersonation } = useAuth();
   const canCreate = me?.permissions['server.create'];
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -195,8 +195,31 @@ export function Shell() {
   const closeMobile = () => setMobileMenuOpen(false);
 
   return (
-    <div className="min-h-full md:grid md:grid-cols-[68px_1fr] lg:grid-cols-[220px_1fr]">
-      {/* Desktop & Tablet Sidebar */}
+    <div className="min-h-full flex flex-col">
+      {/* Impersonation-Banner wenn aktiv */}
+      {impersonatorAdmin && (
+        <div className="sticky top-0 z-50 bg-amber text-black px-4 py-2.5 text-xs font-semibold flex flex-wrap items-center justify-between gap-3 shadow-lg border-b border-black/20">
+          <div className="flex items-center gap-2">
+            <Eye className="size-4 shrink-0" />
+            <span>
+              Du betrachtest das Panel isoliert als <strong className="underline">{me?.user.username}</strong> ({t(`role.${me?.user.role ?? 'user'}`)}). Alle Instanzen, Server & Rechte entsprechen exakt diesem Nutzer.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await stopImpersonation();
+              window.location.href = '/admin/users';
+            }}
+            className="px-3 py-1 rounded bg-black text-amber hover:bg-black/85 font-bold transition-all text-xs shrink-0 cursor-pointer ml-auto"
+          >
+            Sichtprüfung beenden (Zurück zu {impersonatorAdmin.username}) ✕
+          </button>
+        </div>
+      )}
+
+      <div className="flex-1 md:grid md:grid-cols-[68px_1fr] lg:grid-cols-[220px_1fr]">
+        {/* Desktop & Tablet Sidebar */}
       <aside className="hidden md:flex flex-col border-r border-seam bg-rack px-2 lg:px-3 py-4 md:h-screen md:sticky md:top-0 z-30">
         <div className="flex items-center justify-center lg:justify-between gap-2 px-1 lg:px-2 mb-4">
           <Link to="/" className="flex items-center gap-2.5">
@@ -439,6 +462,7 @@ export function Shell() {
       </main>
       <GlobalTaskProgress />
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      </div>
     </div>
   );
 }

@@ -6,11 +6,13 @@ import { Button, Input, Select, ErrorBox, Spinner } from '../components/ui';
 import type { AdminUserItem, EggSummary } from '../lib/types';
 import {
   Users, UserPlus, Shield, Key, Lock, Unlock, Edit2, Check,
-  X, AlertTriangle, Search, Server, Cpu, HardDrive, Gamepad2
+  X, AlertTriangle, Search, Server, Cpu, HardDrive, Gamepad2, Eye,
 } from 'lucide-react';
+import { useAuth } from '../lib/auth';
 import { UserServerAssignModal } from '../components/UserServerAssignModal';
 
 export function AdminUsers() {
+  const { me, impersonateUser } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -266,6 +268,24 @@ export function AdminUsers() {
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {me?.user.id !== u.id && !u.suspended && (
+                        <Button
+                          variant="quiet"
+                          onClick={async () => {
+                            try {
+                              await impersonateUser(u.id);
+                              window.location.href = '/';
+                            } catch (err: any) {
+                              setErrorMsg(err?.message || 'Fehler beim Starten der Sichtprüfung');
+                            }
+                          }}
+                          className="text-amber hover:text-black hover:bg-amber transition-colors border-amber/30"
+                          title={`Als ${u.username} anmelden (Sichtprüfung / isolierte Instanz)`}
+                        >
+                          <Eye className="size-3.5" />
+                          Als Nutzer ansehen
+                        </Button>
+                      )}
                       <Button variant="primary" onClick={() => setAssignUser(u)} title="Server zuweisen & Rechte anpassen (AMP-Stil)">
                         <Server className="size-3.5" />
                         Server-Rechte
@@ -311,7 +331,22 @@ export function AdminUsers() {
             <div className="p-3 bg-rack-2 border border-seam rounded-lg font-mono text-sm text-amber select-all">
               {generatedPw.pw}
             </div>
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <Button
+                variant="quiet"
+                className="text-amber hover:text-black hover:bg-amber transition-colors border-amber/30 text-xs"
+                onClick={async () => {
+                  const targetUser = usersData?.users.find((u) => u.username === generatedPw.user);
+                  if (targetUser) {
+                    setGeneratedPw(null);
+                    await impersonateUser(targetUser.id);
+                    window.location.href = '/';
+                  }
+                }}
+              >
+                <Eye className="size-3.5" />
+                Direkt als {generatedPw.user} einloggen
+              </Button>
               <Button variant="primary" onClick={() => setGeneratedPw(null)}>
                 Schließen
               </Button>

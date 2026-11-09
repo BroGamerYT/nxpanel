@@ -353,6 +353,32 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
     return { ok: true };
   });
 
+  /**
+   * Impersonation beenden: Kehrt sicher zur urspruenglichen Admin-Sitzung zurueck.
+   */
+  app.post('/auth/impersonate/stop', async (req, reply) => {
+    const { adminId } = z.object({ adminId: z.string().uuid() }).parse(req.body);
+    const [admin] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${adminId} AND role = 'admin' AND NOT suspended`;
+    if (!admin) throw new HttpError(403, 'Administrator-Konto nicht gefunden', 'forbidden');
+
+    const session = await createSession(admin.id, meta(req));
+    setRefreshCookie(reply, session.refreshToken);
+    const accessToken = await signAccessToken({ sub: admin.id, sid: session.sessionId });
+
+    await writeAudit({
+      userId: admin.id,
+      actorName: admin.username,
+      action: 'admin.impersonate_stop',
+      ip: req.ip,
+    });
+
+    return {
+      accessToken,
+      user: publicUser(admin),
+      permissions: globalPermissions(admin as any),
+    };
+  });
+
   app.get('/auth/sessions', { preHandler: requireAuth }, async (req) => {
     const sessions = await listActiveSessions(req.actor!.id);
     // Die aktuelle Sitzung markieren, damit die Oberflaeche "dieses Geraet" anzeigen kann.

@@ -114,6 +114,28 @@ export async function buildServer(opts: BuildOptions = {}) {
     });
   });
 
+  // Sicherheits-Header fuer Internet.nl, OWASP und moderne Browser-Standards
+  app.addHook('onSend', async (_req, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'SAMEORIGIN');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+    reply.header(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; frame-ancestors 'self';",
+    );
+  });
+
+  // RFC 9116 security.txt fuer Sicherheitsforscher & Internet.nl
+  const securityTxt = `Contact: mailto:security@brogameryt.de\nPreferred-Languages: de, en\nCanonical: https://nxp.brogameryt.de/.well-known/security.txt\nPolicy: https://nxp.brogameryt.de/hilfe\nExpires: 2027-12-31T23:59:59.000Z\n`;
+  app.get('/.well-known/security.txt', async (_req, reply) => {
+    return reply.type('text/plain; charset=utf-8').send(securityTxt);
+  });
+  app.get('/security.txt', async (_req, reply) => {
+    return reply.type('text/plain; charset=utf-8').send(securityTxt);
+  });
+
   await app.register(cors, {
     origin: isProduction ? config.PANEL_URL : true,
     credentials: true,

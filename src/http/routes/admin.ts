@@ -7,8 +7,9 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError, requireAdmin } from '../auth.js';
-import { createUser, publicUser, UserInputError } from '../../auth/users.js';
-import { revokeAllUserSessions } from '../../auth/sessions.js';
+import { createUser, publicUser, UserInputError, type UserRow } from '../../auth/users.js';
+import { revokeAllUserSessions, createSession } from '../../auth/sessions.js';
+import { signAccessToken } from '../../auth/tokens.js';
 import { disableTotp } from '../../auth/twofactor.js';
 import { writeAudit } from '../../audit.js';
 import { isServerFlag, SERVER_FLAGS } from '../../auth/permissions.js';
@@ -280,6 +281,39 @@ export async function adminUserRoutes(app: FastifyInstance) {
     await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'user.delete', ip: req.ip, metadata: { target: u.username } });
     await sql`DELETE FROM users WHERE id = ${id}`;
     return { ok: true };
+  });
+
+  /**
+   * Als dieser Benutzer anmelden (Impersonation / Sichtprüfung).
+   * Erlaubt Administratoren, das Panel isoliert aus der Sicht dieses Benutzers
+   * zu betrachten (isolierte Server, Rechte, Quotas).
+   */
+  app.post<{ Params: { id: string } }>('/admin/users/:id/impersonate', { preHandler: requireAdmin() }, async (req) => {
+    const targetId = uuidParam(req.params.id);
+    const [target] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${targetId}`;
+    if (!target) throw new HttpError(404, 'Nutzer nicht gefunden', 'not_found');
+    if (target.suspended) throw new HttpError(403, 'Gesperrte Benutzer können nicht imitiert werden', 'suspended');
+
+    const meta = { ip: req.ip, userAgent: req.headers['user-agent'] };
+    const session = await createSession(target.id, meta);
+    const accessToken = await signAccessToken({ sub: target.id, sid: session.sessionId });
+
+    await writeAudit({
+      userId: req.actor!.id,
+      actorName: req.actor!.username,
+      action: 'admin.impersonate_user',
+      ip: req.ip,
+      metadata: { targetUserId: target.id, targetUsername: target.username },
+    });
+
+    return {
+      accessToken,
+      user: publicUser(target),
+      originalAdmin: {
+        id: req.actor!.id,
+        username: req.actor!.username,
+      },
+    };
   });
 
   /** Server und Zugriffsrechte fuer einen bestimmten Nutzer auflisten (AMP-Stil Zuweisung) */
