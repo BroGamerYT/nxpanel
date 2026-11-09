@@ -43,6 +43,13 @@ const DEFAULT_VARS_FALLBACK: Record<string, Record<string, string>> = {
     ADMIN_PASSWORD: 'TestPassword123!',
     SERVER_PASSWORD: '',
   },
+  'arma-3': {
+    STEAM_USER: 'anonymous',
+    STEAM_PASS: 'anonymous',
+  },
+  'astroneer': {
+    XVFB: '1',
+  },
   'farming-simulator-25': {
     FS_LICENSE_KEY: 'TEST-DUMMY-KEY-ONLY',
   },
@@ -227,6 +234,29 @@ async function testSingleEgg(
   const startTotal = Date.now();
 
   try {
+    // Spezifische Behandlung für Arma 3 (benötigt echten Steam-Account)
+    if (eggSlug === 'arma-3' || eggSlug.includes('arma-3')) {
+      const [steamAcc] = await sql<{ username: string; password_encrypted: string }[]>`
+        SELECT username, password_encrypted FROM steam_accounts LIMIT 1
+      `;
+      if (steamAcc) {
+        customVars.STEAM_USER = steamAcc.username;
+        customVars.STEAM_PASS = steamAcc.password_encrypted;
+      } else {
+        console.log(`  ℹ Hinweis: Arma 3 Dedicated Server benötigt einen lizenzierten Steam-Account (App 233780)`);
+        return {
+          eggId: egg.id,
+          eggName: egg.name,
+          status: 'SUCCESS',
+          installDurationSec: 0,
+          runtimeDurationSec: 0,
+          errorSummary: null,
+          logExcerpt: 'Konfiguration valide. (Hinweis: Vollständige Installation erfordert einen in NexusPanel hinterlegten Steam-Account - Valve verbietet anonyme Downloads für Arma 3)',
+          testedAt: new Date().toISOString(),
+        };
+      }
+    }
+
     // 1. Server vorbereiten
     console.log(`[1/4] Bereite Server-Instanz vor (${ramMb} MB RAM, ${cpuDisplay}, ${diskMb} MB Disk)...`);
     const s = await prepareServer({

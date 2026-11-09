@@ -20,7 +20,7 @@ export type ParserKind = 'properties' | 'yaml' | 'yml' | 'ini' | 'json' | 'xml' 
 
 export interface ConfigFileSpec {
   parser: ParserKind;
-  find: Record<string, string>;
+  find: Record<string, unknown>;
   protected?: string[];
 }
 
@@ -38,7 +38,7 @@ export function patchConfigFile(
 ): PatchResult {
   const values: Record<string, string> = {};
   for (const [key, template] of Object.entries(spec.find)) {
-    values[key] = substitute(template, ctx);
+    values[key] = substitute(typeof template === 'string' ? template : String(template ?? ''), ctx);
   }
 
   switch (spec.parser) {

@@ -17,7 +17,7 @@
     "ghcr.io/parkervcp/steamcmd:proton": "ghcr.io/parkervcp/steamcmd:proton"
   },
   "file_denylist": [],
-  "startup": "PROTON_USE_WINED3D=1 xvfb-run -a proton run ./Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe -nullrhi -nosound",
+  "startup": "proton run ./Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe",
   "tmp": "disk",
   "config": {
     "files": "{\r\n    \"Astro/Saved/Config/WindowsServer/Engine.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"url.Port\": \"{{server.build.default.port}}\",\r\n            \"[SystemSettings].net.AllowEncryption\":\"false\"\r\n        }\r\n    },\r\n    \"Astro/Saved/Config/WindowsServer/AstroServerSettings.ini\": {\r\n        \"parser\": \"ini\",\r\n        \"find\": {\r\n            \"[/Script/Astro.AstroServerSettings].PublicIP\": \"{{env.PUBLIC_IP}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerName\": \"{{env.OWNER_NAME}}\",\r\n            \"[/Script/Astro.AstroServerSettings].OwnerGuid\": \"{{env.OWNER_GUID}}\",\r\n            \"[/Script/Astro.AstroServerSettings].PlayerProperties\": \"(PlayerFirstJoinName=\\\"{{env.OWNER_NAME}}\\\",PlayerCategory=Admin,PlayerGuid=\\\"{{env.OWNER_GUID}}\\\",PlayerRecentJoinName=\\\"\\\")\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerPassword\": \"{{env.SERVER_PWD}}\",\r\n            \"[/Script/Astro.AstroServerSettings].ServerName\": \"{{env.SERVER_NAME}}\"\r\n        }\r\n    }\r\n}",
@@ -33,6 +33,15 @@
     }
   },
   "variables": [
+    {
+      "name": "Xvfb Virtual Display",
+      "description": "Start a virtual X display for headless Proton execution.",
+      "env_variable": "XVFB",
+      "default_value": "1",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "nullable|string"
+    },
     {
       "name": "Public IP",
       "description": "Public IP to connect to the server.",

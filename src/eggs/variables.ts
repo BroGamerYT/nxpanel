@@ -20,7 +20,11 @@ export interface SubstitutionContext {
 
 const PLACEHOLDER = /\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g;
 
-export function substitute(template: string, ctx: SubstitutionContext): string {
+export function substitute(template: string | unknown, ctx: SubstitutionContext): string {
+  if (typeof template !== 'string') {
+    return String(template ?? '');
+  }
+
   const builtin: Record<string, string> = {
     SERVER_MEMORY: String(ctx.ramMb),
     // Fuer Java-Spiele: Heap mit Luft fuer den JVM-Eigenbedarf. Wer den Heap

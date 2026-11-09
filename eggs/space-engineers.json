@@ -18,6 +18,7 @@
   "docker_images": {
     "ghcr.io/parkervcp/yolks:wine_latest": "ghcr.io/parkervcp/yolks:wine_latest"
   },
+  "log_file": "config/SpaceEngineersDedicated.log",
   "file_denylist": [],
   "startup": "export WINEDLLOVERRIDES=\"mscoree=n,b;mshtml=n,b\"; wine /home/container/DedicatedServer64/SpaceEngineersDedicated.exe -path Z:\\\\home\\\\container\\\\config -console -ignorelastsession",
   "config": {
