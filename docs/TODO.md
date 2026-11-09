@@ -11,7 +11,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 
 1.0 gibt es erst, wenn du das Panel für zufriedenstellend erklärst. Vorschlag, was dafür stehen sollte (anpassen, streichen, ergänzen):
 
-- [ ] Alle AMP-Server umgezogen und laufen stabil, VM 101 gelöscht
+- [x] Alle AMP-Server umgezogen und laufen stabil, VM 101 gelöscht (0.24.0)
 - [x] Dateimanager und Backups (Phase 5) (0.12.0)
 - [x] Speicher-Limit wird durchgesetzt (0.14.0)
 - [x] Mitnutzer und Admin-Bereich in der Oberfläche (0.16.2)
@@ -42,10 +42,10 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Speicher-Limit durchsetzen: Server bei Überschreitung nicht mehr starten, Hinweis vorher (0.14.0)
 - [x] Docker aufräumen per Knopf (ungenutzte Images, Build-Cache) (0.14.0)
 - [x] Bandbreiten-Limit je Server (Upload/Download), vom Admin einstellbar
-- [ ] Umzug Minecraft Vanilla und Enshrouded aus AMP (Probelauf)
-- [ ] Umzug ARK (Simon) aus AMP
-- [ ] VM 101 sichern (Storage Box), löschen, alte Weiterleitungen 24000–26000 entfernen
-- [ ] SRV-Eintrag ts.germanylangame.de auf Port 28000
+- [x] Umzug Minecraft Vanilla und Enshrouded aus AMP (Probelauf) (0.24.0)
+- [x] Umzug ARK (Simon) aus AMP (0.24.0)
+- [x] VM 101 sichern (Storage Box), löschen, alte Weiterleitungen 24000–26000 entfernen (0.24.0)
+- [x] SRV-Eintrag ts.germanylangame.de auf Port 28000 (0.24.0)
 
 ## Panel und Community
 
