@@ -8,7 +8,6 @@
  *   npm run dev:server -- remove
  */
 import 'dotenv/config';
-import { randomBytes } from 'node:crypto';
 import { sql, closeDatabase, waitForDatabase } from '../db/index.js';
 import { runMigrations } from '../db/migrate.js';
 import { engine } from '../docker/client.js';

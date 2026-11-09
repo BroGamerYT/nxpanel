@@ -32,6 +32,8 @@ export const resourcesBody = z.object({
   ramMb: z.number().int().min(128).max(1_048_576).optional(),
   cpuPercent: z.number().int().min(10).max(6400).optional(),
   diskMb: z.number().int().min(256).max(10_485_760).optional(),
+  bandwidthDownloadKbps: z.number().int().min(1).max(10_000_000).optional().nullable(),
+  bandwidthUploadKbps: z.number().int().min(1).max(10_000_000).optional().nullable(),
 }).refine((b) => Object.keys(b).length > 0, 'Nichts zu aendern');
 
 export const extraPortBody = z.object({
@@ -156,7 +158,13 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
     const actor = req.actor!;
     if (actor.role !== 'admin' && server.owner_id !== actor.id) throw new HttpError(403, 'Leistung aendern duerfen nur Admin und Besitzer', 'forbidden');
 
-    const next = { ram: body.ramMb ?? server.ram_mb, cpu: body.cpuPercent ?? server.cpu_percent, disk: body.diskMb ?? server.disk_mb };
+    const next = {
+      ram: body.ramMb ?? server.ram_mb,
+      cpu: body.cpuPercent ?? server.cpu_percent,
+      disk: body.diskMb ?? server.disk_mb,
+      bandwidthDownload: body.bandwidthDownloadKbps ?? server.bandwidth_download_kbps,
+      bandwidthUpload: body.bandwidthUploadKbps ?? server.bandwidth_upload_kbps,
+    };
     if (actor.role !== 'admin') {
       const [b] = await sql<{ ram_limit_mb: number; disk_limit_mb: number; ram: number; disk: number }[]>`
         SELECT u.ram_limit_mb, u.disk_limit_mb,
@@ -166,9 +174,9 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
       if (b && b.ram_limit_mb > 0 && b.ram + next.ram > b.ram_limit_mb) throw new HttpError(409, `RAM-Budget reicht nicht: ${b.ram_limit_mb - b.ram} MB frei`, 'limit_ram');
       if (b && b.disk_limit_mb > 0 && b.disk + next.disk > b.disk_limit_mb) throw new HttpError(409, `Speicher-Budget reicht nicht: ${b.disk_limit_mb - b.disk} MB frei`, 'limit_disk');
     }
-    await sql`UPDATE servers SET ram_mb = ${next.ram}, cpu_percent = ${next.cpu}, disk_mb = ${next.disk} WHERE id = ${server.id}`;
+    await sql`UPDATE servers SET ram_mb = ${next.ram}, cpu_percent = ${next.cpu}, disk_mb = ${next.disk}, bandwidth_download_kbps = ${next.bandwidthDownload}, bandwidth_upload_kbps = ${next.bandwidthUpload} WHERE id = ${server.id}`;
     await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: 'server.resources_update', ip: req.ip,
-      metadata: { from: { ram: server.ram_mb, cpu: server.cpu_percent, disk: server.disk_mb }, to: next } });
+      metadata: { from: { ram: server.ram_mb, cpu: server.cpu_percent, disk: server.disk_mb, bandwidthDownload: server.bandwidth_download_kbps, bandwidthUpload: server.bandwidth_upload_kbps }, to: next } });
 
     // RAM/CPU sofort am Container; der Java-Heap haengt aber an einer
     // Umgebungsvariable und folgt erst mit neuem Container -> beim

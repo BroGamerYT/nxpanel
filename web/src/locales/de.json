@@ -395,7 +395,12 @@
     "cores_other": "{count} Kerne",
     "cpu": "CPU",
     "disk": "Speicherplatz",
-    "ram": "Arbeitsspeicher"
+    "ram": "Arbeitsspeicher",
+    "bandwidthDownload": "Download-Limit",
+    "bandwidthUpload": "Upload-Limit",
+    "unlimited": "Unbegrenzt",
+    "kbps": "{kbps} KB/s",
+    "bandwidthHint": "Gilt für Datei-Uploads und -Downloads über den Dateimanager."
   },
   "role": {
     "admin": "Administrator",

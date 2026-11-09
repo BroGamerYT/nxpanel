@@ -4,7 +4,7 @@ import { gameStatus, querySpec } from '../games/status.js';
 import { stopServer } from './lifecycle.js';
 import { engine } from '../docker/client.js';
 import { listPorts } from './repo.js';
-import { startWakeProxy, stopWakeProxy, stopAllWakeProxies } from './wake-proxy.js';
+import { startWakeProxy, stopAllWakeProxies } from './wake-proxy.js';
 import { writeEvent } from '../events.js';
 import { writeAudit } from '../audit.js';
 import { notifyServerStatus } from '../notifications/discord.js';

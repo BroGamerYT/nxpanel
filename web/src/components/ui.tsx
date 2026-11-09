@@ -1,7 +1,9 @@
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { STATUS } from '../lib/status';
 import { t } from '../lib/i18n';
-import type { ServerStatus } from '../lib/types';
+import type { ServerStatus } from './../lib/types';
+import { CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import type { Toast, ToastType } from '../lib/toast';
 
 type Variant = 'primary' | 'quiet' | 'danger';
 
@@ -80,6 +82,58 @@ export function Spinner({ label }: { label?: string }) {
     <div className="flex items-center gap-2 text-dim text-sm" role="status">
       <span className="size-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />
       {label ?? t('common.loading')}
+    </div>
+  );
+}
+
+const TOAST_ICON: Record<ToastType, typeof Info> = {
+  success: CheckCircle2,
+  error: AlertCircle,
+  warn: AlertTriangle,
+  info: Info,
+};
+
+const TOAST_COLOR: Record<ToastType, string> = {
+  success: 'text-led-run border-led-run/50 bg-led-run/10',
+  error: 'text-led-crash border-led-crash/50 bg-led-crash/10',
+  warn: 'text-led-start border-led-start/50 bg-led-start/10',
+  info: 'text-sky-400 border-sky-400/50 bg-sky-400/10',
+};
+
+export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
+  const Icon = TOAST_ICON[toast.type];
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-md border p-3 text-sm ${TOAST_COLOR[toast.type]} animate-in slide-in-from-top duration-200`}
+      role="alert"
+      aria-live="polite"
+    >
+      <Icon className="size-4 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-ink">{toast.title}</div>
+        {toast.message && <div className="text-dim text-xs mt-0.5">{toast.message}</div>}
+      </div>
+      <button
+        type="button"
+        onClick={() => onDismiss(toast.id)}
+        className="p-1 text-dim/60 hover:text-ink rounded transition-colors"
+        aria-label="Benachrichtigung schließen"
+      >
+        <span className="sr-only">Schließen</span>
+        <span className="size-3.5">✕</span>
+      </button>
+    </div>
+  );
+}
+
+export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
+  return (
+    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+      {toasts.map((t) => (
+        <div key={t.id} className="pointer-events-auto w-full max-w-xs">
+          <Toast toast={t} onDismiss={onDismiss} />
+        </div>
+      ))}
     </div>
   );
 }

@@ -59,6 +59,7 @@ export interface NewUser {
   role?: Role | undefined;
   canCreateServers?: boolean | undefined;
   allowedEggs?: string[] | null | undefined;
+  steamId?: string | null | undefined;
 }
 
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
@@ -75,12 +76,19 @@ export async function createUser(n: NewUser): Promise<UserRow> {
   `;
   if (dupe) throw new UserInputError('E-Mail oder Benutzername ist schon vergeben');
 
+  const cleanSteamId = n.steamId?.trim() || null;
+  if (cleanSteamId) {
+    const [existingSteam] = await sql`SELECT 1 FROM users WHERE steam_id = ${cleanSteamId}`;
+    if (existingSteam) throw new UserInputError('Diese Steam-ID ist bereits mit einem anderen Benutzer verknüpft');
+  }
+
   const hash = await hashPassword(n.password);
   const [u] = await sql<UserRow[]>`
-    INSERT INTO users (email, username, password_hash, role, can_create_servers, allowed_eggs)
+    INSERT INTO users (email, username, password_hash, role, can_create_servers, allowed_eggs, steam_id)
     VALUES (${n.email.trim()}, ${n.username.trim()}, ${hash}, ${n.role ?? 'user'},
             ${n.canCreateServers ?? n.role === 'admin'},
-            ${n.allowedEggs ? sql.json(n.allowedEggs) : null})
+            ${n.allowedEggs ? sql.json(n.allowedEggs) : null},
+            ${cleanSteamId})
     RETURNING *
   `;
   return u!;

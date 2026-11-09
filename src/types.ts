@@ -26,6 +26,8 @@ export interface ServerRecord {
   cpu_percent: number;
   disk_mb: number;
   io_weight: number;
+  bandwidth_download_kbps: number | null;
+  bandwidth_upload_kbps: number | null;
   variables: Record<string, string>;
   auto_restart: boolean;
   auto_sleep_minutes: number;

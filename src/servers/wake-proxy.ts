@@ -184,7 +184,7 @@ export function stopWakeProxy(serverId: string): void {
 }
 
 export function stopAllWakeProxies(): void {
-  for (const [id, entry] of activeProxies.entries()) {
+  for (const [_id, entry] of activeProxies.entries()) {
     try {
       entry.server.close();
     } catch {}

@@ -288,15 +288,25 @@ export function Login() {
             {(() => {
               const p = new URLSearchParams(window.location.search);
               const err = p.get('error');
+              const steamId = p.get('steamId');
+              const steamName = p.get('name');
               if (err === 'steam_not_linked') {
                 return (
-                  <div className="p-3 rounded-lg bg-amber/15 border border-amber/40 text-amber text-xs space-y-1">
-                    <div className="font-semibold flex items-center gap-1.5">
-                      <AlertCircle className="size-4 shrink-0" />
-                      Steam-Konto nicht verknüpft
+                  <div className="p-3.5 rounded-lg bg-amber/15 border border-amber/40 text-amber text-xs space-y-2">
+                    <div className="font-semibold flex items-center gap-1.5 text-ink">
+                      <AlertCircle className="size-4 text-amber shrink-0" />
+                      Zugriff nur für eingeladene Benutzer
                     </div>
-                    <p className="text-[11px] leading-relaxed text-amber/90">
-                      Dieses Steam-Konto ist noch keinem NexusPanel-Benutzer zugeordnet. Melde dich bitte mit deinem Passwort an und verknüpfe Steam in deinen Kontoeinstellungen.
+                    <p className="text-[11px] leading-relaxed text-dim">
+                      Dieses Steam-Konto {steamName ? <strong>({steamName})</strong> : ''} ist keinem Benutzerkonto zugewiesen.
+                    </p>
+                    {steamId && (
+                      <div className="p-2 rounded bg-rack-2/80 border border-seam text-[11px] font-mono flex items-center justify-between text-ink select-all">
+                        <span>Steam-ID64: {steamId}</span>
+                      </div>
+                    )}
+                    <p className="text-[11px] leading-relaxed text-dim">
+                      Bitte gib diese Steam-ID64 deinem Administrator. Sobald er dich angelegt oder deine ID freigeschaltet hat, kannst du dich sofort mit 1 Klick anmelden.
                     </p>
                   </div>
                 );

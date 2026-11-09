@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, basename, extname } from 'node:path';
+import { join } from 'node:path';
 import { APP_ROOT } from './version.js';
 
 export interface DocMeta {

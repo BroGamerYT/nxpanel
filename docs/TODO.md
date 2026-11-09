@@ -41,7 +41,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Netzwerk je Server als Verlauf (0.14.0)
 - [x] Speicher-Limit durchsetzen: Server bei Überschreitung nicht mehr starten, Hinweis vorher (0.14.0)
 - [x] Docker aufräumen per Knopf (ungenutzte Images, Build-Cache) (0.14.0)
-- [ ] Bandbreiten-Limit je Server (Upload/Download), vom Admin einstellbar
+- [x] Bandbreiten-Limit je Server (Upload/Download), vom Admin einstellbar
 - [ ] Umzug Minecraft Vanilla und Enshrouded aus AMP (Probelauf)
 - [ ] Umzug ARK (Simon) aus AMP
 - [ ] VM 101 sichern (Storage Box), löschen, alte Weiterleitungen 24000–26000 entfernen

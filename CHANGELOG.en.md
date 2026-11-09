@@ -18,6 +18,11 @@ Version format (as parsed by the panel):
 
 Until 0.4.x, intermediate revisions were deployed without individual version numbers; they are cataloged here retrospectively based on the development log. Starting with 0.5.0, every deployment receives its own version number.
 
+## [0.24.0] - 2026-11-09 – Per-server bandwidth limits
+
+### Added
+- **Bandwidth limit per server (upload/download)**: Admins and owners can now set a per-server bandwidth limit in KB/s for file downloads and uploads (e.g. via `PATCH /api/v1/servers/:id/resources` with `bandwidthDownloadKbps` and `bandwidthUploadKbps`, or newly via the UI under „Settings → Resources“). `null` means unlimited. Throttling is applied at the application layer via a token-bucket stream during file transfers.
+
 ## [0.22.1] - 2026-11-07
 
 ### Changed

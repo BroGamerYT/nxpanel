@@ -28,6 +28,8 @@ export interface CreateServerInput {
   variables?: Record<string, string>;
   autoRestart?: boolean;
   autoSleepMinutes?: number;
+  bandwidthDownloadKbps?: number | null;
+  bandwidthUploadKbps?: number | null;
   actorId?: string | null;
   steamAccountId?: string;
 }
@@ -114,10 +116,12 @@ export async function prepareServer(input: CreateServerInput): Promise<ServerRec
 
   const [created] = await sql<{ id: string }[]>`
     INSERT INTO servers (short_id, owner_id, node_id, egg_id, name, docker_image, startup,
-                         status, ram_mb, disk_mb, cpu_percent, variables, auto_restart, auto_sleep_minutes)
+                         status, ram_mb, disk_mb, cpu_percent, variables, auto_restart, auto_sleep_minutes,
+                         bandwidth_download_kbps, bandwidth_upload_kbps)
     VALUES (${shortId}, ${input.ownerId}, ${input.nodeId}, ${input.eggId}, ${input.name},
             ${image}, ${egg.startup}, 'installing', ${input.ramMb}, ${input.diskMb},
-            ${input.cpuPercent ?? 100}, ${sql.json(values)}, ${input.autoRestart ?? true}, ${input.autoSleepMinutes ?? 0})
+            ${input.cpuPercent ?? 100}, ${sql.json(values)}, ${input.autoRestart ?? true}, ${input.autoSleepMinutes ?? 0},
+            ${input.bandwidthDownloadKbps ?? null}, ${input.bandwidthUploadKbps ?? null})
     RETURNING id
   `;
   const serverId = created!.id;

@@ -395,7 +395,12 @@
     "cores_other": "{count} cores",
     "cpu": "CPU",
     "disk": "Disk space",
-    "ram": "Memory"
+    "ram": "Memory",
+    "bandwidthDownload": "Download limit",
+    "bandwidthUpload": "Upload limit",
+    "unlimited": "Unlimited",
+    "kbps": "{kbps} KB/s",
+    "bandwidthHint": "Applies to file uploads and downloads via the file manager."
   },
   "role": {
     "admin": "Administrator",

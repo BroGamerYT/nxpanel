@@ -363,7 +363,7 @@ export function normalizeForeignEgg(input: RawEgg): { raw: RawEgg; notes: string
       const def = (v.default_value ?? '').toString().trim();
       const isReq = /(^|\|)required(\||$)/.test(rules);
       const isPw = PASSWORD_VAR.test(env) && !USER_ACCOUNT_VARS.has(env);
-      let next = { ...v };
+      const next = { ...v };
       if (isPw && next.secret === undefined) {
         next.secret = true;
       }

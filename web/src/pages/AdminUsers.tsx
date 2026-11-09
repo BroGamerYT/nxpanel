@@ -25,12 +25,14 @@ export function AdminUsers() {
   const [newUsername, setNewUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newSteamId, setNewSteamId] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'moderator' | 'user'>('user');
   const [newCanCreate, setNewCanCreate] = useState(true);
   const [newAllowedEggs, setNewAllowedEggs] = useState<string[]>([]);
 
   // Formular-Zustände für Bearbeitung
   const [editRole, setEditRole] = useState<'admin' | 'moderator' | 'user'>('user');
+  const [editSteamId, setEditSteamId] = useState('');
   const [editCanCreate, setEditCanCreate] = useState(false);
   const [editSuspended, setEditSuspended] = useState(false);
   const [editServerLimit, setEditServerLimit] = useState(0);
@@ -93,6 +95,7 @@ export function AdminUsers() {
     setNewUsername('');
     setNewEmail('');
     setNewPassword('');
+    setNewSteamId('');
     setNewRole('user');
     setNewCanCreate(true);
     setNewAllowedEggs([]);
@@ -102,6 +105,7 @@ export function AdminUsers() {
   function openEdit(u: AdminUserItem) {
     setEditUser(u);
     setEditRole(u.role);
+    setEditSteamId(u.steamId ?? '');
     setEditCanCreate(u.canCreateServers);
     setEditSuspended(u.suspended);
     setEditServerLimit(u.serverLimit);
@@ -120,6 +124,7 @@ export function AdminUsers() {
       username: newUsername.trim(),
       email: newEmail.trim(),
       password: newPassword ? newPassword : undefined,
+      steamId: newSteamId.trim() || undefined,
       role: newRole,
       canCreateServers: newCanCreate,
       allowedEggs: newAllowedEggs.length > 0 ? newAllowedEggs : null,
@@ -132,6 +137,7 @@ export function AdminUsers() {
       id: editUser.id,
       body: {
         role: editRole,
+        steamId: editSteamId.trim() || null,
         canCreateServers: editCanCreate,
         suspended: editSuspended,
         serverLimit: Number(editServerLimit),
@@ -227,7 +233,17 @@ export function AdminUsers() {
                         {u.username.slice(0, 2).toUpperCase()}
                       </span>
                       <div>
-                        <div>{u.username}</div>
+                        <div className="flex items-center gap-2">
+                          <span>{u.username}</span>
+                          {u.steamId && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] bg-[#171a21] text-[#66c0f4] border border-[#66c0f4]/30"
+                              title={`Steam verknüpft: ${u.steamName ? `${u.steamName} (${u.steamId})` : u.steamId}`}
+                            >
+                              <span className="font-semibold">Steam:</span> {u.steamName || u.steamId}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-dim">{u.email}</div>
                       </div>
                     </div>
@@ -396,17 +412,32 @@ export function AdminUsers() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
-                  Passwort (leer lassen für automatisches Passwort)
-                </label>
-                <Input
-                  type="password"
-                  placeholder="Optionales Initialpasswort"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
+                    Passwort (leer = autom. generieren)
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Optionales Initialpasswort"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
+                    Steam-ID64 (optional)
+                  </label>
+                  <Input
+                    placeholder="z. B. 76561198000000000"
+                    value={newSteamId}
+                    onChange={(e) => setNewSteamId(e.target.value)}
+                  />
+                </div>
               </div>
+              <p className="text-[11px] text-dim -mt-2">
+                Hinterlege eine Steam-ID64, damit sich der Nutzer sofort ohne Passwort mit dem &quot;Mit Steam anmelden&quot;-Button einloggen kann.
+              </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -581,6 +612,24 @@ export function AdminUsers() {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Steam-Verknüpfung */}
+              <div className="space-y-1.5 pt-3 border-t border-seam">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-dim flex items-center justify-between">
+                  <span>Steam-ID64 (1-Klick Login)</span>
+                  {editUser.steamName && (
+                    <span className="text-xs text-[#66c0f4]">Steam-Name: {editUser.steamName}</span>
+                  )}
+                </label>
+                <Input
+                  placeholder="z. B. 76561198000000000 (leer lassen zum Entfernen)"
+                  value={editSteamId}
+                  onChange={(e) => setEditSteamId(e.target.value)}
+                />
+                <p className="text-[11px] text-dim">
+                  Hinterlege die 17-stellige SteamID64. Damit kann sich der Nutzer passwortlos über Steam anmelden.
+                </p>
               </div>
 
               {/* Erlaubte Spiele (Egg Whitelist) */}

@@ -5,6 +5,12 @@ Zeiten in Europe/Berlin.
 
 ---
 
+## 2026-11-09
+
+| Zeit | Was | Dateien |
+| --- | --- | --- |
+| 15:30 | **Bandbreiten-Limit in der Oberfläche (0.24.0)**: Neue Select-Felder für Download- und Upload-Bandbreite unter „Einstellungen → Ressourcen“ auf der Server-Seite. Werte in KB/s wählbar, „Unbegrenzt“ deaktiviert das Limit. Übersetzung in de.json und en.json ergänzt. | `web/src/components/ServerSettings.tsx`, `web/src/lib/types.ts`, `web/src/locales/de.json`, `web/src/locales/en.json` |
+
 ## 2026-11-08
 
 | Zeit | Was | Dateien |

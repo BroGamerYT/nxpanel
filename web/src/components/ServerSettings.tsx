@@ -368,14 +368,17 @@ function Resources({ detail, stopped }: { detail: ServerDetail; stopped: boolean
   const [ram, setRam] = useState(server.limits.ramMb);
   const [cpu, setCpu] = useState(server.limits.cpuPercent);
   const [disk, setDisk] = useState(server.limits.diskMb);
+  const [bwDown, setBwDown] = useState<number | null>(server.limits.bandwidthDownloadKbps ?? null);
+  const [bwUp, setBwUp] = useState<number | null>(server.limits.bandwidthUploadKbps ?? null);
   const [note, setNote] = useState<string | null>(null);
   const ramOptions = useMemo(() => [...new Set([1024, 2048, 3072, 4096, 4608, 6144, 8192, 10240, 12288, 16384, 24576, 32768, server.limits.ramMb])].sort((a, b) => a - b), [server.limits.ramMb]);
   const diskOptions = useMemo(() => [...new Set([5120, 10240, 20480, 40960, 61440, 102400, 204800, server.limits.diskMb])].sort((a, b) => a - b), [server.limits.diskMb]);
   const cpuOptions = useMemo(() => [...new Set([100, 200, 300, 400, 600, 800, server.limits.cpuPercent])].sort((a, b) => a - b), [server.limits.cpuPercent]);
-  const dirty = ram !== server.limits.ramMb || cpu !== server.limits.cpuPercent || disk !== server.limits.diskMb;
+  const bwOptions = useMemo(() => [null, 512, 1024, 2048, 4096, 8192, 16384, 32768], []);
+  const dirty = ram !== server.limits.ramMb || cpu !== server.limits.cpuPercent || disk !== server.limits.diskMb || bwDown !== server.limits.bandwidthDownloadKbps || bwUp !== server.limits.bandwidthUploadKbps;
 
   const save = useMutation({
-    mutationFn: () => api<{ restartNeeded: boolean }>(`/servers/${server.id}/resources`, { method: 'PATCH', body: { ramMb: ram, cpuPercent: cpu, diskMb: disk } }),
+    mutationFn: () => api<{ restartNeeded: boolean }>(`/servers/${server.id}/resources`, { method: 'PATCH', body: { ramMb: ram, cpuPercent: cpu, diskMb: disk, bandwidthDownloadKbps: bwDown, bandwidthUploadKbps: bwUp } }),
     onSuccess: (r) => { invalidate(); setNote(r.restartNeeded ? t('settings.savedRestart') : t('common.savedDot')); },
   });
 
@@ -397,6 +400,23 @@ function Resources({ detail, stopped }: { detail: ServerDetail; stopped: boolean
             {diskOptions.map((d) => <option key={d} value={d}>{formatMb(d)}</option>)}
           </Select>
         </Field>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-4 pt-3">
+        <Field label={t('res.bandwidthDownload')} htmlFor="bwDown">
+          <Select id="bwDown" value={bwDown === null ? '' : String(bwDown)} onChange={(e) => setBwDown(e.target.value === '' ? null : Number(e.target.value))}>
+            <option value="">{t('res.unlimited')}</option>
+            {bwOptions.filter((b): b is number => b !== null).map((b) => <option key={b} value={String(b)}>{t('res.kbps', { kbps: b })}</option>)}
+          </Select>
+        </Field>
+        <Field label={t('res.bandwidthUpload')} htmlFor="bwUp">
+          <Select id="bwUp" value={bwUp === null ? '' : String(bwUp)} onChange={(e) => setBwUp(e.target.value === '' ? null : Number(e.target.value))}>
+            <option value="">{t('res.unlimited')}</option>
+            {bwOptions.filter((b): b is number => b !== null).map((b) => <option key={b} value={String(b)}>{t('res.kbps', { kbps: b })}</option>)}
+          </Select>
+        </Field>
+        <div className="flex items-end col-span-2">
+          <p className="text-xs text-dim">{t('res.bandwidthHint')}</p>
+        </div>
       </div>
       {save.error && <ErrorBox>{(save.error as Error).message}</ErrorBox>}
       {note && <p className="text-sm text-led-run" role="status">{note}</p>}

@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import type { WebSocket } from '@fastify/websocket';
 import { randomBytes } from 'node:crypto';
 import { sql } from '../../db/index.js';
 import { log } from '../../log.js';

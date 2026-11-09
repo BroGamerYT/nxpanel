@@ -10,7 +10,7 @@ import {
   rm,
   realpath,
 } from 'node:fs/promises';
-import { resolve, normalize, dirname, basename, join, relative, sep } from 'node:path';
+import { resolve, dirname, basename, join, relative, sep } from 'node:path';
 import { spawn } from 'node:child_process';
 import yauzl from 'yauzl';
 import yazl from 'yazl';
@@ -274,7 +274,7 @@ export async function compressToZip(
   sourceRels: string[],
   archiveRelPath: string
 ): Promise<{ path: string; size: number }> {
-  const { root } = await safePath(shortId, '');
+  const { root: _root } = await safePath(shortId, '');
   const { fullPath: archiveFull, relPath: archiveRel } = await safePath(shortId, archiveRelPath);
 
   if (existsSync(archiveFull)) {
@@ -353,7 +353,7 @@ export async function decompressArchive(
   throw new Error(`Nicht unterstütztes Archivformat: ${archiveRelPath}`);
 }
 
-async function extractZip(archivePath: string, targetDir: string, rootDir: string): Promise<{ filesCount: number }> {
+async function extractZip(archivePath: string, targetDir: string, _rootDir: string): Promise<{ filesCount: number }> {
   const zip = await new Promise<yauzl.ZipFile>((res, rej) => {
     yauzl.open(archivePath, { lazyEntries: true, autoClose: true, decodeStrings: true }, (err, z) =>
       err || !z ? rej(err ?? new Error('Zip konnte nicht geöffnet werden')) : res(z)

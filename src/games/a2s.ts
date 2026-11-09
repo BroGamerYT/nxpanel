@@ -17,7 +17,7 @@ function request(host: string, port: number, build: (challenge: Buffer | null) =
     const sock = createSocket('udp4');
     const started = Date.now();
     let tries = 0;
-    const done = (err: Error | null, r?: { data: Buffer; ms: number }) => { clearTimeout(timer); sock.close(); err ? reject(err) : resolve(r!); };
+    const done = (err: Error | null, r?: { data: Buffer; ms: number }) => { clearTimeout(timer); sock.close(); if (err) reject(err); else resolve(r!); };
     const timer = setTimeout(() => done(new Error('Keine Antwort auf die Serverabfrage')), timeoutMs);
     sock.on('error', (e) => done(e));
     sock.on('message', (msg) => {
@@ -40,11 +40,11 @@ export async function a2sInfo(host: string, port: number, timeoutMs = 3000): Pro
   const q = Buffer.concat([HEAD, Buffer.from('TSource Engine Query\0', 'latin1')]);
   const { data, ms } = await request(host, port, (c) => (c ? Buffer.concat([q, c]) : q), 0x49, timeoutMs);
   let p = 1; // Protokoll-Byte
-  let name: string, map: string, game: string;
-  [name, p] = cstr(data, p);
-  [map, p] = cstr(data, p);
-  [, p] = cstr(data, p); // folder
-  [game, p] = cstr(data, p);
+  const [name, p2] = cstr(data, p);
+  const [map, p3] = cstr(data, p2);
+  const [, p4] = cstr(data, p3); // folder
+  const [game, p5] = cstr(data, p4);
+  p = p5;
   p += 2; // App-Id
   const players = data[p] ?? 0, maxPlayers = data[p + 1] ?? 0;
   p += 2 + 1 + 1 + 1 + 1 + 1; // bots, server type, environment, visibility, vac

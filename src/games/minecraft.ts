@@ -58,7 +58,7 @@ export function serverListPing(host: string, port: number, timeoutMs = 4000): Pr
     let buf = Buffer.alloc(0);
     let status: Omit<SlpResult, 'latencyMs'> | null = null;
     let sentAt = 0;
-    const done = (err: Error | null, r?: SlpResult) => { clearTimeout(timer); sock.destroy(); err ? reject(err) : resolve(r!); };
+    const done = (err: Error | null, r?: SlpResult) => { clearTimeout(timer); sock.destroy(); if (err) reject(err); else resolve(r!); };
     const timer = setTimeout(() => done(new Error('Keine Antwort')), timeoutMs);
     sock.on('error', (e) => done(e));
     sock.connect(port, host, () => {

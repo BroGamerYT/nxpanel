@@ -21,6 +21,11 @@ Bis 0.4.x wurden Nachträge ohne eigene Nummer ausgespielt; sie sind hier
 nachträglich anhand des Entwicklungslogs eingeordnet. Ab 0.5.0 bekommt
 jede Auslieferung eine eigene Nummer.
 
+## [0.24.0] - 2026-11-09 – Bandbreiten-Limit pro Server
+
+### Hinzugefügt
+- **Bandbreiten-Limit je Server (Upload/Download)**: Admins und Besitzer können jetzt pro Server ein Bandbreiten-Limit in KB/s für Datei-Downloads und -Uploads festlegen (z. B. über `PATCH /api/v1/servers/:id/resources` mit `bandwidthDownloadKbps` und `bandwidthUploadKbps` oder neu über die Oberfläche unter „Einstellungen → Ressourcen“). `null` bedeutet unbegrenzt. Die Drosselung erfolgt applikationsseitig über einen Token-Bucket-Stream beim Datei-Transfer.
+
 ## [0.23.0] - 2026-11-08 – Online-Egg-Suche, Auto-Start-Limit, Mod-Konfigurator & TODO-Paket
 
 ### Hinzugefügt

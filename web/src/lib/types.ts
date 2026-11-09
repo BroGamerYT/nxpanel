@@ -53,7 +53,7 @@ export interface ServerDetail {
     id: string; shortId: string; name: string; status: ServerStatus; ownerId: string;
     startedAt?: string | null;
     egg: { id: string; name: string; consoleMode: 'full' | 'readonly' | 'none'; webInterface: unknown; hints?: ConsoleHint[]; gameKind?: string | null } | null;
-    limits: { ramMb: number; swapMb: number; cpuPercent: number; diskMb: number };
+    limits: { ramMb: number; swapMb: number; cpuPercent: number; diskMb: number; bandwidthDownloadKbps: number | null; bandwidthUploadKbps: number | null };
     diskUsedMb?: number | null;
     containerLayerMb?: number | null;
     autoRestart: boolean; crashCount?: number; unstartable?: boolean; autoSleepMinutes?: number; suspended: boolean; publicHost: string | null;
@@ -224,6 +224,8 @@ export interface AdminUserItem {
   ramLimitMb: number;
   diskLimitMb: number;
   allowedEggs: string[] | null;
+  steamId: string | null;
+  steamName: string | null;
   createdAt: string;
   lastLoginAt: string | null;
   servers: number;

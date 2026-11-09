@@ -17,6 +17,7 @@ import {
   safePath,
   FilePathSecurityError,
 } from '../../servers/files.js';
+import { applyDownloadLimit, applyUploadLimit } from '../../servers/bandwidth.js';
 import {
   saveRevision,
   listRevisions,
@@ -204,7 +205,8 @@ export async function fileRoutes(app: FastifyInstance) {
         reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         reply.header('Content-Type', 'application/octet-stream');
         reply.header('Content-Length', size);
-        return reply.send(stream);
+        const downloadStream = applyDownloadLimit(stream, server.bandwidth_download_kbps);
+        return reply.send(downloadStream);
       } catch (err) {
         wrapFileErrors(err);
       }
@@ -233,7 +235,8 @@ export async function fileRoutes(app: FastifyInstance) {
       const { fullPath } = await safePath(server.short_id, destRel);
 
       try {
-        await pipeline(part.file, createWriteStream(fullPath));
+        const uploadStream = applyUploadLimit(part.file, server.bandwidth_upload_kbps);
+        await pipeline(uploadStream, createWriteStream(fullPath));
         if (part.file.truncated) {
           await unlink(fullPath).catch(() => {});
           throw new HttpError(413, 'Datei überschreitet Größenlimit', 'too_large');

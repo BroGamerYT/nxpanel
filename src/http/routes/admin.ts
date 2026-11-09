@@ -3,7 +3,6 @@ import { networkCheck } from '../../netcheck.js';
 import { z } from 'zod';
 import { sql } from '../../db/index.js';
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError, requireAdmin } from '../auth.js';
@@ -180,6 +179,7 @@ export const newUserBody = z.object({
   username: z.string().min(3).max(32),
   email: z.string().email().max(254),
   password: z.string().max(256).optional(),
+  steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
   role: z.enum(['admin', 'moderator', 'user']).default('user'),
   canCreateServers: z.boolean().default(false),
   allowedEggs: z.array(z.string().min(1)).nullable().optional(),
@@ -187,6 +187,7 @@ export const newUserBody = z.object({
 
 export const patchUserBody = z.object({
   role: z.enum(['admin', 'moderator', 'user']).optional(),
+  steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
   canCreateServers: z.boolean().optional(),
   suspended: z.boolean().optional(),
   serverLimit: z.number().int().min(0).max(10_000).optional(),
@@ -199,6 +200,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
   app.get('/admin/users', { preHandler: requireAdmin() }, async () => {
     const rows = await sql<Record<string, unknown>[]>`
       SELECT u.id, u.username, u.email, u.role, u.can_create_servers AS "canCreateServers", u.suspended,
+             u.steam_id AS "steamId", u.steam_name AS "steamName",
              u.totp_enabled AS "totpEnabled", u.server_limit AS "serverLimit", u.ram_limit_mb AS "ramLimitMb",
              u.disk_limit_mb AS "diskLimitMb", u.allowed_eggs AS "allowedEggs", u.created_at AS "createdAt", u.last_login_at AS "lastLoginAt",
              (SELECT count(*)::int FROM servers s WHERE s.owner_id = u.id) AS servers,
@@ -220,13 +222,14 @@ export async function adminUserRoutes(app: FastifyInstance) {
         role: body.role,
         canCreateServers: body.canCreateServers,
         allowedEggs: body.allowedEggs,
+        steamId: body.steamId,
       });
     } catch (err) {
       if (err instanceof UserInputError) throw new HttpError(400, err.message, 'invalid_input');
       throw err;
     }
     await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'user.create', ip: req.ip,
-      metadata: { username: u.username, role: u.role } });
+      metadata: { username: u.username, role: u.role, steamId: body.steamId } });
     reply.code(201);
     return { user: publicUser(u), ...(generated ? { password } : {}) };
   });
@@ -244,9 +247,15 @@ export async function adminUserRoutes(app: FastifyInstance) {
       if (n!.n === 0) throw new HttpError(409, 'Das ist der letzte Admin - erst einen anderen ernennen', 'last_admin');
     }
 
+    if (body.steamId) {
+      const [dup] = await sql`SELECT 1 FROM users WHERE steam_id = ${body.steamId} AND id != ${id}`;
+      if (dup) throw new HttpError(400, 'Diese Steam-ID ist bereits einem anderen Benutzer zugewiesen', 'steam_id_taken');
+    }
+
     await sql`
       UPDATE users SET
         role = ${body.role ?? sql`role`},
+        steam_id = ${body.steamId !== undefined ? (body.steamId?.trim() || null) : sql`steam_id`},
         can_create_servers = ${body.canCreateServers ?? sql`can_create_servers`},
         suspended = ${body.suspended ?? sql`suspended`},
         server_limit = ${body.serverLimit ?? sql`server_limit`},
