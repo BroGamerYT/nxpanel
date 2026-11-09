@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
   Server, LogOut, Plus, Network as NetIcon, Users, Search, Shield, History,
@@ -172,10 +172,28 @@ function VersionLink({ mobile = false }: { mobile?: boolean }) {
  */
 export function Shell() {
   const nav = useNavigate();
+  const loc = useLocation();
   const { me, logout, impersonatorAdmin, stopImpersonation } = useAuth();
   const canCreate = me?.permissions['server.create'];
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Live-Präsenz: meldet automatisch alle 20s und bei Routenwechsel, wo sich der Nutzer aufhaelt
+  useEffect(() => {
+    if (!me) return;
+    const sendPing = () => {
+      const match = loc.pathname.match(/^\/server\/([0-9a-f-]{36})/i);
+      const serverId = match ? match[1] : undefined;
+      void api('/presence/ping', {
+        method: 'POST',
+        body: { path: loc.pathname, serverId },
+      }).catch(() => {});
+    };
+
+    sendPing();
+    const interval = setInterval(sendPing, 20_000);
+    return () => clearInterval(interval);
+  }, [loc.pathname, me]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -198,7 +216,7 @@ export function Shell() {
   return (
     <div className="min-h-full flex flex-col">
       {/* Impersonation-Banner wenn aktiv */}
-      {impersonatorAdmin && me && me.user.id !== impersonatorAdmin.id && (
+      {impersonatorAdmin && me && me.user.id !== impersonatorAdmin.id && me.user.username !== impersonatorAdmin.username && (
         <div className="sticky top-0 z-50 bg-amber text-black px-4 py-2.5 text-xs font-semibold flex flex-wrap items-center justify-between gap-3 shadow-lg border-b border-black/20">
           <div className="flex items-center gap-2">
             <Eye className="size-4 shrink-0" />

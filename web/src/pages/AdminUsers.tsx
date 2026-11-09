@@ -66,6 +66,7 @@ export function AdminUsers() {
   const { data: usersData, isLoading } = useQuery<{ users: AdminUserItem[] }>({
     queryKey: ['admin-users'],
     queryFn: () => api('/admin/users'),
+    refetchInterval: 10_000,
   });
 
   const { data: eggsData } = useQuery<{ eggs: EggSummary[] }>({
@@ -300,13 +301,27 @@ export function AdminUsers() {
               return (
                 <tr key={u.id} className="hover:bg-rack-2/30 transition-colors">
                   <td className="px-5 py-4">
-                    <div className="font-medium text-ink flex items-center gap-2.5">
-                      <span className="size-8 rounded-full bg-amber/20 text-amber font-semibold text-xs flex items-center justify-center">
-                        {u.username.slice(0, 2).toUpperCase()}
-                      </span>
-                      <div>
+                    <div className="font-medium text-ink flex items-center gap-3">
+                      <div className="relative shrink-0">
+                        <span className="size-9 rounded-full bg-amber/20 text-amber font-semibold text-xs flex items-center justify-center">
+                          {u.username.slice(0, 2).toUpperCase()}
+                        </span>
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-rack ${
+                            u.online ? 'bg-emerald-500' : 'bg-dim/40'
+                          }`}
+                          title={u.online ? 'Online' : 'Offline'}
+                        />
+                      </div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span>{u.username}</span>
+                          <span className="truncate">{u.username}</span>
+                          {u.online && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Online
+                            </span>
+                          )}
                           {u.steamId && (
                             <span
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] bg-[#171a21] text-[#66c0f4] border border-[#66c0f4]/30"
@@ -316,9 +331,34 @@ export function AdminUsers() {
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-dim">
+                        <div className="text-xs text-dim truncate">
                           {u.email || <span className="italic text-dim/60">Keine E-Mail</span>}
                         </div>
+                        {u.online && u.presence ? (
+                          <div className="flex items-center gap-1 mt-1 text-[11px] text-amber">
+                            <span className="text-dim">Ort:</span>
+                            {u.presence.serverId ? (
+                              <button
+                                type="button"
+                                onClick={() => nav(u.presence!.path)}
+                                className="font-medium underline hover:text-white transition-colors"
+                                title="Zu dieser Instanz springen"
+                              >
+                                {u.presence.locationLabel} ↗
+                              </button>
+                            ) : (
+                              <span className="font-medium text-ink">{u.presence.locationLabel}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-dim/60 mt-0.5">
+                            {u.lastSeenAt
+                              ? `Zuletzt aktiv: ${new Date(u.lastSeenAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                              : u.lastLoginAt
+                              ? `Letzter Login: ${new Date(u.lastLoginAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                              : 'Noch nie angemeldet'}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>

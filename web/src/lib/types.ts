@@ -218,6 +218,14 @@ export interface PermissionsCatalog {
   presets: Record<string, { label: string; flags: string[] }>;
 }
 
+export interface UserPresenceInfo {
+  path: string;
+  serverId?: string | null;
+  serverName?: string | null;
+  locationLabel: string;
+  lastSeenAt: string;
+}
+
 export interface AdminUserItem {
   id: string;
   username: string;
@@ -235,6 +243,9 @@ export interface AdminUserItem {
   steamName: string | null;
   createdAt: string;
   lastLoginAt: string | null;
+  lastSeenAt?: string | null;
+  online?: boolean;
+  presence?: UserPresenceInfo | null;
   servers: number;
   ramUsedMb: number;
 }

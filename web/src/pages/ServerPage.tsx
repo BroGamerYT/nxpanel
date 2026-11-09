@@ -59,10 +59,18 @@ export function ServerPage() {
 }
 
 function Loaded({ detail }: { detail: ServerDetail }) {
+  const { me } = useAuth();
   const { server, permissions } = detail;
   const has = (f: string) => permissions.includes(f);
   const [tab, setTab] = useState<Tab>(has('control.console') ? 'konsole' : 'zeitachse');
   const consoleRef = useRef<ConsoleHandle>(null);
+
+  const { data: presenceData } = useQuery<{ users: Array<{ userId: string; username: string; role: string; locationLabel: string }> }>({
+    queryKey: ['server-presence', server.id],
+    queryFn: () => api(`/servers/${server.id}/presence`),
+    refetchInterval: 8_000,
+  });
+  const otherUsers = (presenceData?.users ?? []).filter((u) => u.userId !== me?.user.id);
 
   const live = useLive(server.id, (lines, meta) => consoleRef.current?.write(lines, meta));
   const status: ServerStatus = live.status ?? server.status;
@@ -264,6 +272,15 @@ function Loaded({ detail }: { detail: ServerDetail }) {
               )}
               {primary && <Address port={primary.port} host={server.publicHost} subdomain={server.subdomain} srvRecordEnabled={server.srvRecordEnabled} eggName={server.egg?.name} />}
               {!live.connected && <span className="text-led-start">{t('server.connecting')}</span>}
+              {otherUsers.length > 0 && (
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-medium cursor-help"
+                  title={otherUsers.map((u) => `${u.username} (${u.locationLabel || 'Online'})`).join(', ')}
+                >
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{otherUsers.map((u) => u.username).join(', ')} ebenfalls hier</span>
+                </span>
+              )}
             </div>
             {((server.tags && server.tags.length > 0) || canEditMeta) && (
               <div className="flex flex-wrap items-center gap-1.5 mt-2">

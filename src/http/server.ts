@@ -17,6 +17,7 @@ import { serverSettingsRoutes } from './routes/server-settings.js';
 import { importRoutes } from './routes/import.js';
 import { consoleRoutes, type ConsoleEngine } from './routes/console.js';
 import { liveRoutes } from './routes/live.js';
+import { presenceRoutes } from './routes/presence.js';
 import { authPlugin, HttpError, requireAuth } from './auth.js';
 import { registerOpenApi } from './openapi.js';
 import { registerWeb } from './web.js';
@@ -181,6 +182,7 @@ export async function buildServer(opts: BuildOptions = {}) {
       await api.register(dashboardRoutes, { stats: opts.stats ?? statsCollector, disk: opts.disk ?? diskCollector });
       await api.register(eggRoutes);
       await api.register(modpackRoutes);
+      await api.register(presenceRoutes);
       await api.register(adminRoutes);
       await api.register(adminUserRoutes);
       await api.register(adminNetworkRoutes);

@@ -13,6 +13,7 @@ import { signAccessToken } from '../../auth/tokens.js';
 import { disableTotp } from '../../auth/twofactor.js';
 import { writeAudit } from '../../audit.js';
 import { isServerFlag, SERVER_FLAGS } from '../../auth/permissions.js';
+import { getPresenceForUser } from '../../presence.js';
 import { getSetting, setSetting, DISCORD_WEBHOOK_URL, DISCORD_NOTIFICATIONS_ENABLED, PLAYIT_SECRET_KEY } from '../../settings.js';
 import { sendDiscordWebhook } from '../../notifications/discord.js';
 import {
@@ -186,12 +187,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
 export const newUserBody = z.object({
   username: z.string().min(3).max(32),
-  email: z.string().max(254).nullable().optional().refine((val) => {
-    if (!val || !val.trim()) return true;
-    return /^[^\s@]+@[^\s@]+$/.test(val.trim());
+  email: z.string().max(254).nullable().optional().transform((val) => (val && val.trim() ? val.trim() : null)).refine((val) => {
+    if (!val) return true;
+    return /^[^\s@]+@[^\s@]+$/.test(val);
   }, 'Ungueltige E-Mail-Adresse'),
   password: z.string().max(256).optional(),
-  steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
+  steamId: z.string().trim().max(32).nullable().optional().transform((v) => (v && v.trim() ? v.trim() : null)).refine((v) => !v || /^\d{15,20}$/.test(v), 'Steam-ID muss aus 15-20 Ziffern bestehen'),
   role: z.enum(['admin', 'moderator', 'user']).default('user'),
   canCreateServers: z.boolean().default(false),
   globalPermissions: z.array(z.string().min(1)).optional(),
@@ -199,12 +200,12 @@ export const newUserBody = z.object({
 });
 
 export const patchUserBody = z.object({
-  email: z.string().max(254).nullable().optional().refine((val) => {
-    if (!val || !val.trim()) return true;
-    return /^[^\s@]+@[^\s@]+$/.test(val.trim());
+  email: z.string().max(254).nullable().optional().transform((val) => (val && val.trim() ? val.trim() : null)).refine((val) => {
+    if (!val) return true;
+    return /^[^\s@]+@[^\s@]+$/.test(val);
   }, 'Ungueltige E-Mail-Adresse'),
   role: z.enum(['admin', 'moderator', 'user']).optional(),
-  steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
+  steamId: z.string().trim().max(32).nullable().optional().transform((v) => (v && v.trim() ? v.trim() : null)).refine((v) => !v || /^\d{15,20}$/.test(v), 'Steam-ID muss aus 15-20 Ziffern bestehen'),
   canCreateServers: z.boolean().optional(),
   globalPermissions: z.array(z.string().min(1)).optional(),
   suspended: z.boolean().optional(),
@@ -221,11 +222,29 @@ export async function adminUserRoutes(app: FastifyInstance) {
              u.global_permissions AS "globalPermissions",
              u.steam_id AS "steamId", u.steam_name AS "steamName",
              u.totp_enabled AS "totpEnabled", u.server_limit AS "serverLimit", u.ram_limit_mb AS "ramLimitMb",
-             u.disk_limit_mb AS "diskLimitMb", u.allowed_eggs AS "allowedEggs", u.created_at AS "createdAt", u.last_login_at AS "lastLoginAt",
+             u.disk_limit_mb AS "diskLimitMb", u.allowed_eggs AS "allowedEggs", u.created_at AS "createdAt",
+             u.last_login_at AS "lastLoginAt", u.last_seen_at AS "lastSeenAt",
              (SELECT count(*)::int FROM servers s WHERE s.owner_id = u.id) AS servers,
              (SELECT coalesce(sum(s.ram_mb), 0)::int FROM servers s WHERE s.owner_id = u.id) AS "ramUsedMb"
       FROM users u ORDER BY u.created_at`;
-    return { users: rows };
+
+    const enriched = rows.map((u) => {
+      const p = getPresenceForUser(u.id as string);
+      return {
+        ...u,
+        online: Boolean(p),
+        presence: p
+          ? {
+              path: p.path,
+              serverId: p.serverId,
+              serverName: p.serverName,
+              locationLabel: p.locationLabel,
+              lastSeenAt: p.lastSeenAt,
+            }
+          : null,
+      };
+    });
+    return { users: enriched };
   });
 
   app.post('/admin/users', { preHandler: requireAdmin() }, async (req, reply) => {

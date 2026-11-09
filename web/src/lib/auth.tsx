@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void api('/auth/me', { method: 'PATCH', body: { locale: chosen } }).catch(() => {});
         m.user.locale = chosen;
       } else if (m.user.locale && m.user.locale !== getLocale()) setLocale(m.user.locale);
-      if (impersonatorAdmin && m.user.id === impersonatorAdmin.id) {
+      if (impersonatorAdmin && (m.user.id === impersonatorAdmin.id || m.user.username === impersonatorAdmin.username)) {
         sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
         setImpersonatorAdmin(null);
       }
@@ -113,15 +113,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const stopImpersonation = useCallback(async () => {
     if (!impersonatorAdmin) return;
-    const res = await api<{ accessToken: string; user: any }>('/auth/impersonate/stop', {
-      method: 'POST',
-      body: { adminId: impersonatorAdmin.id },
-    });
-    sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
-    setImpersonatorAdmin(null);
-    setAccessToken(res.accessToken);
-    qc.clear();
-    await loadMe();
+    try {
+      const res = await api<{ accessToken: string; user: any }>('/auth/impersonate/stop', {
+        method: 'POST',
+        body: { adminId: impersonatorAdmin.id },
+      });
+      setAccessToken(res.accessToken);
+    } catch (err) {
+      console.warn('Failed to cleanly stop impersonation on backend:', err);
+    } finally {
+      sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
+      setImpersonatorAdmin(null);
+      qc.clear();
+      await loadMe();
+    }
   }, [impersonatorAdmin, loadMe, qc]);
 
   return (
