@@ -143,9 +143,11 @@ export async function stopServer(
   // Stopp-Befehl und Zeitlimit kommen aus dem Egg. Vorher wurde hier immer
   // nur SIGTERM mit 15 s geschickt: Minecraft bekam nie sein "stop", und
   // ARK haette beim Speichern hart abgebrochen werden koennen.
-  const [egg] = await sql<{ stop_command: string; stop_timeout: number }[]>`
-    SELECT stop_command, stop_timeout FROM eggs WHERE id = ${server.egg_id}`;
-  const grace = opts.graceSeconds ?? egg?.stop_timeout ?? 30;
+  const [egg] = await sql<{ stop_command: string; stop_timeout: number; name?: string }[]>`
+    SELECT stop_command, stop_timeout, name FROM eggs WHERE id = ${server.egg_id}`;
+  const rawGrace = opts.graceSeconds ?? egg?.stop_timeout ?? 30;
+  // Begrenzen auf maximal 60 Sekunden, damit der Benutzer nicht minutenlang warten muss
+  const grace = Math.min(rawGrace, 60);
   expectedStops.add(serverId);
   activeTransitions.add(serverId);
 
@@ -155,6 +157,17 @@ export async function stopServer(
   const cmd = opts.stopCommand ?? egg?.stop_command ?? '^C';
 
   try {
+    // Fuer Ark / Proton / Wine-Server: gezielt SIGTERM an ArkAscendedServer und Proton senden,
+    // damit der Windows-Prozess in Wine sauber die Welt speichert und herunterfaehrt.
+    const isArkOrProton = (egg?.name ?? '').toLowerCase().includes('ark') ||
+      server.docker_image.includes('asa-linux-server') ||
+      server.docker_image.includes('proton');
+    if (isArkOrProton) {
+      log.info({ serverId }, 'Ark / Proton Server wird gestoppt: Sende SIGTERM an ArkAscendedServer & proton');
+      await engine.exec(server.container_id, ['pkill', '-TERM', '-f', 'ArkAscendedServer']).catch(() => {});
+      await engine.exec(server.container_id, ['pkill', '-TERM', '-f', 'proton']).catch(() => {});
+    }
+
     if (cmd && cmd !== '^C') {
       log.debug({ serverId, cmd }, 'Stop-Kommando an die Konsole');
       await engine.sendToStdin(server.container_id, cmd);

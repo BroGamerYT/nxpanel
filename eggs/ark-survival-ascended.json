@@ -9,14 +9,14 @@
   "entrypoint": [
     "/bin/bash",
     "-c",
-    "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; sed -i 's|+force_install_dir|+@sSteamCmdForcePlatformType windows +force_install_dir|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|app_update 2430930 validate|app_update 2430930|g' /usr/bin/start_server 2>/dev/null || true; exec /usr/bin/start_server"
+    "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; sed -i 's|+force_install_dir|+@sSteamCmdForcePlatformType windows +force_install_dir|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|app_update 2430930 validate|app_update 2430930|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|^\\$STEAM_COMPAT_DIR/\\$PROTON_DIR_NAME/proton.*|trap \"pkill -TERM -f ArkAscendedServer 2>/dev/null; pkill -TERM -f proton 2>/dev/null; wait \\$PID\" TERM INT; \\$STEAM_COMPAT_DIR/\\$PROTON_DIR_NAME/proton run \\$LAUNCH_BINARY_NAME \\$ASA_START_PARAMS \\& PID=\\$!; wait \\$PID|' /usr/bin/start_server 2>/dev/null || true; exec /usr/bin/start_server"
   ],
-  "startup": "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; sed -i 's|+force_install_dir|+@sSteamCmdForcePlatformType windows +force_install_dir|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|app_update 2430930 validate|app_update 2430930|g' /usr/bin/start_server 2>/dev/null || true; exec /usr/bin/start_server",
+  "startup": "mkdir -p /home/gameserver/steamcmd /root/.config/protonfixes && rm -f /home/gameserver/server-files/steamcmd.sh /home/gameserver/server-files/steamcmd_linux.tar.gz* && rm -rf /home/gameserver/server-files/linux32 && chown -R $(id -u):$(id -g) /home/gameserver/server-files/steamapps/compatdata 2>/dev/null || true; sed -i 's|+force_install_dir|+@sSteamCmdForcePlatformType windows +force_install_dir|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|app_update 2430930 validate|app_update 2430930|g' /usr/bin/start_server 2>/dev/null || true; sed -i 's|^\\$STEAM_COMPAT_DIR/\\$PROTON_DIR_NAME/proton.*|trap \"pkill -TERM -f ArkAscendedServer 2>/dev/null; pkill -TERM -f proton 2>/dev/null; wait \\$PID\" TERM INT; \\$STEAM_COMPAT_DIR/\\$PROTON_DIR_NAME/proton run \\$LAUNCH_BINARY_NAME \\$ASA_START_PARAMS \\& PID=\\$!; wait \\$PID|' /usr/bin/start_server 2>/dev/null || true; exec /usr/bin/start_server",
   "data_dir": "/home/gameserver/server-files",
   "console": "readonly",
   "stop": {
     "method": "SIGTERM",
-    "timeout_seconds": 180
+    "timeout_seconds": 60
   },
   "ready_check": {
     "kind": "done",

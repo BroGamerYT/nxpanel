@@ -6,7 +6,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { loginBody, refreshBody, passwordBody, meBody } from './routes/auth.js';
 import { createBody, patchBody, powerBody, eventsQuery } from './routes/servers.js';
 import { addBody, flagsInput } from './routes/subusers.js';
-import { startupBody, resourcesBody, extraPortBody } from './routes/server-settings.js';
+import { startupBody, resourcesBody, extraPortBody, updatePortBody } from './routes/server-settings.js';
 import { importBody, analyzeBody } from './routes/import.js';
 import { iconBody, playerActionBody } from './routes/game.js';
 import { pruneBody, newUserBody, patchUserBody, auditQuery, patchNodeBody } from './routes/admin.js';
@@ -94,6 +94,7 @@ const DOCS: Record<string, Doc> = {
   'PATCH /api/v1/servers/{id}/resources': { tag: 'Einstellungen', summary: 'RAM, CPU, Speicher (Admin/Besitzer, Budget wird geprueft)', body: resourcesBody },
   'POST /api/v1/servers/{id}/reallocate': { tag: 'Einstellungen', summary: 'Alle Ports neu vergeben (nur gestoppt)' },
   'POST /api/v1/servers/{id}/allocations': { tag: 'Einstellungen', summary: 'Zusaetzlichen Port anlegen, im Container als <REF>_PORT', body: extraPortBody },
+  'PATCH /api/v1/servers/{id}/allocations/{port}': { tag: 'Einstellungen', summary: 'Portnummer, Protokoll oder Kennung eines Ports aendern', body: updatePortBody },
   'GET /api/v1/imports': { tag: 'Import', summary: 'Backups, die fuer einen neuen Server bereitliegen' },
   'POST /api/v1/imports/upload': { tag: 'Import', summary: 'Backup hochladen (multipart, Feld "file"), noch ohne Server' },
   'POST /api/v1/imports/analyze': { tag: 'Import', summary: 'Backup untersuchen: Spiel, Version, Einstellungen', body: analyzeBody },

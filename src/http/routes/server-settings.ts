@@ -3,10 +3,10 @@ import { z } from 'zod';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { sql } from '../../db/index.js';
-import { volumePath } from '../../docker/client.js';
+import { engine, volumePath } from '../../docker/client.js';
 import { parseRules } from '../../eggs/rules.js';
 import { validateVariables, substitute, isGeneratedDefault } from '../../eggs/variables.js';
-import { allocatePorts, releasePorts, nodeNetwork, type EggPorts } from '../../servers/allocations.js';
+import { allocatePorts, releasePorts, nodeNetwork, isPortFreeOnHost, type EggPorts } from '../../servers/allocations.js';
 import { STOPPED_STATES, StateError } from '../../servers/create.js';
 import { can } from '../../auth/permissions.js';
 import { writeAudit } from '../../audit.js';
@@ -39,9 +39,16 @@ export const resourcesBody = z.object({
 }).refine((b) => Object.keys(b).length > 0, 'Nichts zu aendern');
 
 export const extraPortBody = z.object({
+  port: z.number().int().min(1024).max(65535).optional(),
   /** Kurzname, wird im Container als <NAME>_PORT bekannt, z. B. "dynmap" -> DYNMAP_PORT */
-  ref: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_]{1,23}$/, 'Nur Kleinbuchstaben, Ziffern, _ (2-24 Zeichen)'),
+  ref: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_]{0,23}$/, 'Nur Kleinbuchstaben, Ziffern, _ (bis 24 Zeichen)').optional().or(z.literal('')).nullable(),
   protocol: z.enum(['tcp', 'udp', 'both']).default('tcp'),
+});
+
+export const updatePortBody = z.object({
+  newPort: z.number().int().min(1024).max(65535).optional(),
+  protocol: z.enum(['tcp', 'udp', 'both']).optional(),
+  ref: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_]{0,23}$/, 'Nur Kleinbuchstaben, Ziffern, _ (bis 24 Zeichen)').optional().or(z.literal('')).nullable(),
 });
 
 export const domainBody = z.object({
@@ -240,18 +247,149 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
     const { server } = req.target!;
     const actor = req.actor!;
     requireStopped(server.status);
-    const [dupe] = await sql`SELECT 1 FROM allocations WHERE server_id = ${server.id} AND ref = ${body.ref}`;
-    if (dupe) throw new HttpError(409, `Es gibt schon einen Port "${body.ref}"`, 'conflict');
-    let port: number;
-    try {
-      port = await addExtraPort(server.id, server.node_id, body.ref, body.protocol);
-    } catch (err) {
-      throw new HttpError(409, err instanceof Error ? err.message : 'Kein freier Port', 'no_free_port');
+    const cleanRef = body.ref && body.ref.trim() ? body.ref.trim().toLowerCase() : null;
+    if (cleanRef) {
+      const [dupe] = await sql`SELECT 1 FROM allocations WHERE server_id = ${server.id} AND ref = ${cleanRef}`;
+      if (dupe) throw new HttpError(409, `Es gibt schon einen Port mit der Kennung "${cleanRef}"`, 'conflict');
     }
-    await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: 'server.port_add', ip: req.ip, metadata: { ref: body.ref, port } });
-    await rebuild(ops, server.id, actor.id, `Port ${port} (${body.ref}) hinzugefuegt`);
+    let port: number;
+    if (body.port) {
+      const [taken] = await sql<{ server_id: string | null }[]>`
+        SELECT server_id FROM allocations
+        WHERE node_id = ${server.node_id} AND port = ${body.port} AND server_id IS NOT NULL AND server_id != ${server.id}
+      `;
+      if (taken) throw new HttpError(409, `Port ${body.port} ist bereits an einen anderen Server vergeben`, 'conflict');
+      const [alreadyMine] = await sql`SELECT 1 FROM allocations WHERE server_id = ${server.id} AND port = ${body.port}`;
+      if (alreadyMine) throw new HttpError(409, `Dieser Server nutzt Port ${body.port} bereits`, 'conflict');
+
+      const published = await engine.listPublishedPorts().catch(() => new Set<number>());
+      if (published.has(body.port)) throw new HttpError(409, `Port ${body.port} wird auf dem Host bereits genutzt`, 'conflict');
+
+      if (!existsSync('/.dockerenv') && !(await isPortFreeOnHost(body.port, body.protocol))) {
+        throw new HttpError(409, `Port ${body.port} kann auf dem Host nicht gebunden werden`, 'conflict');
+      }
+
+      await sql`
+        INSERT INTO allocations (node_id, ip, port, protocol, server_id, is_primary, ref, blocked_until)
+        VALUES (${server.node_id}, '0.0.0.0', ${body.port}, ${body.protocol}, ${server.id}, false, ${cleanRef}, NULL)
+        ON CONFLICT (node_id, ip, port, protocol)
+        DO UPDATE SET server_id = ${server.id}, is_primary = false, ref = ${cleanRef}, blocked_until = NULL
+      `;
+      port = body.port;
+    } else {
+      try {
+        port = await addExtraPort(server.id, server.node_id, cleanRef ?? 'extra', body.protocol);
+      } catch (err) {
+        throw new HttpError(409, err instanceof Error ? err.message : 'Kein freier Port', 'no_free_port');
+      }
+    }
+    await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: 'server.port_add', ip: req.ip, metadata: { ref: cleanRef, port, protocol: body.protocol } });
+    await rebuild(ops, server.id, actor.id, `Port ${port} (${cleanRef ?? 'zusätzlich'}) hinzugefuegt`);
     reply.code(201);
-    return { ref: body.ref, port, env: `${body.ref.toUpperCase()}_PORT` };
+    return { ref: cleanRef, port, protocol: body.protocol, env: cleanRef ? `${cleanRef.toUpperCase()}_PORT` : undefined };
+  });
+
+  /** Port bearbeiten: Portnummer, Protokoll und/oder Kennung aendern */
+  app.patch<{ Params: { id: string; port: string } }>('/servers/:id/allocations/:port', { preHandler: requireServer('allocation.assign') }, async (req) => {
+    const { server } = req.target!;
+    const actor = req.actor!;
+    requireStopped(server.status);
+    const oldPort = Number(req.params.port);
+    const body = updatePortBody.parse(req.body);
+
+    const [current] = await sql<{ id: string; port: number; protocol: 'tcp' | 'udp' | 'both'; is_primary: boolean; ref: string | null }[]>`
+      SELECT id, port, protocol, is_primary, ref FROM allocations WHERE server_id = ${server.id} AND port = ${oldPort} LIMIT 1
+    `;
+    if (!current) throw new HttpError(404, 'Port gehoert nicht zu diesem Server', 'not_found');
+
+    const targetPort = body.newPort ?? current.port;
+    const targetProtocol = body.protocol ?? current.protocol;
+    const targetRef = body.ref !== undefined ? (body.ref && body.ref.trim() ? body.ref.trim().toLowerCase() : null) : current.ref;
+
+    if (targetRef && targetRef !== current.ref) {
+      const [dupe] = await sql`SELECT 1 FROM allocations WHERE server_id = ${server.id} AND ref = ${targetRef} AND id != ${current.id}`;
+      if (dupe) throw new HttpError(409, `Es gibt schon einen Port mit der Kennung "${targetRef}"`, 'conflict');
+    }
+
+    if (targetPort !== current.port) {
+      const [conflict] = await sql<{ server_id: string | null }[]>`
+        SELECT server_id FROM allocations
+        WHERE node_id = ${server.node_id} AND port = ${targetPort} AND server_id IS NOT NULL AND server_id != ${server.id}
+      `;
+      if (conflict) {
+        throw new HttpError(409, `Port ${targetPort} ist bereits an einen anderen Server vergeben`, 'conflict');
+      }
+
+      const published = await engine.listPublishedPorts().catch(() => new Set<number>());
+      if (published.has(targetPort)) {
+        throw new HttpError(409, `Port ${targetPort} wird bereits von einem Docker-Container auf dem Host genutzt`, 'conflict');
+      }
+
+      if (!existsSync('/.dockerenv') && !(await isPortFreeOnHost(targetPort, targetProtocol))) {
+        throw new HttpError(409, `Port ${targetPort} ist auf dem Host bereits belegt`, 'conflict');
+      }
+
+      // Evtl. freien Eintrag auf dem Zielport vorab loeschen
+      await sql`
+        DELETE FROM allocations
+        WHERE node_id = ${server.node_id} AND port = ${targetPort} AND (server_id IS NULL OR server_id = ${server.id}) AND id != ${current.id}
+      `;
+
+      // Alten Port freigeben mit 5 Minuten Cooldown
+      await sql`
+        INSERT INTO allocations (node_id, ip, port, protocol, server_id, is_primary, ref, blocked_until)
+        VALUES (${server.node_id}, '0.0.0.0', ${current.port}, ${current.protocol}, NULL, false, NULL, now() + interval '5 minutes')
+        ON CONFLICT (node_id, ip, port, protocol)
+        DO UPDATE SET server_id = NULL, is_primary = false, ref = NULL, blocked_until = now() + interval '5 minutes'
+      `;
+    }
+
+    await sql`
+      UPDATE allocations
+      SET port = ${targetPort}, protocol = ${targetProtocol}, ref = ${targetRef}
+      WHERE id = ${current.id}
+    `;
+
+    // Falls Variablen den alten Port als Wert hatten (z. B. SERVER_PORT, RCON_PORT), aktualisieren
+    if (targetPort !== current.port) {
+      let varsChanged = false;
+      const vars = { ...server.variables };
+      for (const [k, v] of Object.entries(vars)) {
+        if (v === String(current.port)) {
+          vars[k] = String(targetPort);
+          varsChanged = true;
+        }
+      }
+      if (current.is_primary && vars.SERVER_PORT === String(current.port)) {
+        vars.SERVER_PORT = String(targetPort);
+        varsChanged = true;
+      }
+      if (varsChanged) {
+        await sql`UPDATE servers SET variables = ${sql.json(vars)} WHERE id = ${server.id}`;
+      }
+      if (current.is_primary) {
+        await syncAllDns().catch(() => {});
+      }
+    }
+
+    await writeAudit({
+      userId: actor.id,
+      serverId: server.id,
+      actorName: actor.username,
+      action: 'server.port_update',
+      ip: req.ip,
+      metadata: {
+        fromPort: current.port,
+        toPort: targetPort,
+        fromProtocol: current.protocol,
+        toProtocol: targetProtocol,
+        fromRef: current.ref,
+        toRef: targetRef,
+      },
+    });
+
+    await rebuild(ops, server.id, actor.id, `Port ${current.port} -> ${targetPort} (${targetProtocol}) geaendert`);
+    return { ok: true, port: targetPort, protocol: targetProtocol, ref: targetRef };
   });
 
   /** Liste bekannter Konfigurationsdateien (inkl. Mod- und Plugin-Ordner) fuer diesen Server abfragen */

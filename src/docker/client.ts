@@ -55,6 +55,8 @@ export interface ContainerEngine {
   labels(containerId: string): Promise<Record<string, string> | null>;
   /** Fuehrt einen einmaligen Befehl in einem temporaeren Container aus und faengt die Ausgabe ab. */
   runOneOff(image: string, cmd: string[], timeoutMs?: number): Promise<{ exitCode: number; output: string }>;
+  /** Fuehrt einen Befehl in einem laufenden Container aus und faengt die Ausgabe ab. */
+  exec(containerId: string, cmd: string[], timeoutMs?: number): Promise<{ exitCode: number; output: string }>;
 }
 
 export interface DockerDiskUsage {
@@ -598,6 +600,56 @@ class LocalDockerEngine implements ContainerEngine {
     }
 
     return { exitCode, output };
+  }
+
+  async exec(containerId: string, cmd: string[], timeoutMs = 15000): Promise<{ exitCode: number; output: string }> {
+    try {
+      const container = this.docker.getContainer(containerId);
+      const execution = await container.exec({
+        Cmd: cmd,
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      const stream = (await execution.start({ Detach: false, Tty: false })) as unknown as NodeJS.ReadableStream;
+      let output = '';
+      stream.on('data', (chunk: Buffer) => {
+        output += stripFrames(chunk);
+      });
+      return await new Promise<{ exitCode: number; output: string }>((resolve) => {
+        let done = false;
+        const timer = setTimeout(() => {
+          if (!done) {
+            done = true;
+            (stream as { destroy?: () => void }).destroy?.();
+            resolve({ exitCode: -1, output });
+          }
+        }, timeoutMs);
+
+        const finish = async () => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          try {
+            const inspect = await execution.inspect();
+            resolve({ exitCode: inspect.ExitCode ?? 0, output });
+          } catch {
+            resolve({ exitCode: 0, output });
+          }
+        };
+
+        stream.on('end', () => void finish());
+        stream.on('error', () => {
+          if (!done) {
+            done = true;
+            clearTimeout(timer);
+            resolve({ exitCode: -1, output });
+          }
+        });
+      });
+    } catch (err) {
+      log.debug({ err, containerId, cmd }, 'Container exec fehlgeschlagen');
+      return { exitCode: -1, output: '' };
+    }
   }
 
   /**

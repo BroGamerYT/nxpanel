@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Sliders, Gamepad2, Cpu, AlertTriangle, FileText, Eye, EyeOff, Copy, Check, Moon, Terminal, Globe } from 'lucide-react';
+import { Trash2, Sliders, Gamepad2, Cpu, AlertTriangle, FileText, Eye, EyeOff, Copy, Check, Moon, Terminal, Globe, Pencil, X } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatMb } from '../lib/status';
@@ -450,43 +450,225 @@ const REF_KEY: Record<string, string> = { game: 'ports.ref.game', rcon: 'ports.r
 function Ports({ detail, stopped, canAssign }: { detail: ServerDetail; stopped: boolean; canAssign: boolean }) {
   const { server } = detail;
   const invalidate = useInvalidate(server);
+  const [portInput, setPortInput] = useState('');
   const [ref, setRef] = useState('');
   const [protocol, setProtocol] = useState<'tcp' | 'udp' | 'both'>('tcp');
   const [confirm, setConfirm] = useState(false);
+  const [editingPort, setEditingPort] = useState<{ originalPort: number; newPort: string; protocol: 'tcp' | 'udp' | 'both'; ref: string } | null>(null);
   const ports = server.ports ?? [];
   const host = server.publicHost || location.hostname;
 
   const reallocate = useMutation({ mutationFn: () => api(`/servers/${server.id}/reallocate`, { method: 'POST' }), onSuccess: () => { setConfirm(false); invalidate(); } });
-  const add = useMutation({ mutationFn: () => api(`/servers/${server.id}/allocations`, { method: 'POST', body: { ref, protocol } }), onSuccess: () => { setRef(''); invalidate(); } });
+  const stopServerMut = useMutation({ mutationFn: () => api(`/servers/${server.id}/stop`, { method: 'POST' }), onSuccess: invalidate });
+  const add = useMutation({
+    mutationFn: () => {
+      const p = portInput.trim() ? parseInt(portInput.trim(), 10) : undefined;
+      const r = ref.trim() ? ref.trim().toLowerCase() : undefined;
+      return api(`/servers/${server.id}/allocations`, {
+        method: 'POST',
+        body: {
+          ...(p ? { port: p } : {}),
+          ref: r,
+          protocol,
+        },
+      });
+    },
+    onSuccess: () => {
+      setPortInput('');
+      setRef('');
+      invalidate();
+    },
+  });
+  const update = useMutation({
+    mutationFn: (data: { originalPort: number; newPort?: number; protocol?: 'tcp' | 'udp' | 'both'; ref?: string }) =>
+      api(`/servers/${server.id}/allocations/${data.originalPort}`, {
+        method: 'PATCH',
+        body: {
+          ...(data.newPort ? { newPort: data.newPort } : {}),
+          protocol: data.protocol,
+          ref: data.ref !== undefined ? data.ref : undefined,
+        },
+      }),
+    onSuccess: () => {
+      setEditingPort(null);
+      invalidate();
+    },
+  });
   const remove = useMutation({ mutationFn: (port: number) => api(`/servers/${server.id}/allocations/${port}`, { method: 'DELETE' }), onSuccess: invalidate });
-  const err = reallocate.error ?? add.error ?? remove.error;
+  const err = reallocate.error ?? add.error ?? update.error ?? remove.error ?? stopServerMut.error;
+
+  const isPortInputValid = !portInput.trim() || (!isNaN(Number(portInput.trim())) && Number(portInput.trim()) >= 1024 && Number(portInput.trim()) <= 65535);
+  const isRefInputValid = !ref.trim() || /^[a-z][a-z0-9_]{0,23}$/.test(ref.trim().toLowerCase());
+  const canAdd = stopped && isPortInputValid && isRefInputValid && (portInput.trim() !== '' || ref.trim() !== '');
 
   return (
     <Section title={t('ports.title')} hint={t('ports.hint')}>
-      <div className="rounded-lg border border-seam divide-y divide-seam">
-        {ports.map((p) => (
-          <div key={`${p.port}-${p.protocol}`} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-            <span className="font-mono text-[13px]">{host}:{p.port}<span className="text-dim">/{p.protocol}</span></span>
-            <span className="flex items-center gap-3">
-              <span className="text-dim">{REF_KEY[p.ref ?? ''] ? t(REF_KEY[p.ref ?? '']!) : p.ref ?? '–'}{p.is_primary ? ` · ${t('ports.primary')}` : ''}</span>
-              {canAssign && !p.is_primary && !['rcon', 'query', 'web'].includes(p.ref ?? '') && (
-                <button aria-label={t('ports.remove', { port: p.port })} disabled={!stopped || remove.isPending} onClick={() => remove.mutate(p.port)}
-                  className="text-dim hover:text-led-crash disabled:opacity-40"><Trash2 className="size-4" /></button>
-              )}
-            </span>
+      {!stopped && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-200">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 shrink-0 text-amber-400" />
+            <span>Der Server muss gestoppt sein, um Ports hinzuzufügen oder zu bearbeiten.</span>
           </div>
-        ))}
+          <Button
+            className="px-2.5 py-1 text-xs"
+            variant="quiet"
+            busy={stopServerMut.isPending}
+            onClick={() => stopServerMut.mutate()}
+          >
+            Server stoppen
+          </Button>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-seam divide-y divide-seam">
+        {ports.map((p) => {
+          const isEditing = editingPort?.originalPort === p.port;
+          if (isEditing) {
+            return (
+              <div key={`${p.port}-${p.protocol}`} className="p-3 bg-surface/60 space-y-2">
+                <div className="text-xs font-semibold text-dim uppercase tracking-wider">Port bearbeiten</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-dim block">Port (1024–65535)</label>
+                    <Input
+                      value={editingPort.newPort}
+                      onChange={(e) => setEditingPort({ ...editingPort, newPort: e.target.value.replace(/[^0-9]/g, '') })}
+                      className="w-28 font-mono text-sm"
+                      placeholder="Port"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-dim block">Protokoll</label>
+                    <Select
+                      value={editingPort.protocol}
+                      onChange={(e) => setEditingPort({ ...editingPort, protocol: e.target.value as typeof editingPort.protocol })}
+                      className="w-28 text-sm"
+                    >
+                      <option value="tcp">TCP</option>
+                      <option value="udp">UDP</option>
+                      <option value="both">TCP+UDP</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-dim block">Kennung (optional)</label>
+                    <Input
+                      value={editingPort.ref}
+                      onChange={(e) => setEditingPort({ ...editingPort, ref: e.target.value.toLowerCase() })}
+                      className="w-36 text-sm"
+                      placeholder="z. B. game, rcon"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-5">
+                    <Button
+                      className="px-2.5 py-1 text-xs"
+                      disabled={
+                        !stopped ||
+                        !editingPort.newPort.trim() ||
+                        isNaN(Number(editingPort.newPort.trim())) ||
+                        Number(editingPort.newPort.trim()) < 1024 ||
+                        Number(editingPort.newPort.trim()) > 65535 ||
+                        (editingPort.ref.trim() !== '' && !/^[a-z][a-z0-9_]{0,23}$/.test(editingPort.ref.trim()))
+                      }
+                      busy={update.isPending}
+                      onClick={() => {
+                        update.mutate({
+                          originalPort: editingPort.originalPort,
+                          newPort: Number(editingPort.newPort.trim()),
+                          protocol: editingPort.protocol,
+                          ref: editingPort.ref.trim() || undefined,
+                        });
+                      }}
+                    >
+                      Speichern
+                    </Button>
+                    <Button className="px-2.5 py-1 text-xs" variant="quiet" onClick={() => setEditingPort(null)}>
+                      Abbrechen
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={`${p.port}-${p.protocol}`} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-surface/30 transition-colors">
+              <span className="font-mono text-[13px]">{host}:{p.port}<span className="text-dim">/{p.protocol}</span></span>
+              <span className="flex items-center gap-2">
+                <span className="text-dim">{REF_KEY[p.ref ?? ''] ? t(REF_KEY[p.ref ?? '']!) : p.ref ?? '–'}{p.is_primary ? ` · ${t('ports.primary')}` : ''}</span>
+                {canAssign && (
+                  <button
+                    aria-label={`Port ${p.port} bearbeiten`}
+                    title={stopped ? `Port ${p.port} bearbeiten` : 'Server muss gestoppt sein'}
+                    disabled={!stopped}
+                    onClick={() => setEditingPort({
+                      originalPort: p.port,
+                      newPort: String(p.port),
+                      protocol: p.protocol as 'tcp' | 'udp' | 'both',
+                      ref: p.ref ?? '',
+                    })}
+                    className="p-1 text-dim hover:text-fg disabled:opacity-30 rounded hover:bg-hover transition-colors"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
+                {canAssign && !p.is_primary && !['rcon', 'query', 'web'].includes(p.ref ?? '') && (
+                  <button
+                    aria-label={t('ports.remove', { port: p.port })}
+                    title={stopped ? t('ports.remove', { port: p.port }) : 'Server muss gestoppt sein'}
+                    disabled={!stopped || remove.isPending}
+                    onClick={() => remove.mutate(p.port)}
+                    className="p-1 text-dim hover:text-led-crash disabled:opacity-30 rounded hover:bg-hover transition-colors"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
+
       {canAssign && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-end gap-2">
-            <Field label={t('ports.extra')} htmlFor="ref">
-              <Input id="ref" value={ref} onChange={(e) => setRef(e.target.value.toLowerCase())} placeholder={t('ports.extraPlaceholder')} className="w-56" />
+            <Field label="Port (optional)" htmlFor="portInput">
+              <Input
+                id="portInput"
+                value={portInput}
+                onChange={(e) => setPortInput(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="z. B. 28006 (leer = autom.)"
+                className="w-48 font-mono"
+              />
             </Field>
-            <Select aria-label={t('ports.protocol')} value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)} className="w-28">
-              <option value="tcp">TCP</option><option value="udp">UDP</option><option value="both">TCP+UDP</option>
-            </Select>
-            <Button disabled={!stopped || !/^[a-z][a-z0-9_]{1,23}$/.test(ref)} busy={add.isPending} onClick={() => add.mutate()}>{t('common.add')}</Button>
+            <Field label={t('ports.protocol')} htmlFor="protocol">
+              <Select
+                id="protocol"
+                aria-label={t('ports.protocol')}
+                value={protocol}
+                onChange={(e) => setProtocol(e.target.value as typeof protocol)}
+                className="w-28"
+              >
+                <option value="tcp">TCP</option>
+                <option value="udp">UDP</option>
+                <option value="both">TCP+UDP</option>
+              </Select>
+            </Field>
+            <Field label="Kennung (optional)" htmlFor="ref">
+              <Input
+                id="ref"
+                value={ref}
+                onChange={(e) => setRef(e.target.value.toLowerCase())}
+                placeholder={t('ports.extraPlaceholder')}
+                className="w-44"
+              />
+            </Field>
+            <Button
+              disabled={!canAdd}
+              busy={add.isPending}
+              onClick={() => add.mutate()}
+            >
+              {t('common.add')}
+            </Button>
           </div>
           <div className="flex items-center gap-3">
             <Button disabled={!stopped} busy={reallocate.isPending} variant={confirm ? 'danger' : 'quiet'}
