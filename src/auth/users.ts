@@ -10,6 +10,7 @@ export interface UserRow {
   role: Role;
   can_create_servers: boolean;
   allowed_eggs: string[] | null;
+  global_permissions: string[];
   totp_enabled: boolean;
   suspended: boolean;
   avatar?: string | null;
@@ -23,6 +24,7 @@ export interface UserRow {
 export function publicUser(u: Pick<UserRow, 'id' | 'email' | 'username' | 'role' | 'can_create_servers' | 'totp_enabled'> & {
   locale?: string | null;
   allowed_eggs?: string[] | null;
+  global_permissions?: string[] | null;
   avatar?: string | null;
   steam_id?: string | null;
   steam_name?: string | null;
@@ -35,6 +37,7 @@ export function publicUser(u: Pick<UserRow, 'id' | 'email' | 'username' | 'role'
     role: u.role,
     canCreateServers: u.can_create_servers,
     allowedEggs: u.allowed_eggs ?? null,
+    globalPermissions: u.global_permissions ?? [],
     totpEnabled: u.totp_enabled,
     avatar: u.avatar ?? null,
     steamId: u.steam_id ?? null,
@@ -62,6 +65,7 @@ export interface NewUser {
   role?: Role | undefined;
   canCreateServers?: boolean | undefined;
   allowedEggs?: string[] | null | undefined;
+  globalPermissions?: string[] | null | undefined;
   steamId?: string | null | undefined;
 }
 
@@ -94,11 +98,14 @@ export async function createUser(n: NewUser): Promise<UserRow> {
   }
 
   const hash = await hashPassword(n.password);
+  const canCreate = n.canCreateServers ?? (n.globalPermissions?.includes('server.create') || n.role === 'admin');
+  const perms = n.globalPermissions ?? (canCreate ? ['server.create'] : []);
   const [u] = await sql<UserRow[]>`
-    INSERT INTO users (email, username, password_hash, role, can_create_servers, allowed_eggs, steam_id)
+    INSERT INTO users (email, username, password_hash, role, can_create_servers, allowed_eggs, global_permissions, steam_id)
     VALUES (${cleanEmail}, ${n.username.trim()}, ${hash}, ${n.role ?? 'user'},
-            ${n.canCreateServers ?? n.role === 'admin'},
+            ${canCreate},
             ${n.allowedEggs ? sql.json(n.allowedEggs) : null},
+            ${perms},
             ${cleanSteamId})
     RETURNING *
   `;
@@ -124,8 +131,8 @@ export interface AuthContext extends Actor {
  * Primaerschluessel - billig genug, und Rechteentzug wirkt sofort.
  */
 export async function loadAuthContext(userId: string, sessionId: string): Promise<AuthContext | null> {
-  const [row] = await sql<{ id: string; username: string; role: Role; can_create_servers: boolean; allowed_eggs: string[] | null }[]>`
-    SELECT u.id, u.username, u.role, u.can_create_servers, u.allowed_eggs
+  const [row] = await sql<{ id: string; username: string; role: Role; can_create_servers: boolean; allowed_eggs: string[] | null; global_permissions: string[] | null }[]>`
+    SELECT u.id, u.username, u.role, u.can_create_servers, u.allowed_eggs, u.global_permissions
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.id = ${sessionId} AND u.id = ${userId}
       AND u.suspended = false
@@ -140,6 +147,7 @@ export async function loadAuthContext(userId: string, sessionId: string): Promis
     role: row.role,
     canCreateServers: row.can_create_servers,
     allowedEggs: row.allowed_eggs ?? null,
+    globalPermissions: row.global_permissions ?? [],
     sessionId,
   };
 }

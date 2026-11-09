@@ -48,9 +48,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void api('/auth/me', { method: 'PATCH', body: { locale: chosen } }).catch(() => {});
         m.user.locale = chosen;
       } else if (m.user.locale && m.user.locale !== getLocale()) setLocale(m.user.locale);
+      if (impersonatorAdmin && m.user.id === impersonatorAdmin.id) {
+        sessionStorage.removeItem(IMPERSONATOR_STORAGE_KEY);
+        setImpersonatorAdmin(null);
+      }
       setMe(m);
     } catch { setMe(null); }
-  }, []);
+  }, [impersonatorAdmin]);
 
   // Beim Laden: stilles Wiederanmelden ueber das Cookie.
   useEffect(() => {

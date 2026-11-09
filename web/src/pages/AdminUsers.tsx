@@ -11,6 +11,17 @@ import {
 import { useAuth } from '../lib/auth';
 import { UserServerAssignModal } from '../components/UserServerAssignModal';
 
+const PANEL_MODULES = [
+  { id: 'server.create', label: 'Server erstellen', desc: 'Darf neue Spielserver über das Panel anlegen' },
+  { id: 'admin.test_report', label: 'Spiele-Testbericht', desc: 'Darf automatische Installationstests & Testberichte einsehen' },
+  { id: 'admin.files', label: 'Dateimanager (VM)', desc: 'Darf Panel- und VM-Dateien verwalten' },
+  { id: 'admin.audit', label: 'Audit-Log', desc: 'Darf das Audit- und Sicherheitsprotokoll einsehen' },
+  { id: 'admin.nodes', label: 'Netzwerk & Nodes', desc: 'Darf Nodes, Port-Zuweisungen und Netzwerkkonfiguration sehen' },
+  { id: 'admin.integrations', label: 'Integrationen', desc: 'Darf Discord-Webhooks, Playit.gg etc. konfigurieren' },
+  { id: 'admin.users', label: 'Benutzerverwaltung', desc: 'Darf Benutzerkonten anlegen und verwalten' },
+  { id: 'admin.eggs', label: 'Egg-Vorlagen verwalten', desc: 'Darf Spiele-Vorlagen importieren und anpassen' },
+] as const;
+
 export function AdminUsers() {
   const { me, impersonateUser } = useAuth();
   const qc = useQueryClient();
@@ -19,7 +30,7 @@ export function AdminUsers() {
   const [editUser, setEditUser] = useState<AdminUserItem | null>(null);
   const [assignUser, setAssignUser] = useState<AdminUserItem | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [generatedPw, setGeneratedPw] = useState<{ user: string; pw: string } | null>(null);
+  const [generatedPw, setGeneratedPw] = useState<{ user: string; userId: string; pw: string } | null>(null);
 
   // Formular-Zustände für Neuanlage
   const [newUsername, setNewUsername] = useState('');
@@ -27,7 +38,8 @@ export function AdminUsers() {
   const [newPassword, setNewPassword] = useState('');
   const [newSteamId, setNewSteamId] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'moderator' | 'user'>('user');
-  const [newCanCreate, setNewCanCreate] = useState(true);
+  const [newCanCreate, setNewCanCreate] = useState(false);
+  const [newGlobalPerms, setNewGlobalPerms] = useState<string[]>([]);
   const [newAllowedEggs, setNewAllowedEggs] = useState<string[]>([]);
   const [newEggSearch, setNewEggSearch] = useState('');
 
@@ -36,6 +48,7 @@ export function AdminUsers() {
   const [editRole, setEditRole] = useState<'admin' | 'moderator' | 'user'>('user');
   const [editSteamId, setEditSteamId] = useState('');
   const [editCanCreate, setEditCanCreate] = useState(false);
+  const [editGlobalPerms, setEditGlobalPerms] = useState<string[]>([]);
   const [editSuspended, setEditSuspended] = useState(false);
   const [editServerLimit, setEditServerLimit] = useState(0);
   const [editRamLimitMb, setEditRamLimitMb] = useState(0);
@@ -66,7 +79,7 @@ export function AdminUsers() {
       setAddModalOpen(false);
       resetNewForm();
       if (data.password) {
-        setGeneratedPw({ user: data.user.username, pw: data.password });
+        setGeneratedPw({ user: data.user.username, userId: data.user.id, pw: data.password });
       }
     },
     onError: (err: Error) => setErrorMsg(err.message),
@@ -100,7 +113,8 @@ export function AdminUsers() {
     setNewPassword('');
     setNewSteamId('');
     setNewRole('user');
-    setNewCanCreate(true);
+    setNewCanCreate(false);
+    setNewGlobalPerms([]);
     setNewAllowedEggs([]);
     setNewEggSearch('');
     setErrorMsg(null);
@@ -112,6 +126,10 @@ export function AdminUsers() {
     setEditRole(u.role);
     setEditSteamId(u.steamId ?? '');
     setEditCanCreate(u.canCreateServers);
+    const initialPerms = Array.isArray(u.globalPermissions)
+      ? [...u.globalPermissions]
+      : (u.canCreateServers ? ['server.create'] : []);
+    setEditGlobalPerms(initialPerms);
     setEditSuspended(u.suspended);
     setEditServerLimit(u.serverLimit);
     setEditRamLimitMb(u.ramLimitMb);
@@ -121,31 +139,47 @@ export function AdminUsers() {
     setErrorMsg(null);
   }
 
+  function toggleGlobalPerm(permId: string, isNew: boolean) {
+    if (isNew) {
+      setNewGlobalPerms((prev) =>
+        prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
+      );
+    } else {
+      setEditGlobalPerms((prev) =>
+        prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
+      );
+    }
+  }
+
   function handleCreate() {
     if (!newUsername.trim()) {
       setErrorMsg('Bitte Benutzernamen angeben.');
       return;
     }
+    const perms = newRole === 'admin' ? PANEL_MODULES.map((m) => m.id) : newGlobalPerms;
     createMutation.mutate({
       username: newUsername.trim(),
       email: newEmail.trim() || undefined,
       password: newPassword ? newPassword : undefined,
       steamId: newSteamId.trim() || undefined,
       role: newRole,
-      canCreateServers: newCanCreate,
+      canCreateServers: perms.includes('server.create'),
+      globalPermissions: perms,
       allowedEggs: newAllowedEggs.length > 0 ? newAllowedEggs : null,
     });
   }
 
   function handleSaveEdit() {
     if (!editUser) return;
+    const perms = editRole === 'admin' ? PANEL_MODULES.map((m) => m.id) : editGlobalPerms;
     patchMutation.mutate({
       id: editUser.id,
       body: {
         email: editEmail.trim() || null,
         role: editRole,
         steamId: editSteamId.trim() || null,
-        canCreateServers: editCanCreate,
+        canCreateServers: perms.includes('server.create'),
+        globalPermissions: perms,
         suspended: editSuspended,
         serverLimit: Number(editServerLimit),
         ramLimitMb: Number(editRamLimitMb),
@@ -361,10 +395,10 @@ export function AdminUsers() {
                 variant="quiet"
                 className="text-amber hover:text-black hover:bg-amber transition-colors border-amber/30 text-xs"
                 onClick={async () => {
-                  const targetUser = usersData?.users.find((u) => u.username === generatedPw.user);
-                  if (targetUser) {
+                  const targetId = generatedPw.userId || usersData?.users.find((u) => u.username === generatedPw.user)?.id;
+                  if (targetId) {
                     setGeneratedPw(null);
-                    await impersonateUser(targetUser.id);
+                    await impersonateUser(targetId);
                     window.location.href = '/';
                   }
                 }}
@@ -462,18 +496,70 @@ export function AdminUsers() {
                     <option value="admin">Administrator (Vollzugriff)</option>
                   </Select>
                 </div>
-                <div className="flex items-center gap-3 pt-6">
-                  <input
-                    type="checkbox"
-                    id="newCanCreate"
-                    checked={newCanCreate}
-                    onChange={(e) => setNewCanCreate(e.target.checked)}
-                    className="size-4 rounded border-seam accent-amber"
-                  />
-                  <label htmlFor="newCanCreate" className="text-sm font-medium text-ink cursor-pointer">
-                    Darf Server erstellen
-                  </label>
+              </div>
+
+              {/* Modul- & Panel-Berechtigungen */}
+              <div className="space-y-2.5 pt-3 border-t border-seam">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-dim">
+                      Modul-Berechtigungen (Panel-Funktionen)
+                    </label>
+                    <p className="text-xs text-dim mt-0.5">
+                      Bestimme genau, welche Bereiche des Panels dieser Nutzer sehen und bedienen darf.
+                    </p>
+                  </div>
+                  {newRole === 'admin' ? (
+                    <span className="text-xs text-amber font-semibold bg-amber/15 border border-amber/40 px-2 py-0.5 rounded">
+                      Administrator (voller Zugriff)
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-dim">
+                        {newGlobalPerms.length === 0 ? 'Keine Module aktiv' : `${newGlobalPerms.length} aktiv`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setNewGlobalPerms(newGlobalPerms.length === PANEL_MODULES.length ? [] : PANEL_MODULES.map((m) => m.id))}
+                        className="text-xs text-amber hover:underline"
+                      >
+                        {newGlobalPerms.length === PANEL_MODULES.length ? 'Alle abwählen' : 'Alle aktivieren'}
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {newRole === 'admin' ? (
+                  <div className="p-3 rounded-lg bg-amber/10 border border-amber/30 text-xs text-ink flex items-center gap-2">
+                    <Shield className="size-4 text-amber shrink-0" />
+                    <span>Als <strong>Administrator</strong> hat der Nutzer automatisch vollen Zugriff auf alle Module und Funktionen.</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                    {PANEL_MODULES.map((mod) => {
+                      const checked = newGlobalPerms.includes(mod.id);
+                      return (
+                        <label
+                          key={mod.id}
+                          className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            checked ? 'bg-amber/15 border-amber/50 text-ink shadow-sm' : 'bg-rack-2/40 border-seam text-dim hover:text-ink hover:border-seam/80'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleGlobalPerm(mod.id, true)}
+                            className="size-4 rounded border-seam accent-amber mt-0.5 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span className="font-semibold block truncate">{mod.label}</span>
+                            <span className="text-[11px] text-dim line-clamp-2 mt-0.5">{mod.desc}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Erlaubte Spiele (Egg Whitelist) */}
@@ -621,15 +707,6 @@ export function AdminUsers() {
               </div>
 
               <div className="space-y-2 pt-1">
-                <label className="flex items-center gap-2.5 text-sm font-medium text-ink cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editCanCreate}
-                    onChange={(e) => setEditCanCreate(e.target.checked)}
-                    className="size-4 rounded border-seam accent-amber"
-                  />
-                  Darf Server anlegen
-                </label>
                 <label className="flex items-center gap-2.5 text-sm font-medium text-red-400 cursor-pointer">
                   <input
                     type="checkbox"
@@ -639,6 +716,70 @@ export function AdminUsers() {
                   />
                   Konto sperren (Suspended)
                 </label>
+              </div>
+
+              {/* Modul- & Panel-Berechtigungen */}
+              <div className="space-y-2.5 pt-3 border-t border-seam">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-dim">
+                      Modul-Berechtigungen (Panel-Funktionen)
+                    </label>
+                    <p className="text-xs text-dim mt-0.5">
+                      Bestimme genau, welche Bereiche des Panels dieser Nutzer sehen und bedienen darf.
+                    </p>
+                  </div>
+                  {editRole === 'admin' ? (
+                    <span className="text-xs text-amber font-semibold bg-amber/15 border border-amber/40 px-2 py-0.5 rounded">
+                      Administrator (voller Zugriff)
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-dim">
+                        {editGlobalPerms.length === 0 ? 'Keine Module aktiv' : `${editGlobalPerms.length} aktiv`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditGlobalPerms(editGlobalPerms.length === PANEL_MODULES.length ? [] : PANEL_MODULES.map((m) => m.id))}
+                        className="text-xs text-amber hover:underline"
+                      >
+                        {editGlobalPerms.length === PANEL_MODULES.length ? 'Alle abwählen' : 'Alle aktivieren'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {editRole === 'admin' ? (
+                  <div className="p-3 rounded-lg bg-amber/10 border border-amber/30 text-xs text-ink flex items-center gap-2">
+                    <Shield className="size-4 text-amber shrink-0" />
+                    <span>Als <strong>Administrator</strong> hat der Nutzer automatisch vollen Zugriff auf alle Module und Funktionen.</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                    {PANEL_MODULES.map((mod) => {
+                      const checked = editGlobalPerms.includes(mod.id);
+                      return (
+                        <label
+                          key={mod.id}
+                          className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            checked ? 'bg-amber/15 border-amber/50 text-ink shadow-sm' : 'bg-rack-2/40 border-seam text-dim hover:text-ink hover:border-seam/80'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleGlobalPerm(mod.id, false)}
+                            className="size-4 rounded border-seam accent-amber mt-0.5 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span className="font-semibold block truncate">{mod.label}</span>
+                            <span className="text-[11px] text-dim line-clamp-2 mt-0.5">{mod.desc}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Limits / Quotas */}

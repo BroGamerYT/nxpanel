@@ -137,6 +137,32 @@ function dedupe(flags: ServerFlag[]): readonly ServerFlag[] {
   return Object.freeze([...new Set(flags)]);
 }
 
+// ------------------------------------------------------------- Globale Modul-Rechte
+
+export const GLOBAL_PERMISSIONS = [
+  'server.create',
+  'admin.test_report',
+  'admin.files',
+  'admin.audit',
+  'admin.nodes',
+  'admin.integrations',
+  'admin.users',
+  'admin.eggs',
+] as const;
+
+export type GlobalPermission = (typeof GLOBAL_PERMISSIONS)[number];
+
+export const GLOBAL_PERMISSION_LABELS: Record<GlobalPermission, { label: string; desc: string }> = {
+  'server.create': { label: 'Server erstellen', desc: 'Darf neue Server und Instanzen im Panel anlegen' },
+  'admin.test_report': { label: 'Spiele-Testbericht', desc: 'Automatische Installationstests & Berichte ansehen und ausführen' },
+  'admin.files': { label: 'Dateimanager (VM)', desc: 'Host-Dateisystem & Panel-Verzeichnisse auf der VM verwalten' },
+  'admin.audit': { label: 'Audit-Protokoll', desc: 'Sicherheitsprotokoll und Benutzeraktionen einsehen' },
+  'admin.nodes': { label: 'Netzwerk & Nodes', desc: 'Netzwerkkonfiguration, Ports und Node-Status einsehen' },
+  'admin.integrations': { label: 'Integrationen', desc: 'Discord-Webhooks, Playit.gg und externe Dienste konfigurieren' },
+  'admin.users': { label: 'Benutzerverwaltung', desc: 'Benutzer anlegen, bearbeiten und Berechtigungen verwalten' },
+  'admin.eggs': { label: 'Egg-Vorlagen verwalten', desc: 'Spiele-Vorlagen importieren, anpassen und löschen' },
+};
+
 // ------------------------------------------------------------- Pruefung
 
 export type Role = 'admin' | 'moderator' | 'user';
@@ -146,6 +172,13 @@ export interface Actor {
   role: Role;
   canCreateServers: boolean;
   allowedEggs?: string[] | null;
+  globalPermissions?: string[] | null;
+}
+
+export function hasGlobalPermission(actor: Actor, perm: GlobalPermission): boolean {
+  if (actor.role === 'admin') return true;
+  if (perm === 'server.create' && actor.canCreateServers) return true;
+  return Array.isArray(actor.globalPermissions) && actor.globalPermissions.includes(perm);
 }
 
 export interface ServerAccess {
@@ -207,12 +240,16 @@ export function canGrant(actor: Actor, access: ServerAccess, wanted: readonly st
 
 /** Globale Rechte, z. B. fuer /auth/me und die Navigation der Oberflaeche. */
 export function globalPermissions(actor: Actor) {
+  const isAdmin = actor.role === 'admin';
   return {
     'server.create': canCreateServer(actor),
-    'server.view_all': actor.role !== 'user',
-    'admin.users': actor.role === 'admin',
-    'admin.nodes': actor.role === 'admin',
-    'admin.eggs': actor.role === 'admin',
-    'admin.audit': actor.role === 'admin',
+    'server.view_all': isAdmin || actor.role !== 'user',
+    'admin.users': isAdmin || hasGlobalPermission(actor, 'admin.users'),
+    'admin.nodes': isAdmin || hasGlobalPermission(actor, 'admin.nodes'),
+    'admin.eggs': isAdmin || hasGlobalPermission(actor, 'admin.eggs'),
+    'admin.audit': isAdmin || hasGlobalPermission(actor, 'admin.audit'),
+    'admin.test_report': isAdmin || hasGlobalPermission(actor, 'admin.test_report'),
+    'admin.files': isAdmin || hasGlobalPermission(actor, 'admin.files'),
+    'admin.integrations': isAdmin || hasGlobalPermission(actor, 'admin.integrations'),
   };
 }

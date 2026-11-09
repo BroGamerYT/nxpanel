@@ -2,7 +2,7 @@ export type ServerStatus = 'installing' | 'install_failed' | 'offline' | 'starti
 
 export interface User {
   id: string; email: string | null; username: string; role: 'admin' | 'moderator' | 'user'; locale?: string | null;
-  canCreateServers: boolean; totpEnabled: boolean; allowedEggs?: string[] | null;
+  canCreateServers: boolean; totpEnabled: boolean; allowedEggs?: string[] | null; globalPermissions?: string[] | null;
   avatar?: string | null; steamId?: string | null; steamName?: string | null;
 }
 
@@ -224,6 +224,7 @@ export interface AdminUserItem {
   email: string | null;
   role: 'admin' | 'moderator' | 'user';
   canCreateServers: boolean;
+  globalPermissions?: string[] | null;
   suspended: boolean;
   totpEnabled: boolean;
   serverLimit: number;

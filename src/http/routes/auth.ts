@@ -66,7 +66,7 @@ function meta(req: FastifyRequest) {
   return { ip: req.ip, userAgent: req.headers['user-agent'] };
 }
 
-function setRefreshCookie(reply: FastifyReply, token: string) {
+export function setRefreshCookie(reply: FastifyReply, token: string) {
   reply.setCookie(REFRESH_COOKIE, token, {
     httpOnly: true,
     // Nach HTTPS richten, nicht nach NODE_ENV: im LAN ueber http://10.0.0.x

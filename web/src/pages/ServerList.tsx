@@ -104,7 +104,7 @@ export function ServerList() {
             </button>
           ))}
         </div>
-        {me?.user.role === 'admin' && (
+        {Boolean(me?.permissions['admin.test_report'] ?? (me?.user.role === 'admin')) && (
           <Link
             to="/admin/testbericht"
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-seam bg-rack hover:bg-rack-2 text-ink text-sm font-medium transition-colors"

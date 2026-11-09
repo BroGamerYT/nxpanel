@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { verifyAccessToken } from '../auth/tokens.js';
 import { loadAuthContext, type AuthContext } from '../auth/users.js';
-import { can, type ServerFlag } from '../auth/permissions.js';
+import { can, hasGlobalPermission, type ServerFlag, type GlobalPermission } from '../auth/permissions.js';
 import { loadServerForActor, type ServerWithAccess } from '../servers/access.js';
 
 declare module 'fastify' {
@@ -51,6 +51,15 @@ export function requireAdmin() {
   return async (req: FastifyRequest) => {
     await requireAuth(req);
     if (req.actor!.role !== 'admin') throw new HttpError(403, 'Nur fuer Administratoren', 'forbidden');
+  };
+}
+
+export function requireGlobalPermission(perm: GlobalPermission) {
+  return async (req: FastifyRequest) => {
+    await requireAuth(req);
+    if (!hasGlobalPermission(req.actor!, perm)) {
+      throw new HttpError(403, `Fehlende Berechtigung: ${perm}`, 'forbidden');
+    }
   };
 }
 

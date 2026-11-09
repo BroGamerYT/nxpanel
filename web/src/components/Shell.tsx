@@ -197,7 +197,7 @@ export function Shell() {
   return (
     <div className="min-h-full flex flex-col">
       {/* Impersonation-Banner wenn aktiv */}
-      {impersonatorAdmin && (
+      {impersonatorAdmin && me && me.user.id !== impersonatorAdmin.id && (
         <div className="sticky top-0 z-50 bg-amber text-black px-4 py-2.5 text-xs font-semibold flex flex-wrap items-center justify-between gap-3 shadow-lg border-b border-black/20">
           <div className="flex items-center gap-2">
             <Eye className="size-4 shrink-0" />
@@ -277,17 +277,17 @@ export function Shell() {
               <History className="size-4 shrink-0" /> <span className="hidden lg:inline">Audit-Log</span>
             </NavLink>
           )}
-          {me?.user.role === 'admin' && (
+          {Boolean(me?.permissions['admin.files'] ?? (me?.user.role === 'admin')) && (
             <NavLink to="/admin/dateien" className={link} title={t('nav.adminFiles')}>
               <FolderTree className="size-4 shrink-0" /> <span className="hidden lg:inline">{t('nav.adminFiles')}</span>
             </NavLink>
           )}
-          {me?.user.role === 'admin' && (
+          {Boolean(me?.permissions['admin.test_report'] ?? (me?.user.role === 'admin')) && (
             <NavLink to="/admin/testbericht" className={link} title="Automatisierter Spiele-Testbericht">
               <FlaskConical className="size-4 text-amber shrink-0" /> <span className="hidden lg:inline">Testbericht</span>
             </NavLink>
           )}
-          {me?.user.role === 'admin' && (
+          {Boolean(me?.permissions['admin.integrations'] ?? (me?.user.role === 'admin')) && (
             <NavLink to="/admin/integrationen" className={link} title="Integrationen & Externe Dienste">
               <Blocks className="size-4 text-sky-400 shrink-0" /> <span className="hidden lg:inline">Integrationen</span>
             </NavLink>
@@ -405,17 +405,17 @@ export function Shell() {
                     <History className="size-4 shrink-0" /> <span>Audit-Log</span>
                   </NavLink>
                 )}
-                {me?.user.role === 'admin' && (
+                {Boolean(me?.permissions['admin.files'] ?? (me?.user.role === 'admin')) && (
                   <NavLink to="/admin/dateien" onClick={closeMobile} className={link}>
                     <FolderTree className="size-4 shrink-0" /> <span>{t('nav.adminFiles')}</span>
                   </NavLink>
                 )}
-                {me?.user.role === 'admin' && (
+                {Boolean(me?.permissions['admin.test_report'] ?? (me?.user.role === 'admin')) && (
                   <NavLink to="/admin/testbericht" onClick={closeMobile} className={link}>
                     <FlaskConical className="size-4 text-amber shrink-0" /> <span>Testbericht</span>
                   </NavLink>
                 )}
-                {me?.user.role === 'admin' && (
+                {Boolean(me?.permissions['admin.integrations'] ?? (me?.user.role === 'admin')) && (
                   <NavLink to="/admin/integrationen" onClick={closeMobile} className={link}>
                     <Blocks className="size-4 text-sky-400 shrink-0" /> <span>Integrationen</span>
                   </NavLink>

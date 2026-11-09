@@ -5,7 +5,8 @@ import { sql } from '../../db/index.js';
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { HttpError, requireAdmin } from '../auth.js';
+import { HttpError, requireAdmin, requireGlobalPermission } from '../auth.js';
+import { setRefreshCookie } from './auth.js';
 import { createUser, publicUser, UserInputError, type UserRow } from '../../auth/users.js';
 import { revokeAllUserSessions, createSession } from '../../auth/sessions.js';
 import { signAccessToken } from '../../auth/tokens.js';
@@ -41,7 +42,7 @@ export const auditQuery = z.object({
 
 export async function adminRoutes(app: FastifyInstance) {
   /** Globales Audit-Log. Filter nach Aktion (Praefix, z. B. "auth."), Suche, Nutzer und Server. */
-  app.get('/admin/audit', { preHandler: requireAdmin() }, async (req) => {
+  app.get('/admin/audit', { preHandler: requireGlobalPermission('admin.audit') }, async (req) => {
     const q = auditQuery.parse(req.query);
     const rows = await sql<{
       id: string; created_at: Date; action: string; actor_name: string | null; user_id: string | null;
@@ -92,7 +93,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   /** Spiele-Testbericht und Status abfragen */
-  app.get('/admin/test-report', { preHandler: requireAdmin() }, async () => {
+  app.get('/admin/test-report', { preHandler: requireGlobalPermission('admin.test_report') }, async () => {
     let jsonReport: unknown = null;
     let markdownReport: string | null = null;
     let logTail: string | null = null;
@@ -140,7 +141,7 @@ export async function adminRoutes(app: FastifyInstance) {
   }).optional();
 
   /** Testlauf im Hintergrund starten oder fortsetzen */
-  app.post('/admin/test-games', { preHandler: requireAdmin() }, async (req) => {
+  app.post('/admin/test-games', { preHandler: requireGlobalPermission('admin.test_report') }, async (req) => {
     if (isTestRunning()) {
       throw new HttpError(409, 'Ein Testlauf läuft bereits im Hintergrund', 'conflict');
     }
@@ -167,7 +168,7 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   /** Testlauf anhalten */
-  app.post('/admin/test-games/stop', { preHandler: requireAdmin() }, async (req) => {
+  app.post('/admin/test-games/stop', { preHandler: requireGlobalPermission('admin.test_report') }, async (req) => {
     await stopTestRunner();
 
     await writeAudit({
@@ -193,6 +194,7 @@ export const newUserBody = z.object({
   steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
   role: z.enum(['admin', 'moderator', 'user']).default('user'),
   canCreateServers: z.boolean().default(false),
+  globalPermissions: z.array(z.string().min(1)).optional(),
   allowedEggs: z.array(z.string().min(1)).nullable().optional(),
 });
 
@@ -204,6 +206,7 @@ export const patchUserBody = z.object({
   role: z.enum(['admin', 'moderator', 'user']).optional(),
   steamId: z.string().trim().regex(/^\d{15,20}$/, 'Steam-ID muss aus 15-20 Ziffern bestehen').nullable().optional(),
   canCreateServers: z.boolean().optional(),
+  globalPermissions: z.array(z.string().min(1)).optional(),
   suspended: z.boolean().optional(),
   serverLimit: z.number().int().min(0).max(10_000).optional(),
   ramLimitMb: z.number().int().min(0).optional(),
@@ -215,6 +218,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
   app.get('/admin/users', { preHandler: requireAdmin() }, async () => {
     const rows = await sql<Record<string, unknown>[]>`
       SELECT u.id, u.username, u.email, u.role, u.can_create_servers AS "canCreateServers", u.suspended,
+             u.global_permissions AS "globalPermissions",
              u.steam_id AS "steamId", u.steam_name AS "steamName",
              u.totp_enabled AS "totpEnabled", u.server_limit AS "serverLimit", u.ram_limit_mb AS "ramLimitMb",
              u.disk_limit_mb AS "diskLimitMb", u.allowed_eggs AS "allowedEggs", u.created_at AS "createdAt", u.last_login_at AS "lastLoginAt",
@@ -237,6 +241,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
         password,
         role: body.role,
         canCreateServers: body.canCreateServers,
+        globalPermissions: body.globalPermissions,
         allowedEggs: body.allowedEggs,
         steamId: body.steamId,
       });
@@ -277,12 +282,17 @@ export async function adminUserRoutes(app: FastifyInstance) {
     }
 
     const cleanEmail = body.email !== undefined ? (body.email?.trim() || null) : undefined;
+    const canCreateVal = body.canCreateServers !== undefined
+      ? body.canCreateServers
+      : (body.globalPermissions ? body.globalPermissions.includes('server.create') : undefined);
+
     await sql`
       UPDATE users SET
         email = ${cleanEmail !== undefined ? cleanEmail : sql`email`},
         role = ${body.role ?? sql`role`},
         steam_id = ${body.steamId !== undefined ? (body.steamId?.trim() || null) : sql`steam_id`},
-        can_create_servers = ${body.canCreateServers ?? sql`can_create_servers`},
+        can_create_servers = ${canCreateVal !== undefined ? canCreateVal : sql`can_create_servers`},
+        global_permissions = ${body.globalPermissions !== undefined ? body.globalPermissions : sql`global_permissions`},
         suspended = ${body.suspended ?? sql`suspended`},
         server_limit = ${body.serverLimit ?? sql`server_limit`},
         ram_limit_mb = ${body.ramLimitMb ?? sql`ram_limit_mb`},
@@ -323,7 +333,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
    * Erlaubt Administratoren, das Panel isoliert aus der Sicht dieses Benutzers
    * zu betrachten (isolierte Server, Rechte, Quotas).
    */
-  app.post<{ Params: { id: string } }>('/admin/users/:id/impersonate', { preHandler: requireAdmin() }, async (req) => {
+  app.post<{ Params: { id: string } }>('/admin/users/:id/impersonate', { preHandler: requireAdmin() }, async (req, reply) => {
     const targetId = uuidParam(req.params.id);
     const [target] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${targetId}`;
     if (!target) throw new HttpError(404, 'Nutzer nicht gefunden', 'not_found');
@@ -331,6 +341,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
 
     const meta = { ip: req.ip, userAgent: req.headers['user-agent'] };
     const session = await createSession(target.id, meta);
+    setRefreshCookie(reply, session.refreshToken);
     const accessToken = await signAccessToken({ sub: target.id, sid: session.sessionId });
 
     await writeAudit({

@@ -16,7 +16,7 @@ import {
   safePath,
 } from '../../servers/files.js';
 import { adminFileRoots, findAdminRoot, folderUsage, volumeLabels, applyVolumeLabels } from '../../admin/file-roots.js';
-import { HttpError, requireAdmin } from '../auth.js';
+import { HttpError, requireAdmin, requireGlobalPermission } from '../auth.js';
 import { writeAudit } from '../../audit.js';
 import {
   listFilesQuery,
@@ -57,7 +57,7 @@ async function audit(req: RootReq, action: string, metadata: Record<string, unkn
 }
 
 export async function adminFileRoutes(app: FastifyInstance) {
-  const admin = { preHandler: requireAdmin() };
+  const admin = { preHandler: requireGlobalPermission('admin.files') };
 
   app.get('/admin/files', admin, async () => ({
     roots: adminFileRoots().map((r) => ({ id: r.id, label: r.label, path: r.path, available: r.available, readOnly: Boolean(r.readOnly) })),
