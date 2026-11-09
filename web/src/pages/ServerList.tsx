@@ -267,7 +267,7 @@ export function ServerList() {
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{s.primaryPort ? <Address port={s.primaryPort} host={s.publicHost} /> : <span className="text-dim">–</span>}</td>
+                      <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{s.primaryPort ? <Address port={s.primaryPort} host={s.publicHost} subdomain={s.subdomain} srvRecordEnabled={s.srvRecordEnabled} eggName={s.eggName} /> : <span className="text-dim">–</span>}</td>
                       <td className="px-3 py-2.5 text-dim hidden lg:table-cell tabular-nums whitespace-nowrap"><LoadCell s={s} live={liveOf(s.id)} /></td>
                       <td className="px-3 py-2.5 text-dim hidden xl:table-cell tabular-nums whitespace-nowrap">{dash.data?.diskUsed[s.id] !== undefined ? t('server.ramOf', { used: formatMb(dash.data.diskUsed[s.id]!), max: formatMb(s.diskMb) }) : formatMb(s.diskMb)}</td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
@@ -554,10 +554,42 @@ function Tile({
 }
 
 /** Adresse zum Kopieren - genau das, was man Mitspielern schickt. */
-export function Address({ port, host }: { port: number; host?: string | null }) {
+export function Address({
+  port,
+  host,
+  subdomain,
+  srvRecordEnabled,
+  eggName,
+}: {
+  port: number;
+  host?: string | null;
+  subdomain?: string | null;
+  srvRecordEnabled?: boolean;
+  eggName?: string | null;
+}) {
   const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle');
-  // Oeffentliche Adresse des Hosts, sonst die, unter der das Panel gerade offen ist.
-  const addr = `${host || window.location.hostname}:${port}`;
+
+  const isSrv = Boolean(
+    srvRecordEnabled !== false &&
+    eggName &&
+    (/minecraft|paper|purpur|fabric|forge/i.test(eggName) || /teamspeak|ts3/i.test(eggName) || /terraria/i.test(eggName))
+  );
+
+  let addr = `${host || window.location.hostname}:${port}`;
+  let isSub = false;
+
+  if (subdomain) {
+    const baseDomain = host && !/^\d+\.\d+\.\d+\.\d+$/.test(host) ? host : '';
+    const fqdn = subdomain.includes('.') ? subdomain : (baseDomain ? `${subdomain}.${baseDomain}` : subdomain);
+    if (isSrv) {
+      addr = fqdn;
+      isSub = true;
+    } else {
+      addr = `${fqdn}:${port}`;
+      isSub = true;
+    }
+  }
+
   return (
     <button
       type="button"
@@ -566,9 +598,14 @@ export function Address({ port, host }: { port: number; host?: string | null }) 
         setTimeout(() => setState('idle'), 1800);
       }}
       className="inline-flex items-center gap-1.5 font-mono text-[13px] text-ink hover:text-amber"
-      title={state === 'fail' ? t('copy.failTitle') : t('copy.address')}
+      title={state === 'fail' ? t('copy.failTitle') : (isSub && isSrv ? 'Direktadresse (SRV ohne Port)' : t('copy.address'))}
     >
-      {addr}
+      <span className={isSub ? 'text-amber font-semibold' : ''}>{addr}</span>
+      {isSub && isSrv && (
+        <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-sans border border-emerald-500/30">
+          SRV
+        </span>
+      )}
       {state === 'ok' ? <Check className="size-3.5 text-led-run" /> : state === 'fail' ? <span className="text-xs text-led-crash">{t('copy.failShort')}</span> : <Copy className="size-3.5 text-dim" />}
     </button>
   );

@@ -36,6 +36,9 @@ export interface ServerRecord {
   tags?: string[];
   is_favorite?: boolean;
   started_at?: Date | null;
+  subdomain?: string | null;
+  custom_domain?: string | null;
+  srv_record_enabled?: boolean;
 }
 
 export interface PortBinding {

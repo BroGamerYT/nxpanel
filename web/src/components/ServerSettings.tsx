@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Trash2, Sliders, Gamepad2, Cpu, AlertTriangle, FileText, Eye, EyeOff, Copy, Check, Moon, Terminal } from 'lucide-react';
+import { Trash2, Sliders, Gamepad2, Cpu, AlertTriangle, FileText, Eye, EyeOff, Copy, Check, Moon, Terminal, Globe } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatMb } from '../lib/status';
-import type { EggVariable, ServerDetail, ServerStatus } from '../lib/types';
+import type { EggVariable, ServerDetail, ServerStatus, DnsConfig } from '../lib/types';
 import { Button, ErrorBox, Field, Input, Select, Spinner } from './ui';
 import { VariableField, visible } from './VariableField';
 import { ImportSection } from './ImportSection';
@@ -30,7 +30,7 @@ const STOPPED: ServerStatus[] = ['offline', 'crashed', 'install_failed'];
  * Was einen neuen Container braucht, geht nur im gestoppten Zustand -
  * das sagt die Seite vorher, nicht erst als Fehler nach dem Klick.
  */
-type SettingsSection = 'spiel' | 'configs' | 'ressourcen' | 'danger';
+type SettingsSection = 'spiel' | 'configs' | 'ressourcen' | 'domain' | 'danger';
 
 export function ServerSettings({ detail, status }: { detail: ServerDetail; status: ServerStatus }) {
   const { server, permissions } = detail;
@@ -83,6 +83,19 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
           Leistung & Ports
         </button>
 
+        <button
+          type="button"
+          onClick={() => setSection('domain')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition ${
+            section === 'domain'
+              ? 'bg-amber text-black font-semibold shadow'
+              : 'text-dim hover:text-ink hover:bg-rack-2/60'
+          }`}
+        >
+          <Globe className="size-4" />
+          Subdomain & SRV
+        </button>
+
         {isOwnerOrAdmin && (
           <button
             type="button"
@@ -128,7 +141,12 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
         </div>
       )}
 
-      {/* Sektion 4: Erweitert / Gefahrenzone */}
+      {/* Sektion 4: Subdomain & SRV */}
+      {section === 'domain' && (
+        <DomainSection detail={detail} />
+      )}
+
+      {/* Sektion 5: Erweitert / Gefahrenzone */}
       {section === 'danger' && isOwnerOrAdmin && (
         <div className="space-y-8 max-w-2xl">
           <ImportSection serverId={server.id} stopped={stopped} />
@@ -507,5 +525,149 @@ function Danger({ detail, status }: { detail: ServerDetail; status: ServerStatus
         <dt className="text-dim">{t('danger.shortId')}</dt><dd className="font-mono text-[13px]">{server.shortId}</dd>
       </dl>
     </section>
+  );
+}
+
+function DomainSection({ detail }: { detail: ServerDetail }) {
+  const { server } = detail;
+  const qc = useQueryClient();
+  const invalidate = useInvalidate(server);
+  const primaryPort = server.ports?.find((p) => p.is_primary)?.port ?? null;
+
+  const dnsQuery = useQuery<{ config: DnsConfig }>({
+    queryKey: ['admin-dns'],
+    queryFn: () => api('/admin/network/dns'),
+    retry: false,
+  });
+
+  const rootDomain = dnsQuery.data?.config.rootDomain || null;
+  const [subdomain, setSubdomain] = useState(server.subdomain ?? '');
+  const [srvEnabled, setSrvEnabled] = useState(server.srvRecordEnabled ?? true);
+  const [copied, setCopied] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const eggName = server.egg?.name ?? '';
+  const gameKind = server.egg?.gameKind;
+  const isMinecraft = gameKind === 'minecraft' || /minecraft|paper|purpur|fabric|forge/i.test(eggName);
+  const isTeamSpeak = /teamspeak|ts3/i.test(eggName);
+  const isSrvSupported = isMinecraft || isTeamSpeak || /terraria/i.test(eggName);
+
+  const fqdn = subdomain.trim() ? `${subdomain.trim().toLowerCase()}.${rootDomain || 'meinedomain.de'}` : '';
+  const connectAddress = isSrvSupported && srvEnabled
+    ? fqdn
+    : (fqdn && primaryPort ? `${fqdn}:${primaryPort}` : (server.publicHost && primaryPort ? `${server.publicHost}:${primaryPort}` : ''));
+
+  const saveMutation = useMutation({
+    mutationFn: () => api(`/servers/${server.id}/domain`, {
+      method: 'PATCH',
+      body: {
+        subdomain: subdomain.trim().toLowerCase() || null,
+        srvRecordEnabled: srvEnabled,
+      },
+    }),
+    onSuccess: () => {
+      setMsg({ ok: true, text: 'Subdomain & DNS-Einstellungen gespeichert!' });
+      invalidate();
+      void qc.invalidateQueries({ queryKey: ['admin-dns'] });
+    },
+    onError: (err: Error) => setMsg({ ok: false, text: err.message }),
+  });
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <Section
+        title="Eigene Subdomain & Direkter Beitritt (SRV)"
+        hint="Lege eine einprägsame Subdomain für deinen Server fest. Spieler können sich diese Adresse merken, statt kryptische Portnummern tippen zu müssen."
+      >
+        <div className="p-4 rounded-xl bg-rack-2/60 border border-seam space-y-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1.5">
+              Subdomain des Servers
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Input
+                  placeholder="z. B. mc oder survival"
+                  value={subdomain}
+                  onChange={(e) => setSubdomain(e.target.value.toLowerCase())}
+                />
+              </div>
+              <span className="text-sm font-mono text-dim">
+                .{rootDomain || 'meinedomain.de'}
+              </span>
+            </div>
+            {!rootDomain && (
+              <p className="text-xs text-dim mt-1.5">
+                Hinweis: Im Menü <strong>Netzwerk</strong> kann der Administrator eine Haupt-Domain (z. B. via Cloudflare oder Hetzner DNS) hinterlegen.
+              </p>
+            )}
+          </div>
+
+          {isSrvSupported && (
+            <div className="pt-2 border-t border-seam">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={srvEnabled}
+                  onChange={(e) => setSrvEnabled(e.target.checked)}
+                  className="mt-0.5 size-4 rounded border-seam accent-amber"
+                />
+                <div>
+                  <span className="text-sm font-medium text-ink block">
+                    Automatischer SRV-Record aktivieren (Beitritt ohne Portnummer)
+                  </span>
+                  <span className="text-xs text-dim block mt-0.5">
+                    {isMinecraft && 'Erzeugt einen _minecraft._tcp-Record. Spieler geben im Spiel nur die Subdomain ohne Port ein!'}
+                    {isTeamSpeak && 'Erzeugt einen _ts3._udp-Record. Verbindung im TeamSpeak-Client direkt ohne Port!'}
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {/* Vorschau der Beitrittsadresse */}
+          {fqdn && (
+            <div className="p-3 rounded-lg bg-rack border border-amber/30 space-y-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber block">
+                Beitrittsadresse für Spieler:
+              </span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-mono text-base font-bold text-ink select-all">
+                  {connectAddress}
+                </span>
+                <Button
+                  variant="quiet"
+                  onClick={async () => {
+                    await copyText(connectAddress);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="text-xs"
+                >
+                  {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+                  {copied ? 'Kopiert' : 'Kopieren'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {msg && (
+            <div className={`p-3 rounded-lg text-sm border ${msg.ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+              {msg.text}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button
+              variant="primary"
+              busy={saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              Subdomain speichern
+            </Button>
+          </div>
+        </div>
+      </Section>
+    </div>
   );
 }

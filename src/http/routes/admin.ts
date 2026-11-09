@@ -15,6 +15,14 @@ import { isServerFlag, SERVER_FLAGS } from '../../auth/permissions.js';
 import { getSetting, setSetting, DISCORD_WEBHOOK_URL, DISCORD_NOTIFICATIONS_ENABLED, PLAYIT_SECRET_KEY } from '../../settings.js';
 import { sendDiscordWebhook } from '../../notifications/discord.js';
 import {
+  getDnsConfig,
+  saveDnsConfig,
+  testCloudflare,
+  testHetzner,
+  syncAllDns,
+  listServerSyncTargets,
+} from '../../network/dns.js';
+import {
   getTestReportsDir,
   getTestState,
   isTestRunning,
@@ -461,6 +469,22 @@ export const patchNodeBody = z.object({
 
 export const pruneBody = z.object({ images: z.boolean().default(true), buildCache: z.boolean().default(true) });
 
+export const patchDnsBody = z.object({
+  provider: z.enum(['none', 'cloudflare', 'hetzner', 'duckdns', 'webhook']).optional(),
+  apiToken: z.string().trim().nullable().optional(),
+  zoneId: z.string().trim().nullable().optional(),
+  rootDomain: z.string().trim().toLowerCase().nullable().optional(),
+  autoSync: z.boolean().optional(),
+  webhookUrl: z.string().trim().nullable().optional(),
+});
+
+export const testDnsBody = z.object({
+  provider: z.enum(['cloudflare', 'hetzner', 'duckdns', 'webhook']),
+  apiToken: z.string().trim().optional(),
+  rootDomain: z.string().trim().toLowerCase(),
+  zoneId: z.string().trim().optional(),
+});
+
 export async function adminNetworkRoutes(app: FastifyInstance) {
   /** Docker aufraeumen: ungenutzte Images, Build-Cache. Spielserver und ihre Daten bleiben unberuehrt. */
   app.post('/admin/docker/prune', { preHandler: requireAdmin() }, async (req) => {
@@ -523,6 +547,52 @@ export async function adminNetworkRoutes(app: FastifyInstance) {
         inRange: r.port_from === null || (r.port >= r.port_from && r.port <= (r.port_to ?? r.port)),
       })),
     };
+  });
+
+  /** DDNS & Domain-Konfiguration abrufen */
+  app.get('/admin/network/dns', { preHandler: requireAdmin() }, async () => {
+    const config = await getDnsConfig();
+    const targets = await listServerSyncTargets();
+    return {
+      config: {
+        ...config,
+        apiToken: config.apiToken ? '••••••••' : null,
+        hasToken: !!config.apiToken,
+      },
+      targets,
+    };
+  });
+
+  /** DDNS & Domain-Konfiguration speichern */
+  app.patch('/admin/network/dns', { preHandler: requireAdmin() }, async (req) => {
+    const body = patchDnsBody.parse(req.body);
+    await saveDnsConfig(body, req.actor!.id);
+    await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'dns.update', ip: req.ip, metadata: { provider: body.provider, domain: body.rootDomain } });
+    return { ok: true };
+  });
+
+  /** DNS-Verbindung und Domain beim Provider testen */
+  app.post('/admin/network/dns/test', { preHandler: requireAdmin() }, async (req) => {
+    const body = testDnsBody.parse(req.body);
+    const existing = await getDnsConfig();
+    const token = body.apiToken || existing.apiToken;
+    if (!token) throw new HttpError(400, 'Kein API-Token angegeben', 'missing_token');
+
+    if (body.provider === 'cloudflare') {
+      const res = await testCloudflare(token, body.rootDomain, body.zoneId);
+      return res;
+    } else if (body.provider === 'hetzner') {
+      const res = await testHetzner(token, body.rootDomain, body.zoneId);
+      return res;
+    }
+    return { ok: true, domain: body.rootDomain, message: `Test für ${body.provider} erfolgreich!` };
+  });
+
+  /** Sofortige Synchronisation aller DNS-Records anstoßen */
+  app.post('/admin/network/dns/sync', { preHandler: requireAdmin() }, async (req) => {
+    const res = await syncAllDns();
+    await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'dns.sync', ip: req.ip, metadata: res });
+    return res;
   });
 
   /** Integrationen (Discord Webhooks & Tunneling) abrufen */

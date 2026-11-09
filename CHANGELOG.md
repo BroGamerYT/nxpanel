@@ -21,10 +21,13 @@ Bis 0.4.x wurden Nachträge ohne eigene Nummer ausgespielt; sie sind hier
 nachträglich anhand des Entwicklungslogs eingeordnet. Ab 0.5.0 bekommt
 jede Auslieferung eine eigene Nummer.
 
-## [0.24.0] - 2026-11-09 – Bandbreiten-Limit pro Server
+## [0.24.0] - 2026-11-09 – DDNS, Gameserver-Subdomains & SRV-Records, Bandbreiten-Limit und Steam-Login
 
 ### Hinzugefügt
-- **Bandbreiten-Limit je Server (Upload/Download)**: Admins und Besitzer können jetzt pro Server ein Bandbreiten-Limit in KB/s für Datei-Downloads und -Uploads festlegen (z. B. über `PATCH /api/v1/servers/:id/resources` mit `bandwidthDownloadKbps` und `bandwidthUploadKbps` oder neu über die Oberfläche unter „Einstellungen → Ressourcen“). `null` bedeutet unbegrenzt. Die Drosselung erfolgt applikationsseitig über einen Token-Bucket-Stream beim Datei-Transfer.
+- **DDNS & Eigene Subdomains (Cloudflare, Hetzner, DuckDNS)**: Admins können unter „Netzwerk“ ihren DNS-Anbieter hinterlegen und automatische DDNS-Synchronisation für dynamische IPs aktivieren.
+- **Automatische SRV-Records für Gameserver**: Jeder Gameserver kann eine eigene Subdomain (z. B. `mc.brogameryt.de` oder `ts.germanylangame.de`) erhalten. Für Minecraft und TeamSpeak werden automatisch SRV-Records angelegt, sodass Spieler direkt ohne Portangabe beitreten können.
+- **Steam-Login für eingeladene & erstellte Nutzer**: Admins können beim Anlegen und Bearbeiten von Benutzern direkt deren SteamID64 hinterlegen. Nutzer können sich so passwortlos mit 1 Klick über Steam anmelden.
+- **Bandbreiten-Limit je Server (Upload/Download)**: Admins und Besitzer können pro Server ein Bandbreiten-Limit in KB/s für Datei-Downloads und -Uploads festlegen. Die Drosselung erfolgt applikationsseitig über einen Token-Bucket-Stream.
 
 ## [0.23.0] - 2026-11-08 – Online-Egg-Suche, Auto-Start-Limit, Mod-Konfigurator & TODO-Paket
 

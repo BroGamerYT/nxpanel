@@ -12,6 +12,7 @@ import { statsCollector, diskCollector } from './servers/stats.js';
 import { startBackupScheduler, stopBackupScheduler } from './servers/backup-scheduler.js';
 import { startScheduleWorker, stopScheduleWorker } from './servers/schedules.js';
 import { startAutoSleep, stopAutoSleep } from './servers/auto-sleep.js';
+import { startDdnsBackgroundService } from './network/dns.js';
 import { resumeTestRunnerIfInterrupted, stopTestRunner } from './servers/test-runner.js';
 
 function hint(lines: string[]): void {
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
   startBackupScheduler();
   startScheduleWorker();
   startAutoSleep();
+  startDdnsBackgroundService();
 
   const app = await buildServer();
   await app.listen({ port: config.PANEL_PORT, host: '0.0.0.0' });

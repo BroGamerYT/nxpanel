@@ -406,6 +406,9 @@ export async function serverRoutes(
         modpackVersion: gameInfo.modpackVersion,
         tags: server.tags ?? [],
         isFavorite: Boolean(server.is_favorite),
+        subdomain: server.subdomain,
+        customDomain: server.custom_domain,
+        srvRecordEnabled: server.srv_record_enabled ?? true,
         // Nur ausliefern, was der Nutzer sehen darf.
         ...(has('allocation.read') ? { ports } : {}),
         ...(has('startup.read') ? {

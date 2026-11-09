@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Globe, RefreshCw, Radio } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
-import type { AllocationRow, NodeInfo } from '../lib/types';
+import type { AllocationRow, NodeInfo, DnsConfig, ServerSyncTarget } from '../lib/types';
 import { Button, ErrorBox, Field, Input, Led, Spinner } from '../components/ui';
 import { t, tn, fmtDateTime } from '../lib/i18n';
 
@@ -26,6 +26,7 @@ export function Network() {
       </header>
       {nodes.isLoading && <Spinner />}
       {node && <NodeSettings node={node} />}
+      <DnsSettingsCard />
       {node && <ProxmoxRules node={node} />}
       <NetCheck />
       <section className="space-y-3">
@@ -80,6 +81,255 @@ function NodeSettings({ node }: { node: NodeInfo }) {
       )}
       <div className="flex justify-end">
         <Button variant="primary" busy={save.isPending} disabled={(from === '') !== (to === '')} onClick={() => save.mutate()}>{t('common.save')}</Button>
+      </div>
+    </section>
+  );
+}
+
+function DnsSettingsCard() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<{ config: DnsConfig; targets: ServerSyncTarget[] }>({
+    queryKey: ['admin-dns'],
+    queryFn: () => api('/admin/network/dns'),
+  });
+
+  const [provider, setProvider] = useState<'none' | 'cloudflare' | 'hetzner' | 'duckdns' | 'webhook'>('none');
+  const [rootDomain, setRootDomain] = useState('');
+  const [apiToken, setApiToken] = useState('');
+  const [zoneId, setZoneId] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [autoSync, setAutoSync] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (data?.config) {
+      setProvider(data.config.provider);
+      setRootDomain(data.config.rootDomain ?? '');
+      setZoneId(data.config.zoneId ?? '');
+      setWebhookUrl(data.config.webhookUrl ?? '');
+      setAutoSync(data.config.autoSync);
+    }
+  }, [data]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => api('/admin/network/dns', {
+      method: 'PATCH',
+      body: {
+        provider,
+        rootDomain: rootDomain.trim() || null,
+        apiToken: apiToken.trim() || undefined,
+        zoneId: zoneId.trim() || null,
+        webhookUrl: webhookUrl.trim() || null,
+        autoSync,
+      },
+    }),
+    onSuccess: () => {
+      setStatusMsg({ ok: true, text: 'DNS-Einstellungen erfolgreich gespeichert!' });
+      setApiToken('');
+      void qc.invalidateQueries({ queryKey: ['admin-dns'] });
+    },
+    onError: (err: Error) => setStatusMsg({ ok: false, text: err.message }),
+  });
+
+  const testMutation = useMutation({
+    mutationFn: () => api<{ message: string }>('/admin/network/dns/test', {
+      method: 'POST',
+      body: {
+        provider,
+        rootDomain: rootDomain.trim(),
+        apiToken: apiToken.trim() || undefined,
+        zoneId: zoneId.trim() || undefined,
+      },
+    }),
+    onSuccess: (res) => setStatusMsg({ ok: true, text: res.message }),
+    onError: (err: Error) => setStatusMsg({ ok: false, text: err.message }),
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () => api<{ message: string }>('/admin/network/dns/sync', { method: 'POST' }),
+    onSuccess: (res) => {
+      setStatusMsg({ ok: true, text: res.message });
+      void qc.invalidateQueries({ queryKey: ['admin-dns'] });
+    },
+    onError: (err: Error) => setStatusMsg({ ok: false, text: err.message }),
+  });
+
+  if (isLoading) return <Spinner />;
+  const cfg = data?.config;
+  const targets = data?.targets || [];
+
+  return (
+    <section className="space-y-5 rounded-lg border border-seam bg-rack p-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-medium text-ink flex items-center gap-2">
+            <Globe className="size-5 text-amber" />
+            DDNS & Eigene Subdomains (Cloudflare, Hetzner, DuckDNS)
+          </h2>
+          <p className="text-sm text-dim mt-0.5">
+            Verbinde deinen DNS-Anbieter, um Gameservern eigene Subdomains (z. B. <code className="text-amber">mc.brogameryt.de</code>) und automatische SRV-Records ohne Portangabe zu geben.
+          </p>
+        </div>
+        {cfg?.lastIp && (
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-rack-2 border border-seam text-xs font-mono text-dim">
+            <Radio className="size-3 text-emerald-400 animate-pulse" />
+            <span>Host-IP: {cfg.lastIp}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
+            DNS-Anbieter
+          </label>
+          <select
+            className="w-full h-10 rounded-lg bg-rack-2 border border-seam px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            value={provider}
+            onChange={(e) => setProvider(e.target.value as any)}
+          >
+            <option value="none">Deaktiviert</option>
+            <option value="cloudflare">Cloudflare (API-Token)</option>
+            <option value="hetzner">Hetzner DNS (Auth-API-Token)</option>
+            <option value="duckdns">DuckDNS</option>
+            <option value="webhook">Eigener DynDNS Webhook</option>
+          </select>
+        </div>
+
+        {provider !== 'none' && (
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
+              Haupt-Domain (Root Domain)
+            </label>
+            <Input
+              placeholder="z. B. brogameryt.de"
+              value={rootDomain}
+              onChange={(e) => setRootDomain(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
+
+      {provider !== 'none' && (
+        <>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1 flex items-center justify-between">
+                <span>API-Token {cfg?.hasToken && <span className="text-emerald-400 font-normal">(hinterlegt)</span>}</span>
+              </label>
+              <Input
+                type="password"
+                placeholder={cfg?.hasToken ? '•••••••••••• (unverändert lassen)' : 'API-Token einfügen'}
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+              />
+            </div>
+
+            {['cloudflare', 'hetzner'].includes(provider) && (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
+                  Zone-ID (optional)
+                </label>
+                <Input
+                  placeholder="Leer lassen für automatische Erkennung"
+                  value={zoneId}
+                  onChange={(e) => setZoneId(e.target.value)}
+                />
+              </div>
+            )}
+
+            {provider === 'webhook' && (
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
+                  Webhook URL
+                </label>
+                <Input
+                  placeholder="https://update.example.com?ip={ip}&domain={domain}"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <input
+              type="checkbox"
+              id="autoSyncCheck"
+              checked={autoSync}
+              onChange={(e) => setAutoSync(e.target.checked)}
+              className="size-4 rounded border-seam accent-amber"
+            />
+            <label htmlFor="autoSyncCheck" className="text-sm text-ink cursor-pointer">
+              Automatische DDNS-Synchronisation alle 5 Minuten bei IP-Änderung aktivieren
+            </label>
+          </div>
+
+          {/* Letzter Sync-Status */}
+          {cfg?.lastSyncAt && (
+            <div className="p-3 rounded-lg bg-rack-2/60 border border-seam flex items-center justify-between text-xs text-dim">
+              <span>Zuletzt synchronisiert: <strong className="text-ink">{fmtDateTime(cfg.lastSyncAt, { dateStyle: 'short', timeStyle: 'medium' })}</strong></span>
+              <span className={`px-2 py-0.5 rounded font-mono ${cfg.lastSyncStatus === 'OK' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                {cfg.lastSyncStatus ?? 'Unbekannt'}
+              </span>
+            </div>
+          )}
+
+          {/* Aktive Subdomains der Gameserver */}
+          {targets.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-seam">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-dim">
+                Aktive Server-Subdomains ({targets.length})
+              </h3>
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {targets.map((t) => (
+                  <div key={t.id} className="p-2.5 rounded-lg bg-rack-2 border border-seam flex flex-col gap-1 text-xs">
+                    <div className="font-semibold text-amber truncate">{t.subdomain}.{rootDomain || 'domain'}</div>
+                    <div className="text-dim text-[11px] truncate">{t.name} (Port {t.primaryPort})</div>
+                    {t.srvRecordEnabled && (
+                      <span className="text-[10px] text-emerald-400 font-medium">✓ SRV ohne Port</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {statusMsg && (
+        <div className={`p-3 rounded-lg border text-sm ${statusMsg.ok ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+          {statusMsg.text}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <div className="flex items-center gap-2">
+          {provider !== 'none' && ['cloudflare', 'hetzner'].includes(provider) && (
+            <Button
+              variant="quiet"
+              busy={testMutation.isPending}
+              disabled={!rootDomain}
+              onClick={() => testMutation.mutate()}
+            >
+              Verbindung testen
+            </Button>
+          )}
+          {provider !== 'none' && (
+            <Button
+              variant="quiet"
+              busy={syncMutation.isPending}
+              onClick={() => syncMutation.mutate()}
+              className="text-amber hover:text-ink"
+            >
+              <RefreshCw className="size-3.5" />
+              Jetzt synchronisieren
+            </Button>
+          )}
+        </div>
+        <Button variant="primary" busy={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+          {t('common.save')}
+        </Button>
       </div>
     </section>
   );

@@ -92,6 +92,9 @@ export interface ServerListItem {
   modpackVersion: string | null;
   tags: string[];
   isFavorite: boolean;
+  subdomain?: string | null;
+  customDomain?: string | null;
+  srvRecordEnabled?: boolean;
 }
 
 export function extractGameInfo(
@@ -170,11 +173,13 @@ export async function listServersForActor(actor: Actor): Promise<ServerListItem[
     auto_restart: boolean; crash_count: number; suspended: boolean;
     primary_port: number | null; public_host: string | null; port_from: number | null; port_to: number | null; created_at: Date; started_at: Date | null; subuser_flags: string[] | null;
     variables: Record<string, string>; tags: string[] | null; is_favorite: boolean | null;
+    subdomain: string | null; custom_domain: string | null; srv_record_enabled: boolean | null;
   }[]>`
     SELECT s.id, s.short_id, s.name, s.status, s.owner_id, u.username AS owner_name,
            e.name AS egg_name, s.egg_id, e.raw_egg AS egg_raw, e.cover AS egg_cover, e.cover_version AS egg_cover_version,
            s.ram_mb, s.cpu_percent, s.disk_mb, s.auto_restart, s.crash_count, s.suspended, s.created_at, s.started_at,
-           s.variables, s.tags, s.is_favorite, su.permissions AS subuser_flags, n.public_host, n.port_from, n.port_to,
+           s.variables, s.tags, s.is_favorite, s.subdomain, s.custom_domain, s.srv_record_enabled,
+           su.permissions AS subuser_flags, n.public_host, n.port_from, n.port_to,
            (SELECT a.port FROM allocations a WHERE a.server_id = s.id AND a.is_primary LIMIT 1) AS primary_port
     FROM servers s
     JOIN users u ON u.id = s.owner_id
@@ -215,6 +220,9 @@ export async function listServersForActor(actor: Actor): Promise<ServerListItem[
       modpackVersion: info.modpackVersion,
       tags: r.tags ?? [],
       isFavorite: Boolean(r.is_favorite),
+      subdomain: r.subdomain,
+      customDomain: r.custom_domain,
+      srvRecordEnabled: r.srv_record_enabled ?? true,
     };
   });
 }

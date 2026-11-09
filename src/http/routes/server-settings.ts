@@ -13,6 +13,8 @@ import { writeAudit } from '../../audit.js';
 import type { RateLimiter } from '../../auth/ratelimit.js';
 import { HttpError, requireServer } from '../auth.js';
 import type { ServerOps } from './servers.js';
+import { syncAllDns } from '../../network/dns.js';
+import { log } from '../../log.js';
 
 /**
  * Einstellungen eines bestehenden Servers.
@@ -40,6 +42,12 @@ export const extraPortBody = z.object({
   /** Kurzname, wird im Container als <NAME>_PORT bekannt, z. B. "dynmap" -> DYNMAP_PORT */
   ref: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_]{1,23}$/, 'Nur Kleinbuchstaben, Ziffern, _ (2-24 Zeichen)'),
   protocol: z.enum(['tcp', 'udp', 'both']).default('tcp'),
+});
+
+export const domainBody = z.object({
+  subdomain: z.string().trim().toLowerCase().regex(/^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/, 'Ungültige Subdomain (nur a-z, 0-9 und Bindestrich, 2-32 Zeichen)').nullable().optional(),
+  customDomain: z.string().trim().toLowerCase().max(128).nullable().optional(),
+  srvRecordEnabled: z.boolean().optional(),
 });
 
 function requireStopped(status: string) {
@@ -328,6 +336,48 @@ export async function serverSettingsRoutes(app: FastifyInstance, opts: { ops: Se
     await writeAudit({ userId: actor.id, serverId: server.id, actorName: actor.username, action: 'server.port_remove', ip: req.ip, metadata: { port, ref: a.ref } });
     await rebuild(ops, server.id, actor.id, `Port ${port} entfernt`);
     return { ok: true };
+  });
+
+  /** Subdomain und SRV-Einstellungen des Servers aktualisieren */
+  app.patch<{ Params: { id: string } }>('/servers/:id/domain', { preHandler: requireServer('allocation.assign') }, async (req) => {
+    const { server } = req.target!;
+    const actor = req.actor!;
+    const body = domainBody.parse(req.body);
+
+    const sub = body.subdomain !== undefined ? (body.subdomain?.trim().toLowerCase() || null) : undefined;
+    const custom = body.customDomain !== undefined ? (body.customDomain?.trim().toLowerCase() || null) : undefined;
+
+    if (sub) {
+      const [dup] = await sql`SELECT 1 FROM servers WHERE lower(subdomain) = ${sub} AND id != ${server.id}`;
+      if (dup) throw new HttpError(409, `Die Subdomain "${sub}" ist bereits für einen anderen Server vergeben`, 'subdomain_taken');
+    }
+
+    await sql`
+      UPDATE servers SET
+        subdomain = ${sub !== undefined ? sub : sql`subdomain`},
+        custom_domain = ${custom !== undefined ? custom : sql`custom_domain`},
+        srv_record_enabled = ${body.srvRecordEnabled !== undefined ? body.srvRecordEnabled : sql`srv_record_enabled`}
+      WHERE id = ${server.id}
+    `;
+
+    await writeAudit({
+      userId: actor.id,
+      serverId: server.id,
+      actorName: actor.username,
+      action: 'server.domain_update',
+      ip: req.ip,
+      metadata: { subdomain: sub, customDomain: custom, srvRecordEnabled: body.srvRecordEnabled },
+    });
+
+    // Im Hintergrund DNS synchronisieren
+    void syncAllDns().catch((err) => log.warn({ err }, 'DNS Sync nach Subdomain-Aenderung fehlgeschlagen'));
+
+    return {
+      ok: true,
+      subdomain: sub !== undefined ? sub : server.subdomain,
+      customDomain: custom !== undefined ? custom : server.custom_domain,
+      srvRecordEnabled: body.srvRecordEnabled !== undefined ? body.srvRecordEnabled : (server.srv_record_enabled ?? true),
+    };
   });
 }
 

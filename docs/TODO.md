@@ -31,7 +31,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Online-Spieler je Server anzeigen – Minecraft (0.13.0)
 - [x] Online-Spieler für weitere Spiele: ARK und Palworld mit Kicken/Bannen, Valheim/7DTD/SotF/CS2 anzeigen (0.15.0)
 - [x] Spieler kicken, bannen (mit Begründung und Dauer) sowie Bann- und Whitelists im Panel verwalten – Minecraft (0.13.0)
-- [ ] DDNS und eigene Subdomains je Server (Cloudflare, DuckDNS, Hetzner DNS) mit automatischen SRV-Records (ohne Portangabe beitreten)
+- [x] DDNS und eigene Subdomains je Server (Cloudflare, DuckDNS, Hetzner DNS) mit automatischen SRV-Records (ohne Portangabe beitreten) (0.24.0)
 - [x] 1-Klick Update-Button im Panel: Panel selbst aktualisieren & Server-Dateien auf Knopfdruck updaten (0.23.0)
 - [x] Globale Suche / Befehlspalette (Strg+K): blitzschnell Server, Einstellungen, Menüs und Dateien finden (0.12.0)
 - [x] Visuelle Konfigurations-Formulare für Spieleggs in Server-Einstellungen (0.12.0)
@@ -89,9 +89,9 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 
 ## Netzwerk und Domains
 
-- [ ] DDNS-Unterstützung für dynamische Host-IPs (Cloudflare API, Hetzner DNS, DuckDNS, Custom Webhook)
-- [ ] Eigene Subadressen je Gameserver (z. B. mc.meinedomain.de) unabhängig von der IP des Host-Servers
-- [ ] Automatische SRV-Records für Minecraft und TeamSpeak (Spieler treten ohne Portangabe bei)
+- [x] DDNS-Unterstützung für dynamische Host-IPs (Cloudflare API, Hetzner DNS, DuckDNS, Custom Webhook) (0.24.0)
+- [x] Eigene Subadressen je Gameserver (z. B. mc.meinedomain.de) unabhängig von der IP des Host-Servers (0.24.0)
+- [x] Automatische SRV-Records für Minecraft und TeamSpeak (Spieler treten ohne Portangabe bei) (0.24.0)
 
 ## Phase 6 – Mehrbenutzer und Rechtesystem (Abgeschlossen)
 

@@ -262,7 +262,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                   </Tooltip>
                 )
               )}
-              {primary && <Address port={primary.port} host={server.publicHost} />}
+              {primary && <Address port={primary.port} host={server.publicHost} subdomain={server.subdomain} srvRecordEnabled={server.srvRecordEnabled} eggName={server.egg?.name} />}
               {!live.connected && <span className="text-led-start">{t('server.connecting')}</span>}
             </div>
             {((server.tags && server.tags.length > 0) || canEditMeta) && (

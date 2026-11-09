@@ -46,6 +46,9 @@ export interface ServerListItem {
   modpackVersion?: string | null;
   tags?: string[];
   isFavorite?: boolean;
+  subdomain?: string | null;
+  customDomain?: string | null;
+  srvRecordEnabled?: boolean;
 }
 
 export interface ServerDetail {
@@ -66,6 +69,9 @@ export interface ServerDetail {
     modpackVersion?: string | null;
     tags?: string[];
     isFavorite?: boolean;
+    subdomain?: string | null;
+    customDomain?: string | null;
+    srvRecordEnabled?: boolean;
     variables?: Record<string, string>;
   };
   permissions: string[];
@@ -302,4 +308,28 @@ export interface GameTestReportData {
   } | null;
   markdownReport?: string | null;
   logTail?: string | null;
+}
+
+export interface DnsConfig {
+  provider: 'none' | 'cloudflare' | 'hetzner' | 'duckdns' | 'webhook';
+  apiToken: string | null;
+  hasToken: boolean;
+  zoneId: string | null;
+  rootDomain: string | null;
+  autoSync: boolean;
+  lastSyncAt: string | null;
+  lastSyncStatus: string | null;
+  lastIp: string | null;
+  webhookUrl: string | null;
+}
+
+export interface ServerSyncTarget {
+  id: string;
+  name: string;
+  subdomain: string;
+  customDomain: string | null;
+  srvRecordEnabled: boolean;
+  primaryPort: number;
+  eggName: string;
+  gameKind: string | null;
 }
