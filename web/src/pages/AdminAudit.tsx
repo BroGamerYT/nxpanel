@@ -634,7 +634,7 @@ export function AdminAudit() {
                       {/* Details */}
                       <td className="px-3.5 py-2.5 text-xs text-dim">
                         {detailsSummary ? (
-                          <span className="font-mono text-slate-300 bg-rack-2/70 px-2 py-0.5 rounded border border-seam/80 inline-block truncate max-w-sm">
+                          <span className="font-mono text-slate-300 bg-rack-2/70 px-2 py-0.5 rounded border border-seam/80 inline-block truncate max-w-2xl">
                             {detailsSummary}
                           </span>
                         ) : (
@@ -643,10 +643,10 @@ export function AdminAudit() {
                       </td>
 
                       {/* Info Button */}
-                      <td className="px-3 py-2.5 text-right whitespace-nowrap w-[48px] shrink-0">
+                      <td className="px-3.5 py-2.5 text-right whitespace-nowrap w-[48px] shrink-0">
                         <div
                           title="Details anzeigen"
-                          className="size-7 rounded-md bg-rack-2/80 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center justify-center ml-auto"
+                          className="size-7 rounded-lg bg-rack-2/80 text-dim group-hover:text-amber group-hover:bg-rack-3 transition-colors inline-flex items-center justify-center ml-auto"
                         >
                           <Eye className="size-3.5" />
                         </div>
