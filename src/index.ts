@@ -10,6 +10,7 @@ import { startSupervisor, stopSupervisor } from './servers/supervisor.js';
 import { startBanExpiry, stopBanExpiry } from './games/ban-expiry.js';
 import { statsCollector, diskCollector } from './servers/stats.js';
 import { startBackupScheduler, stopBackupScheduler } from './servers/backup-scheduler.js';
+import { cleanupOrphanedBackups } from './servers/backups.js';
 import { startScheduleWorker, stopScheduleWorker } from './servers/schedules.js';
 import { startAutoSleep, stopAutoSleep } from './servers/auto-sleep.js';
 import { startDdnsBackgroundService } from './network/dns.js';
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
   // Speicher messen geht auch ohne Docker (Datenordner der Server).
   diskCollector.start();
   startBackupScheduler();
+  await cleanupOrphanedBackups().catch((err: unknown) => log.warn({ err }, 'Bereinigung verwaister Backups fehlgeschlagen'));
   startScheduleWorker();
   startAutoSleep();
   startDdnsBackgroundService();

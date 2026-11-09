@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { api, currentToken, refreshSession } from '../lib/api';
 import { t } from '../lib/i18n';
-import type { BackupItem, ServerStatus, BackupSchedule, BackupVerificationDetails } from '../lib/types';
+import type { BackupItem, ServerStatus, BackupSchedule, BackupVerificationDetails, ActiveTask } from '../lib/types';
 import { Button, ErrorBox, Spinner } from './ui';
 
 function formatBytes(bytes: number): string {
@@ -98,6 +98,17 @@ export function BackupManager({
     queryKey: ['backup-schedule', serverId],
     queryFn: () => api<{ schedule: BackupSchedule }>(`/servers/${serverId}/backup-schedule`),
     enabled: canRead,
+  });
+
+  const { data: tasksData } = useQuery<{ tasks: ActiveTask[] }>({
+    queryKey: ['active-tasks', serverId],
+    queryFn: () => api<{ tasks: ActiveTask[] }>(`/servers/${serverId}/tasks/active`),
+    enabled: canRead,
+    refetchInterval: (query) => {
+      const list = query.state.data?.tasks ?? [];
+      const hasBackup = list.some((t) => t.type === 'backup');
+      return hasBackup ? 1500 : 8000;
+    },
   });
 
   const invalidate = () => {
@@ -346,6 +357,15 @@ export function BackupManager({
                                 <span>NAS</span>
                               </span>
                             )}
+                            {tasksData?.tasks.some((t) => t.id === `nas-sync-${b.id}`) && (
+                              <span
+                                className="shrink-0 inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 animate-pulse"
+                                title="Wird aktuell auf das UGREEN NAS übertragen"
+                              >
+                                <Cloud className="size-2.5" />
+                                <span>NAS Sync...</span>
+                              </span>
+                            )}
                           </div>
                           {/* Zweite Zeile: wann erstellt - die Datei heisst fast wie das Backup, der volle Name steht im Tooltip. */}
                           <div className="text-xs text-dim truncate" title={b.filename}>
@@ -358,12 +378,25 @@ export function BackupManager({
 
                     {/* Status */}
                     <td className="py-2.5 px-3">
-                      {b.status === 'running' && (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-amber font-medium">
-                          <span className="size-2 rounded-full bg-amber animate-pulse" />
-                          {t('backups.status_running')}
-                        </span>
-                      )}
+                      {b.status === 'running' && (() => {
+                        const activeTask = tasksData?.tasks.find(
+                          (t) => t.id === `backup-${b.id}` || t.id === `nas-sync-${b.id}`
+                        );
+                        return (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1.5 text-xs text-amber font-medium">
+                              <span className="size-2 rounded-full bg-amber animate-pulse" />
+                              {t('backups.status_running')}
+                              {activeTask?.progressPercent !== undefined && ` (${activeTask.progressPercent} %)`}
+                            </span>
+                            {activeTask?.subtitle && (
+                              <p className="text-[10px] text-dim truncate max-w-[200px]" title={activeTask.subtitle}>
+                                {activeTask.subtitle}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {b.status === 'restoring' && (
                         <span className="inline-flex items-center gap-1.5 text-xs text-blue-400 font-medium">
                           <span className="size-2 rounded-full bg-blue-400 animate-pulse" />

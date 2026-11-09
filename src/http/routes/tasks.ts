@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { statSync, existsSync } from 'node:fs';
 import { sql } from '../../db/index.js';
-import { backupFilePath } from '../../servers/backups.js';
+import { backupFilePath, activeBackupStates, activeNasSyncs } from '../../servers/backups.js';
 import { diskCollector } from '../../servers/stats.js';
 import { isUpdating, updateState } from '../../servers/modpack-update.js';
 import { requireAuth } from '../auth.js';
@@ -66,21 +66,44 @@ export async function taskRoutes(app: FastifyInstance) {
     for (const b of runningBackups) {
       if (!isAdmin && b.owner_id !== actor.id) continue;
 
+      const active = activeBackupStates.get(b.id);
+      let subtitle = 'Archivierung wird vorbereitet...';
+      let progressPercent = 5;
       let bytesWritten = 0;
-      try {
-        const p = backupFilePath(b.server_id, b.id);
-        if (existsSync(p)) {
-          bytesWritten = statSync(p).size;
-        }
-      } catch {}
+      let totalBytes = (diskCollector.serverMb().get(b.server_id) ?? 0) * 1024 * 1024;
+      let step: string | undefined = undefined;
 
-      const serverMb = diskCollector.serverMb().get(b.server_id) ?? 0;
-      const totalBytes = serverMb * 1024 * 1024;
-      // Zstd komprimiert Spiele meist um das 2- bis 2.5-fache (ca. 45% Zielgroesse)
-      const targetCompressed = Math.max(totalBytes * 0.45, 10 * 1024 * 1024);
-      const progressPercent = totalBytes > 0
-        ? Math.min(99, Math.max(5, Math.round((bytesWritten / targetCompressed) * 100)))
-        : undefined;
+      if (active) {
+        progressPercent = active.progressPercent;
+        bytesWritten = active.bytesWritten;
+        totalBytes = active.totalBytes;
+        step = active.phase;
+
+        if (active.phase === 'compressing') {
+          const mbWritten = (active.bytesWritten / (1024 * 1024)).toFixed(1);
+          const mbTotal = (active.totalBytes / (1024 * 1024)).toFixed(0);
+          subtitle = `1/3: Archiv wird gepackt... ${mbWritten} MB geschrieben${active.totalBytes > 0 ? ` (von ~${mbTotal} MB)` : ''}`;
+        } else if (active.phase === 'hashing') {
+          const mbHashed = ((active.hashedBytes ?? 0) / (1024 * 1024)).toFixed(0);
+          const mbTotal = ((active.archiveSize ?? active.bytesWritten) / (1024 * 1024)).toFixed(0);
+          subtitle = `2/3: SHA-256 Prüfsumme berechnen... ${mbHashed} / ${mbTotal} MB`;
+        } else if (active.phase === 'uploading_nas') {
+          const mbTrans = ((active.nasTransferred ?? 0) / (1024 * 1024)).toFixed(1);
+          const mbTotal = ((active.nasTotal ?? active.archiveSize ?? active.bytesWritten) / (1024 * 1024)).toFixed(1);
+          const mbSpeed = ((active.nasSpeed ?? 0) / (1024 * 1024)).toFixed(1);
+          subtitle = `3/3: Auf UGREEN NAS sichern... ${mbTrans} / ${mbTotal} MB (${mbSpeed} MB/s)`;
+        } else if (active.phase === 'verifying') {
+          subtitle = 'Integritätsprüfung & Validierung läuft...';
+        }
+      } else {
+        try {
+          const p = backupFilePath(b.server_id, b.id);
+          if (existsSync(p)) bytesWritten = statSync(p).size;
+        } catch {}
+        subtitle = bytesWritten > 0
+          ? `${(bytesWritten / (1024 * 1024)).toFixed(1)} MB geschrieben`
+          : 'Archivierung wird vorbereitet...';
+      }
 
       // Pruefen ob dieses Backup zu einem 1-Klick-Game-Update gehoert
       const gameUpdate = activeGameUpdates.get(b.server_id);
@@ -95,13 +118,38 @@ export async function taskRoutes(app: FastifyInstance) {
         title: isPreUpdateBackup
           ? `Sicherheits-Backup vor Update`
           : `Backup „${b.name}“`,
-        subtitle: bytesWritten > 0
-          ? `${(bytesWritten / (1024 * 1024)).toFixed(1)} MB geschrieben${totalBytes > 0 ? ` (von ~${(totalBytes / (1024 * 1024)).toFixed(0)} MB Daten)` : ''}`
-          : 'Archivierung wird vorbereitet...',
+        subtitle,
         progressPercent,
         bytesWritten,
         totalBytes,
+        step,
         startedAt: b.created_at.toISOString(),
+      });
+    }
+
+    // Eigenständige UGREEN NAS Synchronisationen erfassen
+    for (const [backupId, sync] of activeNasSyncs.entries()) {
+      if (!isAdmin) {
+        const [srv] = await sql<{ owner_id: string }[]>`SELECT owner_id FROM servers WHERE id = ${sync.serverId}`;
+        if (srv?.owner_id !== actor.id) continue;
+      }
+      const mbTrans = (sync.transferred / (1024 * 1024)).toFixed(1);
+      const mbTotal = (sync.total / (1024 * 1024)).toFixed(1);
+      const mbSpeed = (sync.speed / (1024 * 1024)).toFixed(1);
+
+      tasks.push({
+        id: `nas-sync-${backupId}`,
+        type: 'backup',
+        serverId: sync.serverId,
+        serverName: sync.serverName,
+        shortId: '',
+        title: `UGREEN NAS Übertragung: „${sync.backupName}“`,
+        subtitle: `${mbTrans} / ${mbTotal} MB übertragen (${mbSpeed} MB/s)`,
+        progressPercent: sync.progressPercent,
+        bytesWritten: sync.transferred,
+        totalBytes: sync.total,
+        step: 'uploading_nas',
+        startedAt: new Date(sync.startedAt).toISOString(),
       });
     }
 

@@ -1,4 +1,4 @@
-import { existsSync, createReadStream } from 'node:fs';
+import { existsSync, createReadStream, createWriteStream, statSync } from 'node:fs';
 import { mkdir, stat, rm, copyFile, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -10,6 +10,42 @@ import { writeEvent } from '../events.js';
 import { writeAudit } from '../audit.js';
 import { log } from '../log.js';
 import { STOPPED_STATES } from './create.js';
+import { diskCollector } from './stats.js';
+
+export interface ActiveBackupState {
+  backupId: string;
+  serverId: string;
+  serverName: string;
+  shortId: string;
+  name: string;
+  phase: 'compressing' | 'hashing' | 'uploading_nas' | 'verifying' | 'completed' | 'failed';
+  bytesWritten: number;
+  totalBytes: number;
+  archiveSize?: number;
+  hashedBytes?: number;
+  nasTransferred?: number;
+  nasTotal?: number;
+  nasSpeed?: number;
+  progressPercent: number;
+  error?: string;
+  startedAt: number;
+}
+
+export const activeBackupStates = new Map<string, ActiveBackupState>();
+
+export interface ActiveNasSync {
+  backupId: string;
+  serverId: string;
+  serverName: string;
+  backupName: string;
+  transferred: number;
+  total: number;
+  speed: number;
+  progressPercent: number;
+  startedAt: number;
+}
+
+export const activeNasSyncs = new Map<string, ActiveNasSync>();
 
 export interface BackupRow {
   id: string;
@@ -159,17 +195,88 @@ export async function findNasBackupPath(
 }
 
 /**
- * Synchronisiert ein fertiges Backup auf das UGREEN NAS mit menschenlesbaren Namen
+ * Synchronisiert ein fertiges Backup auf das UGREEN NAS mit Stream und Fortschrittsmessung
  */
-export async function syncBackupToNas(serverId: string, backupId: string): Promise<boolean> {
+export async function syncBackupToNas(
+  serverId: string,
+  backupId: string,
+  onProgress?: (transferred: number, total: number, speed: number) => void
+): Promise<boolean> {
   const src = backupFilePath(serverId, backupId);
   if (!existsSync(src)) return false;
+
+  const isStandalone = !onProgress;
+  let activeSync: ActiveNasSync | undefined;
+
+  if (isStandalone) {
+    const [b] = await sql<{ name: string; filename: string }[]>`SELECT name, filename FROM backups WHERE id = ${backupId}`;
+    const [s] = await sql<{ name: string }[]>`SELECT name FROM servers WHERE id = ${serverId}`;
+    const st = await stat(src).catch(() => null);
+    if (st) {
+      activeSync = {
+        backupId,
+        serverId,
+        serverName: s?.name || serverId,
+        backupName: b?.name || backupId,
+        transferred: 0,
+        total: st.size,
+        speed: 0,
+        progressPercent: 0,
+        startedAt: Date.now(),
+      };
+      activeNasSyncs.set(backupId, activeSync);
+    }
+  }
 
   try {
     if (existsSync(config.NAS_BACKUP_ROOT)) {
       const dst = await getNasBackupDestinationPath(serverId, backupId);
       await mkdir(dirname(dst), { recursive: true });
-      await copyFile(src, dst);
+
+      const st = await stat(src);
+      const total = st.size;
+      let transferred = 0;
+      let lastReport = Date.now();
+      let lastBytes = 0;
+      let speed = 0;
+
+      await new Promise<void>((resolve, reject) => {
+        const inStream = createReadStream(src);
+        const outStream = createWriteStream(dst);
+
+        inStream.on('data', (chunk) => {
+          transferred += chunk.length;
+          const now = Date.now();
+          if (now - lastReport >= 500) {
+            speed = ((transferred - lastBytes) / (now - lastReport)) * 1000;
+            lastReport = now;
+            lastBytes = transferred;
+            onProgress?.(transferred, total, speed);
+            if (activeSync) {
+              activeSync.transferred = transferred;
+              activeSync.speed = speed;
+              activeSync.progressPercent = Math.round((transferred / total) * 100);
+            }
+          }
+        });
+
+        inStream.on('error', (err) => {
+          outStream.destroy();
+          reject(err);
+        });
+        outStream.on('error', reject);
+        outStream.on('finish', () => {
+          onProgress?.(total, total, 0);
+          if (activeSync) {
+            activeSync.transferred = total;
+            activeSync.progressPercent = 100;
+          }
+          resolve();
+        });
+
+        inStream.pipe(outStream);
+      });
+
       log.info({ backupId, serverId, dst }, 'Backup erfolgreich auf UGREEN NAS synchronisiert');
 
       await writeEvent({
@@ -184,18 +291,35 @@ export async function syncBackupToNas(serverId: string, backupId: string): Promi
     }
   } catch (err) {
     log.warn({ err, backupId, serverId }, 'Synchronisation zum UGREEN NAS fehlgeschlagen');
+  } finally {
+    if (activeSync) {
+      setTimeout(() => {
+        activeNasSyncs.delete(backupId);
+      }, 3000);
+    }
   }
   return false;
 }
 
 /**
- * Berechnet den SHA-256 Hash einer Datei als Checksumme
+ * Berechnet den SHA-256 Hash einer Datei als Checksumme mit Fortschritt
  */
-async function computeSha256(filePath: string): Promise<string> {
+async function computeSha256(
+  filePath: string,
+  totalSize?: number,
+  onProgress?: (hashed: number, total: number) => void
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = createHash('sha256');
     const stream = createReadStream(filePath);
-    stream.on('data', (d) => hash.update(d));
+    let hashed = 0;
+    stream.on('data', (d) => {
+      hash.update(d);
+      hashed += d.length;
+      if (totalSize && onProgress) {
+        onProgress(hashed, totalSize);
+      }
+    });
     stream.on('end', () => resolve(hash.digest('hex')));
     stream.on('error', reject);
   });
@@ -278,6 +402,42 @@ async function runBackupCreation(
   const archivePath = backupFilePath(serverId, backupId);
   const srcDir = volumePath(shortId);
 
+  // Server- & Backup-Name für aussagekräftige Live-Fortschrittsanzeige laden
+  const [srv] = await sql<{ name: string }[]>`SELECT name FROM servers WHERE id = ${serverId}`;
+  const serverName = srv?.name || serverId;
+  const [bRow] = await sql<{ name: string }[]>`SELECT name FROM backups WHERE id = ${backupId}`;
+  const backupName = bRow?.name || backupId;
+
+  const serverMb = diskCollector.serverMb().get(serverId) ?? 0;
+  const totalBytes = serverMb * 1024 * 1024;
+  const targetCompressed = Math.max(totalBytes * 0.45, 10 * 1024 * 1024);
+
+  const state: ActiveBackupState = {
+    backupId,
+    serverId,
+    serverName,
+    shortId,
+    name: backupName,
+    phase: 'compressing',
+    bytesWritten: 0,
+    totalBytes,
+    progressPercent: 5,
+    startedAt: Date.now(),
+  };
+  activeBackupStates.set(backupId, state);
+
+  // Polling während Komprimierung läuft: misst Archivgröße und skaliert von 5% bis 65%
+  const progressInterval = setInterval(() => {
+    try {
+      if (existsSync(archivePath)) {
+        const sz = statSync(archivePath).size;
+        state.bytesWritten = sz;
+        const compPct = targetCompressed > 0 ? sz / targetCompressed : 0;
+        state.progressPercent = Math.min(65, Math.max(5, Math.round(compPct * 60) + 5));
+      }
+    } catch {}
+  }, 1000);
+
   try {
     await mkdir(dir, { recursive: true });
 
@@ -318,8 +478,55 @@ async function runBackupCreation(
       proc.on('error', reject);
     });
 
+    clearInterval(progressInterval);
+
     const st = await stat(archivePath);
-    const checksum = await computeSha256(archivePath);
+    state.archiveSize = st.size;
+    state.bytesWritten = st.size;
+    state.phase = 'hashing';
+    state.progressPercent = 65;
+
+    // Phase 2: Prüfsumme mit Fortschritt (65% bis 75%)
+    const checksum = await computeSha256(archivePath, st.size, (hashed, total) => {
+      state.hashedBytes = hashed;
+      const hashPct = total > 0 ? hashed / total : 1;
+      state.progressPercent = 65 + Math.round(hashPct * 10);
+    });
+
+    // Phase 3: UGREEN NAS Übertragung (75% bis 95%)
+    if (existsSync(config.NAS_BACKUP_ROOT)) {
+      state.phase = 'uploading_nas';
+      state.nasTotal = st.size;
+      state.nasTransferred = 0;
+      state.progressPercent = 75;
+
+      await syncBackupToNas(serverId, backupId, (transferred, total, speed) => {
+        state.nasTransferred = transferred;
+        state.nasTotal = total;
+        state.nasSpeed = speed;
+        const uploadPct = total > 0 ? transferred / total : 1;
+        state.progressPercent = 75 + Math.round(uploadPct * 20);
+      });
+    }
+
+    // Phase 4: Auto-Verifizierung & Retention ausführen
+    const [srvConfig] = await sql<{
+      auto_backup_verify: boolean;
+      auto_backup_retention: number;
+    }[]>`
+      SELECT auto_backup_verify, auto_backup_retention FROM servers WHERE id = ${serverId}
+    `;
+
+    if (srvConfig?.auto_backup_verify) {
+      state.phase = 'verifying';
+      state.progressPercent = 95;
+      await verifyBackup(serverId, backupId, actor).catch((err) => {
+        log.warn({ err, backupId }, 'Automatische Verifizierung nach Backup-Erstellung fehlgeschlagen');
+      });
+    }
+
+    state.progressPercent = 100;
+    state.phase = 'completed';
 
     await sql`
       UPDATE backups
@@ -348,30 +555,16 @@ async function runBackupCreation(
       metadata: { backupId, bytes: st.size },
     });
 
-    // Automatisch auf UGREEN NAS synchronisieren, falls verfuegbar
-    void syncBackupToNas(serverId, backupId);
-
-    // Auto-Verifizierung & Retention ausfuehren, falls am Server aktiviert
-    const [srvConfig] = await sql<{
-      auto_backup_verify: boolean;
-      auto_backup_retention: number;
-    }[]>`
-      SELECT auto_backup_verify, auto_backup_retention FROM servers WHERE id = ${serverId}
-    `;
-
-    if (srvConfig?.auto_backup_verify) {
-      await verifyBackup(serverId, backupId, actor).catch((err) => {
-        log.warn({ err, backupId }, 'Automatische Verifizierung nach Backup-Erstellung fehlgeschlagen');
-      });
-    }
-
     if (srvConfig && srvConfig.auto_backup_retention > 0) {
       await rotateBackups(serverId, srvConfig.auto_backup_retention).catch((err) => {
         log.warn({ err, serverId }, 'Backup-Retention-Bereinigung fehlgeschlagen');
       });
     }
   } catch (err) {
+    clearInterval(progressInterval);
+    state.phase = 'failed';
     const errorMsg = err instanceof Error ? err.message : String(err);
+    state.error = errorMsg;
     log.error({ err, backupId, serverId }, 'Backup-Erstellung fehlgeschlagen');
 
     await rm(archivePath, { force: true }).catch(() => {});
@@ -392,6 +585,35 @@ async function runBackupCreation(
       summary: `Backup fehlgeschlagen: ${errorMsg}`,
       payload: { backupId },
     });
+  } finally {
+    setTimeout(() => {
+      activeBackupStates.delete(backupId);
+    }, 4000);
+  }
+}
+
+/**
+ * Bereinigt beim Panel-Start verwaiste Backups, deren Erstellung durch
+ * einen Panel-Neustart oder Container-Absturz unterbrochen wurde.
+ */
+export async function cleanupOrphanedBackups(): Promise<void> {
+  const orphaned = await sql<BackupRow[]>`
+    SELECT * FROM backups WHERE status = 'running'
+  `;
+  if (orphaned.length === 0) return;
+
+  log.info({ count: orphaned.length }, 'Verwaiste Backups nach Panel-Start werden bereinigt');
+  for (const b of orphaned) {
+    const p = backupFilePath(b.server_id, b.id);
+    await sql`
+      UPDATE backups
+      SET status = 'failed',
+          error = 'Erstellung durch Panel-Neustart oder Server-Absturz unterbrochen',
+          completed_at = now()
+      WHERE id = ${b.id}
+    `;
+    await rm(p, { force: true }).catch(() => {});
+    log.info({ backupId: b.id, serverId: b.server_id }, 'Verwaistes Backup auf fehlgeschlagen gesetzt und bereinigt');
   }
 }
 
