@@ -102,7 +102,7 @@ export function UserServerAssignModal({ user, onClose }: Props) {
     mutationFn: async ({ serverId, isOwner, permissions }: { serverId: string; isOwner?: boolean; permissions?: string[] }) => {
       return api(`/admin/users/${user.id}/servers/${serverId}`, {
         method: 'PUT',
-        body: JSON.stringify({ isOwner, permissions }),
+        body: { isOwner, permissions },
       });
     },
     onSuccess: () => {
@@ -140,7 +140,7 @@ export function UserServerAssignModal({ user, onClose }: Props) {
         const permissions = serverPerms[s.id] ?? [];
         await api(`/admin/users/${user.id}/servers/${s.id}`, {
           method: 'PUT',
-          body: JSON.stringify({ isOwner, permissions }),
+          body: { isOwner, permissions },
         });
       }
       qc.invalidateQueries({ queryKey: ['admin-user-servers', user.id] });

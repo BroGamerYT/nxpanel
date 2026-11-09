@@ -77,7 +77,7 @@ export function SubusersManager({ serverId, canManage }: Props) {
     mutationFn: (body: { user: string; permissions: string[] }) =>
       api(`/servers/${serverId}/subusers`, {
         method: 'POST',
-        body: JSON.stringify(body),
+        body,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['subusers', serverId] });
@@ -90,7 +90,7 @@ export function SubusersManager({ serverId, canManage }: Props) {
     mutationFn: ({ userId, permissions }: { userId: string; permissions: string[] }) =>
       api(`/servers/${serverId}/subusers/${userId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ permissions }),
+        body: { permissions },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['subusers', serverId] });

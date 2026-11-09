@@ -57,7 +57,7 @@ export function AdminUsers() {
     mutationFn: (body: unknown) =>
       api<{ user: AdminUserItem; password?: string }>('/admin/users', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body,
       }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
@@ -74,7 +74,7 @@ export function AdminUsers() {
     mutationFn: ({ id, body }: { id: string; body: unknown }) =>
       api(`/admin/users/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(body),
+        body,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });

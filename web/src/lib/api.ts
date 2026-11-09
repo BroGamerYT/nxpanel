@@ -57,7 +57,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
       ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
-    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+    ...(init.body !== undefined ? { body: typeof init.body === 'string' ? init.body : JSON.stringify(init.body) } : {}),
   });
 
   if (res.status === 401 && retry && !path.startsWith('/auth/login') && !path.startsWith('/auth/refresh')) {
@@ -67,7 +67,9 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    throw new ApiError(res.status, errorMessage(data?.code, data?.error ?? t('common.errorCode', { code: res.status })), data?.code, data?.issues);
+    const firstIssue = Array.isArray(data?.issues) && data.issues.length > 0 ? data.issues[0]?.message : null;
+    const msg = firstIssue || data?.error || t('common.errorCode', { code: res.status });
+    throw new ApiError(res.status, errorMessage(data?.code, msg), data?.code, data?.issues);
   }
   return data as T;
 }
