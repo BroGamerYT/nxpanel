@@ -174,7 +174,7 @@ export async function testSteamAccount(
 
   let output = '';
   try {
-    const res = await engine.runOneOff('steamcmd/steamcmd:latest', cmd, 35000);
+    const res = await engine.runOneOff('steamcmd/steamcmd:latest', cmd, 75000);
     output = res.output;
   } catch (err: any) {
     return {
@@ -185,6 +185,51 @@ export async function testSteamAccount(
   }
 
   const out = output.toLowerCase();
+
+  // 1. Erfolgreich eingeloggt (auch per Push-Bestätigung am Handy!)
+  const loginSuccess =
+    out.includes('waiting for confirmation...ok') ||
+    out.includes('waiting for user info...ok') ||
+    out.includes('waiting for license info...ok') ||
+    (out.includes('logging in user') && out.includes('...ok'));
+
+  if (loginSuccess) {
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'ok',
+          guard_type = 'app',
+          guard_code = ${codeToTry ?? null},
+          guard_prompt = NULL,
+          last_used_at = now(),
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'ok',
+      message: 'Steam-Verbindung erfolgreich über Handy-Bestätigung verifiziert!',
+      account: updated,
+    };
+  }
+
+  // 2. Wartet auf Push-Bestätigung in der Steam-App
+  if (out.includes('waiting for confirmation') || out.includes('please confirm the login in the steam mobile app')) {
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'needed',
+          guard_type = 'app',
+          guard_prompt = 'Bitte öffne die Steam-App auf deinem Smartphone und tippe auf Bestätigen',
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'needed',
+      guardType: 'app',
+      message: 'Steam hat eine Bestätigung an dein Smartphone gesendet! Bitte dort auf Bestätigen tippen.',
+      account: updated,
+    };
+  }
 
   // 1. Falsches Passwort oder Steam Guard 2FA erforderlich
   if (out.includes('invalid password') || out.includes('error (invalid password)')) {
@@ -242,18 +287,13 @@ export async function testSteamAccount(
     };
   }
 
-  // 3. Steam Guard wird benötigt
+  // 4. Steam Guard wird benötigt
   const needsGuard =
     out.includes('twofactorcodemismatch') ||
     out.includes('accountlogondenied') ||
     out.includes('steam guard') ||
     out.includes('two-factor code') ||
     out.includes('mobile authenticator');
-
-  const loginSuccess =
-    out.includes('waiting for user info...ok') ||
-    out.includes('waiting for license info...ok') ||
-    (out.includes('logging in user') && out.includes('...ok'));
 
   if (needsGuard && !loginSuccess) {
     const isApp = out.includes('mobile') || out.includes('twofactor') || out.includes('authenticator');
