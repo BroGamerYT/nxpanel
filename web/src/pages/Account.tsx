@@ -682,6 +682,30 @@ export function Account() {
                   </div>
                 )}
 
+                {/* Hinweis warum Passwort für Gameserver SteamCMD nötig ist */}
+                <div className="p-3 rounded-xl border border-sky-500/30 bg-sky-500/10 text-xs text-sky-200/90 leading-relaxed flex items-start gap-2.5">
+                  <Info className="size-4 text-sky-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-white">Warum Passwort statt 1-Klick-Login?</strong><br />
+                    Für Spiele mit Steam-Pflicht (z. B. Farming Simulator 25, Arma 3) lädt der Server die Spieldateien per <em>SteamCMD</em> direkt von Valve herunter. Valve erlaubt für Spiel-Downloads aus Sicherheitsgründen keinen 1-Klick-Login ohne Passwort. Deine Daten werden sicher mit AES-256-GCM verschlüsselt!
+                  </div>
+                </div>
+
+                {/* Schnellübernahme aus verknüpftem Steam-Profil */}
+                {me?.user.steamName && !accountName && !editAccountId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!accountLabel) setAccountLabel(`Steam (${me.user.steamName})`);
+                      setAccountName(me.user.steamName || '');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-semibold bg-[#171a21] hover:bg-[#2a475e] text-[#66c0f4] border border-[#2a475e] transition shadow-sm"
+                  >
+                    <SteamIcon className="size-4 text-[#66c0f4]" />
+                    <span>Namen aus verknüpftem Profil übernehmen ({me.user.steamName})</span>
+                  </button>
+                )}
+
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
