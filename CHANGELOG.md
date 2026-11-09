@@ -21,6 +21,17 @@ Bis 0.4.x wurden Nachträge ohne eigene Nummer ausgespielt; sie sind hier
 nachträglich anhand des Entwicklungslogs eingeordnet. Ab 0.5.0 bekommt
 jede Auslieferung eine eigene Nummer.
 
+## [0.25.0] - 2026-11-09 – Live-Echtzeit, Toast-Meldungen & Massenaktionen
+
+### Hinzugefügt
+- **Panelweiter Live-Strom (WebSocket)**: Ein neuer WebSocket (`/api/v1/live/ws`) meldet Ereignisse aller Server in Echtzeit. Die Serverliste aktualisiert sich dadurch sofort bei Statuswechseln, statt alle 5 s nachzufragen; das Polling bleibt als Sicherheitsnetz erhalten (jetzt 15 s).
+- **Toast-Benachrichtigungen**: Neue Meldungen oben rechts für Erfolg, Fehler, Warnung und Info – z. B. bei fehlgeschlagenen Power-Aktionen oder Massenaktionen.
+- **Massenaktionen für Server**: In der Listenansicht lassen sich Server per Checkbox auswählen (einzeln oder alle) und gemeinsam starten, neu starten oder stoppen. Fehlende Rechte oder unpassende Zustände werden automatisch übersprungen, das Ergebnis erscheint als Toast.
+- **Optimistische Statuswechsel**: Start/Stopp/Neustart wirken jetzt sofort in der Oberfläche, statt auf die Server-Antwort zu warten – mit automatischem Rollback bei Fehlern.
+
+### Geändert
+- **Leerer-Zustand der Serverliste**: Freundlicher gestaltet mit Icon und direktem „Ersten Server anlegen“-Button statt nur Text.
+
 ## [0.24.1] - 2026-11-09 – Integrierter SFTP-Server, RCON-Konsole & Passkey (WebAuthn/FIDO2) Authentifizierung
 
 ### Hinzugefügt

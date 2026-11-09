@@ -100,3 +100,56 @@ export function useLive(serverId: string, onLines: (lines: string[], meta: { his
 
   return { status, startedAt, canCommand, connected, stats, events, lastError, sendCommand, clearError: () => setLastError(null) };
 }
+
+type GlobalMsg =
+  | { type: 'hello' }
+  | { type: 'event'; event: { id: number; serverId: string | null; kind: string; severity: string; summary: string; ts: string } }
+  | { type: 'error'; message: string };
+
+/**
+ * Panelweiter Live-Strom. Meldet Ereignisse aller Server über einen
+ * einzigen WebSocket. `onEvent` wird bei jedem Ereignis aufgerufen –
+ * typischerweise, um React-Query-Caches zu invalidieren. Baut sich bei
+ * Abbruch selbst wieder auf (1 s, 2 s, 4 s … bis 30 s).
+ */
+export function useGlobalLive(onEvent: (serverId: string | null) => void) {
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
+
+  useEffect(() => {
+    let stopped = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let ws: WebSocket | null = null;
+
+    async function connect() {
+      try {
+        const { ticket } = await api<{ ticket: string }>('/live/ws-ticket', { method: 'POST' });
+        if (stopped) return;
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(`${proto}://${location.host}/api/v1/live/ws?ticket=${encodeURIComponent(ticket)}`);
+        ws.onopen = () => { attempt = 0; };
+        ws.onmessage = (e) => {
+          let m: GlobalMsg;
+          try { m = JSON.parse(e.data as string) as GlobalMsg; } catch { return; }
+          if (m.type === 'event') onEventRef.current(m.event.serverId);
+        };
+        ws.onclose = () => { if (!stopped) schedule(); };
+      } catch {
+        schedule();
+      }
+    }
+    function schedule() {
+      if (stopped) return;
+      const delay = Math.min(30_000, 1000 * 2 ** attempt++);
+      timer = setTimeout(() => void connect(), delay);
+    }
+
+    void connect();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      ws?.close();
+    };
+  }, []);
+}

@@ -18,6 +18,17 @@ Version format (as parsed by the panel):
 
 Until 0.4.x, intermediate revisions were deployed without individual version numbers; they are cataloged here retrospectively based on the development log. Starting with 0.5.0, every deployment receives its own version number.
 
+## [0.25.0] - 2026-11-09 – Realtime live updates, toasts & bulk actions
+
+### Added
+- **Panel-wide live stream (WebSocket)**: A new WebSocket (`/api/v1/live/ws`) pushes events from all servers in real time. The server list refreshes instantly on status changes instead of polling every 5 s; polling remains as a safety net (now 15 s).
+- **Toast notifications**: New messages in the top-right corner for success, error, warning and info – e.g. on failed power actions or bulk actions.
+- **Bulk actions for servers**: In the list view, servers can be selected via checkbox (individually or all) and started, restarted or stopped together. Missing permissions or invalid states are skipped automatically, the result is shown as a toast.
+- **Optimistic status changes**: Start/stop/restart now take effect immediately in the UI instead of waiting for the server response – with automatic rollback on errors.
+
+### Changed
+- **Empty state of the server list**: Friendlier design with an icon and a direct "Create your first server" button instead of text only.
+
 ## [0.24.0] - 2026-11-09 – Per-server bandwidth limits
 
 ### Added

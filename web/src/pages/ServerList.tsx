@@ -2,16 +2,18 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GameCover } from '../components/GameCover';
-import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical, RotateCcw, AlertTriangle, Star, Tag, Play, Square, Activity } from 'lucide-react';
+import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical, RotateCcw, AlertTriangle, Star, Tag, Play, Square, Activity, CheckSquare, Square as SquareIcon, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
 import { useAuth } from '../lib/auth';
 import { POWER_ALLOWED, STATUS, formatMb, formatRate, formatUptime } from '../lib/status';
 import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
+import { useGlobalLive } from '../lib/live';
+import { toast } from '../lib/toast';
 import type { DashboardData, ServerListItem, ServerLive, ServerStatus } from '../lib/types';
 import { Dashboard, Bar } from '../components/Dashboard';
 import { DashboardSidebar } from '../components/DashboardSidebar';
-import { ErrorBox, Input, Led, Select, Spinner, StatusLabel } from '../components/ui';
+import { Button, ErrorBox, Input, Led, Select, Spinner, StatusLabel } from '../components/ui';
 import { t } from '../lib/i18n';
 import { Tooltip } from '../components/Tooltip';
 
@@ -31,7 +33,16 @@ export function ServerList() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['servers'],
     queryFn: () => api<{ servers: ServerListItem[] }>('/servers'),
-    refetchInterval: 5_000,
+    refetchInterval: 15_000,
+  });
+
+  // Panelweiter Live-Strom: bei jedem Ereignis die Listen sofort auffrischen,
+  // statt stur alle 5 s nachzufragen. Das Polling oben bleibt als Sicherheitsnetz.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<PowerAction | null>(null);
+  useGlobalLive(() => {
+    void qc.invalidateQueries({ queryKey: ['servers'] });
+    void qc.invalidateQueries({ queryKey: ['dashboard'] });
   });
 
   const toggleAutoStart = useMutation({
@@ -46,7 +57,7 @@ export function ServerList() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['servers'] }),
   });
 
-  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<DashboardData>('/dashboard'), refetchInterval: 5_000 });
+  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<DashboardData>('/dashboard'), refetchInterval: 15_000 });
   const [view, setView] = useState<View>(loadView);
   const pick = (v: View) => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* egal */ } };
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(loadSidebar);
@@ -74,6 +85,44 @@ export function ServerList() {
     (!q || `${s.name} ${s.eggName} ${s.ownerName} ${s.primaryPort ?? ''} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(q.toLowerCase())),
   );
   const running = servers.filter((s) => s.status === 'running').length;
+
+  // ---- Bulk-Auswahl & Massenaktionen ----
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const allShownSelected = shown.length > 0 && shown.every((s) => selected.has(s.id));
+  const toggleSelectAll = () =>
+    setSelected(allShownSelected ? new Set() : new Set(shown.map((s) => s.id)));
+
+  const bulkAction = async (action: PowerAction) => {
+    // Nur Server, die diese Aktion erlauben und deren Recht vorhanden ist
+    const targets = shown.filter(
+      (s) => selected.has(s.id) && s.permissions.includes(`control.${action}`) && POWER_ALLOWED[action].includes(s.status)
+    );
+    if (targets.length === 0) {
+      toast.warn(t('servers.bulkNone', { action: POWER_LABEL[action] }));
+      return;
+    }
+    setBulkBusy(action);
+    try {
+      const results = await Promise.allSettled(
+        targets.map((s) => api(`/servers/${s.id}/power`, { method: 'POST', body: { action } }))
+      );
+      const ok = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.length - ok;
+      if (failed === 0) toast.success(t('servers.bulkDone', { action: POWER_LABEL[action], count: ok }));
+      else toast.warn(t('servers.bulkPartial', { action: POWER_LABEL[action], ok, failed }));
+      setSelected(new Set());
+    } catch (err) {
+      toast.error(t('servers.bulkError'), err instanceof Error ? err.message : undefined);
+    } finally {
+      setBulkBusy(null);
+      void qc.invalidateQueries({ queryKey: ['servers'] });
+    }
+  };
 
   return (
     <div className="max-w-[1720px] w-full">
@@ -154,12 +203,44 @@ export function ServerList() {
           {isLoading && <Spinner />}
           {error && <ErrorBox>{t('servers.loadError', { message: (error as Error).message })}</ErrorBox>}
 
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 mb-4">
+              <span className="text-sm text-ink font-medium mr-1">
+                {t('servers.bulkSelected', { count: selected.size })}
+              </span>
+              <Button variant="primary" busy={bulkBusy === 'start'} onClick={() => void bulkAction('start')}>
+                <Play className="size-3.5" /> {POWER_LABEL.start}
+              </Button>
+              <Button variant="quiet" busy={bulkBusy === 'restart'} onClick={() => void bulkAction('restart')}>
+                <RotateCcw className="size-3.5" /> {POWER_LABEL.restart}
+              </Button>
+              <Button variant="quiet" busy={bulkBusy === 'stop'} onClick={() => void bulkAction('stop')}>
+                <Square className="size-3.5" /> {POWER_LABEL.stop}
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="ml-auto inline-flex items-center gap-1 text-sm text-dim hover:text-ink"
+              >
+                <X className="size-3.5" /> {t('servers.bulkClear')}
+              </button>
+            </div>
+          )}
+
           {!isLoading && servers.length === 0 && (
-            <div className="rounded-lg border border-dashed border-seam px-6 py-12 text-center">
-              <p className="text-ink font-medium">{t('servers.empty')}</p>
-              <p className="text-dim text-sm mt-1">
+            <div className="rounded-xl border border-dashed border-seam/80 bg-rack/30 px-6 py-16 text-center">
+              <div className="mx-auto mb-4 grid place-items-center size-14 rounded-2xl bg-rack-2/60 border border-seam">
+                <Package className="size-7 text-amber" aria-hidden />
+              </div>
+              <h2 className="text-ink font-semibold text-lg">{t('servers.empty')}</h2>
+              <p className="text-dim text-sm mt-1.5 max-w-md mx-auto">
                 {me?.permissions['server.create'] ? t('servers.emptyCreate') : t('servers.emptyInvite')}
               </p>
+              {me?.permissions['server.create'] && (
+                <Link to="/neu" className="inline-flex items-center gap-2 h-10 px-4 mt-5 rounded-md bg-amber text-amber-ink font-semibold text-sm hover:brightness-110">
+                  <Play className="size-4" /> {t('servers.create')}
+                </Link>
+              )}
             </div>
           )}
 
@@ -185,6 +266,17 @@ export function ServerList() {
               <table className="w-full text-sm">
                 <thead className="bg-rack text-dim text-left">
                   <tr>
+                    <th className="px-3 py-2.5 w-8">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        title={allShownSelected ? t('servers.bulkClear') : t('servers.bulkSelectAll')}
+                        aria-label={allShownSelected ? t('servers.bulkClear') : t('servers.bulkSelectAll')}
+                        className="text-dim hover:text-amber"
+                      >
+                        {allShownSelected ? <CheckSquare className="size-4 text-amber" /> : <SquareIcon className="size-4" />}
+                      </button>
+                    </th>
                     <th className="font-medium px-3 py-2.5">{t('servers.col.name')}</th>
                     <th className="font-medium px-3 py-2.5 hidden sm:table-cell">{t('servers.col.game')}</th>
                     <th className="font-medium px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{t('servers.col.address')}</th>
@@ -195,7 +287,17 @@ export function ServerList() {
                 </thead>
                 <tbody className="divide-y divide-seam">
                   {shown.map((s) => (
-                    <tr key={s.id} className="hover:bg-rack/70">
+                    <tr key={s.id} className={`hover:bg-rack/70 ${selected.has(s.id) ? 'bg-amber/5' : ''}`}>
+                      <td className="px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelect(s.id)}
+                          aria-label={t('servers.bulkSelectOne', { name: s.name })}
+                          className="text-dim hover:text-amber"
+                        >
+                          {selected.has(s.id) ? <CheckSquare className="size-4 text-amber" /> : <SquareIcon className="size-4" />}
+                        </button>
+                      </td>
                       <td className="px-3 py-2.5 max-w-[240px]">
                         <div className="flex items-center gap-2 min-w-0">
                           <button

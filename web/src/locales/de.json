@@ -388,7 +388,8 @@
     "killConfirm": "Wirklich abwürgen?",
     "restart": "Neu starten",
     "start": "Starten",
-    "stop": "Stoppen"
+    "stop": "Stoppen",
+    "errorTitle": "{action} fehlgeschlagen"
   },
   "res": {
     "cores_one": "{count} Kern",
@@ -455,6 +456,16 @@
     "empty": "Noch keine Server",
     "emptyCreate": "Leg den ersten an – Spiel aussuchen, RAM festlegen, fertig.",
     "emptyInvite": "Sobald dich jemand zu einem Server einlädt, erscheint er hier.",
+    "bulkSelected_one": "{count} ausgewählt",
+    "bulkSelected_other": "{count} ausgewählt",
+    "bulkSelectAll": "Alle auswählen",
+    "bulkSelectOne": "Server {name} auswählen",
+    "bulkClear": "Auswahl aufheben",
+    "bulkNone": "Kein ausgewählter Server erlaubt „{action}“.",
+    "bulkDone_one": "{action}: {count} Server",
+    "bulkDone_other": "{action}: {count} Server",
+    "bulkPartial": "{action}: {ok} erfolgreich, {failed} fehlgeschlagen",
+    "bulkError": "Massenaktion fehlgeschlagen",
     "loadError": "Serverliste konnte nicht geladen werden: {message}",
     "noMatch": "Kein Server passt zu diesem Filter.",
     "runningOf_one": "{running} von {count} läuft",

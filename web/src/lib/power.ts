@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import { t } from './i18n';
-import type { ServerListItem, ServerStatus } from './types';
-import { useToast } from './toast';
+import type { ServerDetail, ServerListItem, ServerStatus } from './types';
+import { toast } from './toast';
 
 export type PowerAction = 'start' | 'stop' | 'restart' | 'kill';
 
@@ -20,37 +20,42 @@ const NEXT_STATUS: Record<PowerAction, ServerStatus> = {
   kill: 'stopping',
 };
 
-/** Power-Knopf: Optimistischer Statuswechsel, dann API, dann Rollback bei Fehler. */
+/**
+ * Power-Knopf: Optimistischer Statuswechsel, dann API, dann Rollback bei Fehler.
+ * Dadurch fühlt sich Start/Stopp sofort an, statt auf die Server-Antwort zu warten.
+ */
 export function usePower(serverId: string) {
   const qc = useQueryClient();
-  const { success, error } = useToast();
   return useMutation({
     mutationFn: (action: PowerAction) => api(`/servers/${serverId}/power`, { method: 'POST', body: { action } }),
     onMutate: async (action) => {
-      // Alle abfragen für diese Server-ID abbrechen
+      // Laufende Abfragen abbrechen, damit sie das optimistische Update nicht überschreiben
       await qc.cancelQueries({ queryKey: ['server', serverId] });
       await qc.cancelQueries({ queryKey: ['servers'] });
 
-      // Aktuelle Werte sichern für Rollback
-      const previousServer = qc.getQueryData<{ server: ServerListItem } | null>(['server', serverId]);
-      const previousServers = qc.getQueryData<{ servers: ServerListItem[] } | null>(['servers']);
+      // Aktuellen Stand für Rollback sichern
+      const previousServer = qc.getQueryData<ServerDetail>(['server', serverId]);
+      const previousServers = qc.getQueryData<{ servers: ServerListItem[] }>(['servers']);
 
       // Optimistisch den Status setzen
       const next = NEXT_STATUS[action];
-      qc.setQueryData<{ server: ServerListItem } | null>(['server', serverId], (old) =>
-        old ? { server: { ...old.server, status: next } } : old
-      );
-      qc.setQueryData<{ servers: ServerListItem[] } | null>(['servers'], (old) =>
-        old ? { servers: old.servers.map((s) => s.id === serverId ? { ...s, status: next } : s) } : old
+      if (previousServer) {
+        qc.setQueryData<ServerDetail>(['server', serverId], {
+          ...previousServer,
+          server: { ...previousServer.server, status: next },
+        });
+      }
+      qc.setQueryData<{ servers: ServerListItem[] }>(['servers'], (old) =>
+        old ? { ...old, servers: old.servers.map((s) => s.id === serverId ? { ...s, status: next } : s) } : old
       );
 
-      return { previousServer, previousServers, action };
+      return { previousServer, previousServers };
     },
     onError: (err, variables, context) => {
       // Rollback auf vorherigen Stand
       qc.setQueryData(['server', serverId], context?.previousServer);
       qc.setQueryData(['servers'], context?.previousServers);
-      error(
+      toast.error(
         t('power.errorTitle', { action: POWER_LABEL[variables] }),
         err instanceof Error ? err.message : t('common.errorCode', { code: 'unknown' })
       );

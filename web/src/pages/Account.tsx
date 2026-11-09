@@ -21,6 +21,9 @@ import {
   Sparkles,
   Info,
   Fingerprint,
+  Copy,
+  Download,
+  Key,
 } from 'lucide-react';
 import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { api, currentToken } from '../lib/api';
@@ -83,7 +86,53 @@ export function Account() {
   const [totpSetupData, setTotpSetupData] = useState<{ secret: string; otpauth: string; qrDataUrl?: string } | null>(null);
   const [totpVerifyCode, setTotpVerifyCode] = useState('');
   const [totpRecoveryCodes, setTotpRecoveryCodes] = useState<string[] | null>(null);
+  const [totpCopyDone, setTotpCopyDone] = useState(false);
   const [totpError, setTotpError] = useState<string | null>(null);
+  const [regenModalOpen, setRegenModalOpen] = useState(false);
+  const [regenPassword, setRegenPassword] = useState('');
+  const [regenBusy, setRegenBusy] = useState(false);
+
+  function handleDownloadCodes(codes: string[]) {
+    const username = me?.user.username || 'user';
+    const content = `NexusPanel 2FA Wiederherstellungscodes\nBenutzer: ${username}\nDatum: ${new Date().toLocaleString()}\n\nBewahre diese Codes an einem sicheren Ort auf (z. B. in KeePass oder deinem Passwortmanager).\nJeder Code kann genau einmal zur Anmeldung verwendet werden:\n\n${codes.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nexuspanel-recovery-codes-${username}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleCopyCodes(codes: string[]) {
+    void navigator.clipboard.writeText(codes.join('\n'));
+    setTotpCopyDone(true);
+    setTimeout(() => setTotpCopyDone(false), 2500);
+  }
+
+  async function handleRegenerateCodes() {
+    if (!regenPassword) {
+      setTotpError('Bitte gib dein aktuelles Passwort ein.');
+      return;
+    }
+    setRegenBusy(true);
+    setTotpError(null);
+    try {
+      const res = await api<{ recoveryCodes: string[] }>('/auth/totp/recovery-codes', {
+        method: 'POST',
+        body: { password: regenPassword },
+      });
+      setTotpRecoveryCodes(res.recoveryCodes);
+      setRegenModalOpen(false);
+      setRegenPassword('');
+    } catch (err: any) {
+      setTotpError(err?.message || 'Fehler beim Neugenerieren der Codes');
+    } finally {
+      setRegenBusy(false);
+    }
+  }
 
   // Query: Steam Accounts
   const { data: steamData, isLoading: steamLoading, refetch: refetchSteam } = useQuery<{ accounts: SteamAccount[] }>({
@@ -1094,12 +1143,27 @@ export function Account() {
 
             {me?.user.totpEnabled ? (
               <div className="space-y-4">
-                <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-xs flex items-center gap-3">
-                  <CheckCircle2 className="size-6 shrink-0" />
-                  <div>
-                    <div className="font-semibold text-sm">2FA ist aktiv</div>
-                    <div className="text-[11px] text-emerald-300 mt-0.5">Dein Konto ist optimal gegen unbefugten Zugriff geschützt.</div>
+                <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-xs flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="size-6 shrink-0" />
+                    <div>
+                      <div className="font-semibold text-sm">2FA ist aktiv</div>
+                      <div className="text-[11px] text-emerald-300 mt-0.5">Dein Konto ist optimal gegen unbefugten Zugriff geschützt.</div>
+                    </div>
                   </div>
+                  <Button
+                    variant="quiet"
+                    onClick={() => {
+                      setRegenPassword('');
+                      setTotpError(null);
+                      setRegenModalOpen(true);
+                    }}
+                    className="text-xs shrink-0"
+                    title="Neue Wiederherstellungscodes generieren und anzeigen"
+                  >
+                    <Key className="size-3.5" />
+                    Wiederherstellungscodes
+                  </Button>
                 </div>
               </div>
             ) : totpSetupData ? (
@@ -1140,18 +1204,44 @@ export function Account() {
               </div>
             )}
 
-            {/* Wiederherstellungscodes nach Einrichtung anzeigen */}
+            {/* Wiederherstellungscodes nach Einrichtung oder Neugenerierung anzeigen */}
             {totpRecoveryCodes && (
               <div className="p-4 rounded-xl border border-amber/40 bg-amber/10 space-y-3">
-                <div className="text-xs font-bold text-amber flex items-center gap-1.5">
-                  <AlertTriangle className="size-4" />
-                  Wichtig: Sichere deine Wiederherstellungscodes!
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-amber flex items-center gap-1.5">
+                    <AlertTriangle className="size-4 shrink-0" />
+                    Wichtig: Sichere deine Wiederherstellungscodes!
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="quiet"
+                      className="text-xs py-1 h-7 text-ink"
+                      onClick={() => handleCopyCodes(totpRecoveryCodes)}
+                    >
+                      {totpCopyDone ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+                      {totpCopyDone ? 'Kopiert!' : 'Kopieren'}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="text-xs py-1 h-7"
+                      onClick={() => handleDownloadCodes(totpRecoveryCodes)}
+                    >
+                      <Download className="size-3" />
+                      Herunterladen (.txt)
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 font-mono text-xs text-ink bg-rack p-3 rounded-lg border border-seam">
+                <div className="grid grid-cols-2 gap-1.5 font-mono text-xs text-ink bg-rack p-3 rounded-lg border border-seam select-all">
                   {totpRecoveryCodes.map((c, i) => (
-                    <div key={i}>{c}</div>
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-dim text-[10px] w-4">{i + 1}.</span>
+                      <span>{c}</span>
+                    </div>
                   ))}
                 </div>
+                <p className="text-[11px] text-dim">
+                  Jeder Code kann genau 1x verwendet werden, falls du dein Handy verlierst. Speichere sie z. B. in KeePass oder drucke sie aus.
+                </p>
               </div>
             )}
           </div>
@@ -1165,7 +1255,7 @@ export function Account() {
                   Passkeys & Biometrie (WebAuthn / FIDO2)
                 </h2>
                 <p className="text-xs text-dim mt-1">
-                  Melde dich blitzschnell und ohne Passwort mit Touch ID, Windows Hello, Face ID oder einem YubiKey an.
+                  Melde dich blitzschnell und ohne Passwort an. Unterstützt <strong>KeePassXC</strong> (mit Browser-Erweiterung), <strong>Proton Pass</strong>, <strong>Bitwarden</strong>, <strong>1Password</strong>, <strong>Windows Hello</strong>, Apple Touch ID und YubiKeys.
                 </p>
               </div>
               <Button
@@ -1242,13 +1332,13 @@ export function Account() {
               Neuen Passkey einrichten
             </h3>
             <p className="text-xs text-dim">
-              Gib dem Passkey einen Namen (z. B. "MacBook Touch ID" oder "Windows PC"), damit du deine Schlüssel auseinanderhalten kannst.
+              Gib dem Passkey einen Namen (z. B. "MacBook Touch ID", "KeePassXC" oder "Windows Hello"), damit du deine Schlüssel auseinanderhalten kannst.
             </p>
             <Field label="Gerätename">
               <Input
                 value={passkeyDeviceName}
                 onChange={(e) => setPasskeyDeviceName(e.target.value)}
-                placeholder="z. B. Mein Arbeitsrechner"
+                placeholder="z. B. Mein Arbeitsrechner / KeePassXC"
                 className="text-xs"
                 autoFocus
               />
@@ -1264,6 +1354,47 @@ export function Account() {
               </Button>
               <Button variant="primary" onClick={handleAddPasskey} busy={passkeyAdding}>
                 Sicherheitsschlüssel aktivieren
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Neue Wiederherstellungscodes anfordern */}
+      {regenModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-rack border border-seam rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-ink flex items-center gap-2">
+              <Key className="size-5 text-amber" />
+              Wiederherstellungscodes neu generieren
+            </h3>
+            <p className="text-xs text-dim leading-relaxed">
+              Bitte bestätige dein Kontopasswort. Deine bisherigen Wiederherstellungscodes werden dadurch ungültig und durch neue ersetzt.
+            </p>
+            <Field label="Aktuelles Passwort">
+              <Input
+                type="password"
+                value={regenPassword}
+                onChange={(e) => setRegenPassword(e.target.value)}
+                placeholder="Dein Passwort eingeben"
+                className="text-xs"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleRegenerateCodes();
+                }}
+              />
+            </Field>
+            {totpError && (
+              <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs">
+                {totpError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="quiet" onClick={() => setRegenModalOpen(false)}>
+                Abbrechen
+              </Button>
+              <Button variant="primary" onClick={handleRegenerateCodes} busy={regenBusy}>
+                Codes jetzt generieren
               </Button>
             </div>
           </div>

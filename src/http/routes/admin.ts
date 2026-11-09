@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError, requireAdmin, requireGlobalPermission } from '../auth.js';
 import { setRefreshCookie } from './auth.js';
-import { createUser, publicUser, UserInputError, type UserRow } from '../../auth/users.js';
+import { createUser, publicUser, setPassword, UserInputError, type UserRow } from '../../auth/users.js';
 import { revokeAllUserSessions, createSession } from '../../auth/sessions.js';
 import { signAccessToken } from '../../auth/tokens.js';
 import { disableTotp } from '../../auth/twofactor.js';
@@ -303,6 +303,35 @@ export async function adminUserRoutes(app: FastifyInstance) {
     await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'user.update', ip: req.ip,
       metadata: { target: u.username, ...body } });
     return { ok: true };
+  });
+
+  /** Admin kann Passwort eines Benutzers neu setzen oder automatisch ein sicheres generieren lassen */
+  app.post<{ Params: { id: string } }>('/admin/users/:id/reset-password', { preHandler: requireAdmin() }, async (req) => {
+    const id = uuidParam(req.params.id);
+    const [u] = await sql<{ id: string; username: string }[]>`SELECT id, username FROM users WHERE id = ${id}`;
+    if (!u) throw new HttpError(404, 'Nutzer nicht gefunden', 'not_found');
+
+    const body = z.object({ password: z.string().max(256).optional() }).parse(req.body ?? {});
+    const generated = !body.password || !body.password.trim();
+    const newPw = generated ? randomBytes(18).toString('base64url') : body.password!.trim();
+
+    try {
+      await setPassword(u.id, newPw);
+    } catch (err: any) {
+      if (err instanceof UserInputError) throw new HttpError(400, err.message, 'invalid_password');
+      throw err;
+    }
+
+    await revokeAllUserSessions(u.id, 'admin_password_reset');
+    await writeAudit({
+      userId: req.actor!.id,
+      actorName: req.actor!.username,
+      action: 'user.password_reset',
+      ip: req.ip,
+      metadata: { targetUserId: u.id, targetUsername: u.username, generated },
+    });
+
+    return { ok: true, password: newPw, generated, username: u.username };
   });
 
   /** Handy weg und keine Wiederherstellungscodes mehr: Admin schaltet 2FA ab. */

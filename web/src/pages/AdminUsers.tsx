@@ -7,7 +7,7 @@ import { Button, Input, Select, ErrorBox, Spinner } from '../components/ui';
 import type { AdminUserItem, EggSummary } from '../lib/types';
 import {
   Users, UserPlus, Shield, Key, Lock, Unlock, Edit2, Check,
-  X, AlertTriangle, Search, Server, Cpu, HardDrive, Gamepad2, Eye,
+  X, AlertTriangle, Search, Server, Cpu, HardDrive, Gamepad2, Eye, Copy,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { UserServerAssignModal } from '../components/UserServerAssignModal';
@@ -33,6 +33,11 @@ export function AdminUsers() {
   const [assignUser, setAssignUser] = useState<AdminUserItem | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [generatedPw, setGeneratedPw] = useState<{ user: string; userId: string; pw: string } | null>(null);
+  const [resetPwUser, setResetPwUser] = useState<AdminUserItem | null>(null);
+  const [resetPwCustom, setResetPwCustom] = useState('');
+  const [resetPwResult, setResetPwResult] = useState<{ user: string; pw: string } | null>(null);
+  const [resetPwError, setResetPwError] = useState<string | null>(null);
+  const [resetPwCopied, setResetPwCopied] = useState(false);
 
   // Formular-Zustände für Neuanlage
   const [newUsername, setNewUsername] = useState('');
@@ -107,6 +112,24 @@ export function AdminUsers() {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
     },
     onError: (err: Error) => setErrorMsg(err.message),
+  });
+
+  const resetPwMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password?: string }) => {
+      return api<{ ok: boolean; password: string; generated: boolean; username: string }>(
+        `/admin/users/${userId}/reset-password`,
+        { method: 'POST', body: { password: password || undefined } }
+      );
+    },
+    onSuccess: (res) => {
+      setResetPwResult({ user: res.username, pw: res.password });
+      setResetPwUser(null);
+      setResetPwCustom('');
+      setResetPwError(null);
+    },
+    onError: (err: any) => {
+      setResetPwError(err?.message || 'Fehler beim Zurücksetzen des Passworts');
+    },
   });
 
   function resetNewForm() {
@@ -361,6 +384,18 @@ export function AdminUsers() {
                         <Edit2 className="size-3.5" />
                         Bearbeiten
                       </Button>
+                      <Button
+                        variant="quiet"
+                        onClick={() => {
+                          setResetPwUser(u);
+                          setResetPwCustom('');
+                          setResetPwError(null);
+                        }}
+                        title={`Passwort für ${u.username} zurücksetzen oder neu vergeben`}
+                      >
+                        <Key className="size-3.5 text-amber" />
+                        Passwort
+                      </Button>
                       {u.totpEnabled && (
                         <Button
                           variant="danger"
@@ -416,6 +451,108 @@ export function AdminUsers() {
               </Button>
               <Button variant="primary" onClick={() => setGeneratedPw(null)}>
                 Schließen
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Passwort zurücksetzen / neu vergeben */}
+      {resetPwUser && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-rack border border-seam rounded-xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-ink font-semibold">
+                <Key className="size-5 text-amber" />
+                Passwort für {resetPwUser.username}
+              </div>
+              <button onClick={() => setResetPwUser(null)} className="text-dim hover:text-ink">
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-dim leading-relaxed">
+              Als Administrator kannst du das Passwort dieses Nutzers neu festlegen oder ein sicheres Einmal-Passwort automatisch generieren lassen.
+            </p>
+
+            {resetPwError && <ErrorBox>{resetPwError}</ErrorBox>}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-dim mb-1">
+                  Neues Passwort (leer lassen zum automatischen Generieren):
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Zufallspasswort generieren..."
+                  value={resetPwCustom}
+                  onChange={(e) => setResetPwCustom(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-rack-2/60 border border-seam text-xs text-dim space-y-1.5">
+                <div className="flex items-center gap-1.5 font-semibold text-ink">
+                  <AlertTriangle className="size-3.5 text-amber" />
+                  Wichtige Hinweise:
+                </div>
+                <div>• Alle bisherigen aktiven Sitzungen des Nutzers werden sofort beendet.</div>
+                <div>
+                  • <strong>E-Mail-Versand:</strong> Da aktuell noch kein externer Mailserver (SMTP) angebunden ist, kopiere das neue Passwort im nächsten Schritt und übermittle es dem Nutzer sicher (z. B. via KeePass, Signal oder Discord).
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="quiet" onClick={() => setResetPwUser(null)}>
+                Abbrechen
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => resetPwMutation.mutate({ userId: resetPwUser.id, password: resetPwCustom.trim() || undefined })}
+                busy={resetPwMutation.isPending}
+              >
+                <Key className="size-3.5" />
+                {resetPwCustom.trim() ? 'Passwort setzen' : 'Zufallspasswort generieren'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Passwort erfolgreich zurückgesetzt (Ergebnis) */}
+      {resetPwResult && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-rack border border-seam rounded-xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+              <Check className="size-5" />
+              Passwort erfolgreich geändert!
+            </div>
+            <p className="text-sm text-dim">
+              Das neue Passwort für <strong className="text-ink">{resetPwResult.user}</strong> lautet:
+            </p>
+            <div className="p-3 bg-rack-2 border border-seam rounded-lg font-mono text-sm text-amber select-all flex items-center justify-between gap-2">
+              <span className="truncate">{resetPwResult.pw}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard.writeText(resetPwResult.pw);
+                  setResetPwCopied(true);
+                  setTimeout(() => setResetPwCopied(false), 2000);
+                }}
+                className="px-2 py-1 rounded bg-rack border border-seam text-xs text-dim hover:text-ink flex items-center gap-1 shrink-0"
+                title="Passwort kopieren"
+              >
+                {resetPwCopied ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+                {resetPwCopied ? 'Kopiert!' : 'Kopieren'}
+              </button>
+            </div>
+            <p className="text-[11px] text-dim">
+              Bitte teile dieses Passwort dem Nutzer mit. Alle vorherigen Anmeldungen des Kontos wurden aus Sicherheitsgründen abgemeldet.
+            </p>
+            <div className="flex justify-end pt-2">
+              <Button variant="primary" onClick={() => setResetPwResult(null)}>
+                Fertig
               </Button>
             </div>
           </div>

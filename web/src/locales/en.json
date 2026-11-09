@@ -388,7 +388,8 @@
     "killConfirm": "Really kill?",
     "restart": "Restart",
     "start": "Start",
-    "stop": "Stop"
+    "stop": "Stop",
+    "errorTitle": "{action} failed"
   },
   "res": {
     "cores_one": "{count} core",
@@ -455,6 +456,16 @@
     "empty": "No servers yet",
     "emptyCreate": "Create your first one – pick a game, set RAM, done.",
     "emptyInvite": "Once someone invites you to a server, it shows up here.",
+    "bulkSelected_one": "{count} selected",
+    "bulkSelected_other": "{count} selected",
+    "bulkSelectAll": "Select all",
+    "bulkSelectOne": "Select server {name}",
+    "bulkClear": "Clear selection",
+    "bulkNone": "No selected server allows \"{action}\".",
+    "bulkDone_one": "{action}: {count} servers",
+    "bulkDone_other": "{action}: {count} servers",
+    "bulkPartial": "{action}: {ok} succeeded, {failed} failed",
+    "bulkError": "Bulk action failed",
     "loadError": "Could not load servers: {message}",
     "noMatch": "No server matches this filter.",
     "runningOf_one": "{running} of {count} running",

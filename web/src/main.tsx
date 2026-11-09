@@ -24,7 +24,7 @@ const Integrations = page(() => import('./pages/Integrations'), 'Integrations');
 const AdminFiles = page(() => import('./pages/AdminFiles'), 'AdminFiles');
 const Account = page(() => import('./pages/Account'), 'Account');
 import { Spinner, Toaster } from './components/ui';
-import { useToast } from './lib/toast';
+import { useToasts, dismiss } from './lib/toast';
 import { I18nProvider, i18nReady, t } from './lib/i18n';
 
 const queryClient = new QueryClient({
@@ -33,7 +33,7 @@ const queryClient = new QueryClient({
 
 function App() {
   const { me, ready } = useAuth();
-  const { toasts, dismiss } = useToast();
+  const toasts = useToasts();
   if (!ready) return <div className="min-h-full grid place-items-center"><Spinner /></div>;
   if (!me) return <Login />;
   return (

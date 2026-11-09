@@ -16,6 +16,7 @@ import { eggRoutes } from './routes/eggs.js';
 import { serverSettingsRoutes } from './routes/server-settings.js';
 import { importRoutes } from './routes/import.js';
 import { consoleRoutes, type ConsoleEngine } from './routes/console.js';
+import { liveRoutes } from './routes/live.js';
 import { authPlugin, HttpError, requireAuth } from './auth.js';
 import { registerOpenApi } from './openapi.js';
 import { registerWeb } from './web.js';
@@ -167,6 +168,7 @@ export async function buildServer(opts: BuildOptions = {}) {
       await api.register(serverSettingsRoutes, { ops, limiter });
       await api.register(importRoutes);
       await api.register(consoleRoutes, { engine: consoleEngine });
+      await api.register(liveRoutes);
       await api.register(logRoutes);
       await api.register(gameRoutes);
       await api.register(steamRoutes);

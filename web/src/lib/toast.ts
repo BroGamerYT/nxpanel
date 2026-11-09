@@ -1,53 +1,64 @@
-import { useCallback, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 export type ToastType = 'success' | 'error' | 'warn' | 'info';
 
 export interface Toast {
-  id: string;
+  id: number;
   type: ToastType;
   title: string;
   message?: string;
   duration?: number;
 }
 
-let nextId = 0;
-
 /**
- * Einfaches Toast-System. Rufe `useToast()` in einer Komponente auf,
- * die oben im Baum sitzt (z. B. in `main.tsx` oder `ServerPage.tsx`),
- * und rendere `<Toaster />` an zentraler Stelle.
+ * Globales Toast-System.
+ *
+ * Der Zustand lebt auf Modulebene (ein einziger Store), damit jede
+ * Komponente – egal wo im Baum – Meldungen auslösen kann und der
+ * zentrale `<Toaster />` sie anzeigt. `useToasts()` abonniert den Store
+ * über `useSyncExternalStore`; `toast.*` löst Meldungen von überall aus.
  */
-export function useToast() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+let toasts: Toast[] = [];
+let nextId = 0;
+const listeners = new Set<() => void>();
 
-  const show = useCallback((type: ToastType, title: string, message?: string, duration = 4000) => {
-    const id = String(++nextId);
-    setToasts((prev) => [...prev, { id, type, title, message, duration }]);
-    if (duration > 0) {
-      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), duration);
-    }
-    return id;
-  }, []);
-
-  const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const success = useCallback((title: string, message?: string, duration?: number) =>
-    show('success', title, message, duration), [show]);
-  const error = useCallback((title: string, message?: string, duration?: number) =>
-    show('error', title, message, duration), [show]);
-  const warn = useCallback((title: string, message?: string, duration?: number) =>
-    show('warn', title, message, duration), [show]);
-  const info = useCallback((title: string, message?: string, duration?: number) =>
-    show('info', title, message, duration), [show]);
-
-  return { toasts, show, dismiss, success, error, warn, info };
+function emit() {
+  for (const l of listeners) l();
 }
 
-export const TOAST_TYPE_LABEL: Record<ToastType, string> = {
-  success: 'Erfolg',
-  error: 'Fehler',
-  warn: 'Warnung',
-  info: 'Information',
+function add(type: ToastType, title: string, message?: string, duration = 4000): number {
+  const id = ++nextId;
+  toasts = [...toasts, { id, type, title, message, duration }];
+  emit();
+  if (duration > 0) {
+    setTimeout(() => dismiss(id), duration);
+  }
+  return id;
+}
+
+export function dismiss(id: number): void {
+  toasts = toasts.filter((t) => t.id !== id);
+  emit();
+}
+
+function subscribe(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => { listeners.delete(cb); };
+}
+
+function getSnapshot(): Toast[] {
+  return toasts;
+}
+
+/** Abonniert den globalen Toast-Store (für `<Toaster />`). */
+export function useToasts(): Toast[] {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/** Meldungen von überall auslösen – ohne Hook, ohne Provider. */
+export const toast = {
+  success: (title: string, message?: string, duration = 4000) => add('success', title, message, duration),
+  error: (title: string, message?: string, duration = 6000) => add('error', title, message, duration),
+  warn: (title: string, message?: string, duration = 5000) => add('warn', title, message, duration),
+  info: (title: string, message?: string, duration = 4000) => add('info', title, message, duration),
 };

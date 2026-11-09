@@ -100,7 +100,7 @@ const TOAST_COLOR: Record<ToastType, string> = {
   info: 'text-sky-400 border-sky-400/50 bg-sky-400/10',
 };
 
-export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
+export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => void }) {
   const Icon = TOAST_ICON[toast.type];
   return (
     <div
@@ -126,7 +126,7 @@ export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: (id: stri
   );
 }
 
-export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
+export function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   return (
     <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
       {toasts.map((t) => (
