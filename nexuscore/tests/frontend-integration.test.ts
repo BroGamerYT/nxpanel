@@ -15,12 +15,23 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
   let registry: ServerRegistry;
   let tmpDir: string;
 
+  let authHeaders: { authorization: string };
+
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nx-front-'));
     bus = new EventBus();
     driver = new MockDriver();
     registry = await ServerRegistry.open(tmpDir);
     server = await createCoreServer(driver, bus, registry);
+
+    const refreshRes = await server.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      headers: { 'content-type': 'application/json' },
+      payload: {},
+    });
+    const { accessToken } = refreshRes.json();
+    authHeaders = { authorization: `Bearer ${accessToken}` };
   });
 
   afterEach(async () => {
@@ -49,14 +60,24 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
     expect(res.body).toContain('<div id="root"></div>');
   });
 
-  it('authentifiziert den Standalone-Admin automatisch ueber /api/v1/auth/me', async () => {
+  it('blockiert nicht authentifizierte Anfragen auf /api/v1/auth/me mit 401', async () => {
     const res = await server.inject({
       method: 'GET',
       url: '/api/v1/auth/me',
     });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('authentifiziert den Standalone-Admin ueber /api/v1/auth/me mit Token', async () => {
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: authHeaders,
+    });
     expect(res.statusCode).toBe(200);
     const json = res.json();
     expect(json.user.role).toBe('admin');
+    expect(json.permissions['server.create']).toBe(true);
     expect(json.permissions['admin.hosts']).toBe(true);
   });
 
@@ -64,6 +85,7 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
     const res = await server.inject({
       method: 'GET',
       url: '/api/v1/dashboard',
+      headers: authHeaders,
     });
     expect(res.statusCode).toBe(200);
     const json = res.json();
@@ -78,6 +100,7 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
     const createRes = await server.inject({
       method: 'POST',
       url: '/api/v1/servers',
+      headers: authHeaders,
       payload: {
         name: 'Mein Test Minecraft Server',
         eggId: 'minecraft-paper',
@@ -95,17 +118,21 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
     const listRes = await server.inject({
       method: 'GET',
       url: '/api/v1/servers',
+      headers: authHeaders,
     });
     expect(listRes.statusCode).toBe(200);
     const list = listRes.json();
     expect(list.servers.length).toBe(1);
     expect(list.servers[0].id).toBe(serverId);
     expect(list.servers[0].eggName).toBe('minecraft-paper');
+    expect(list.servers[0].permissions).toContain('control.console');
+    expect(list.servers[0].permissions).toContain('control.start');
 
     // 3. Server Power Action
     const powerRes = await server.inject({
       method: 'POST',
       url: `/api/v1/servers/${serverId}/power`,
+      headers: authHeaders,
       payload: { action: 'start' },
     });
     expect(powerRes.statusCode).toBe(200);
@@ -114,17 +141,21 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
     const detailRes = await server.inject({
       method: 'GET',
       url: `/api/v1/servers/${serverId}`,
+      headers: authHeaders,
     });
     expect(detailRes.statusCode).toBe(200);
     const detail = detailRes.json();
     expect(detail.server.id).toBe(serverId);
     expect(detail.server.limits.ramMb).toBe(4096);
+    expect(detail.permissions).toContain('control.console');
+    expect(detail.permissions).toContain('file.read');
   });
 
   it('liefert den Spielekatalog ueber /api/v1/eggs', async () => {
     const eggsRes = await server.inject({
       method: 'GET',
       url: '/api/v1/eggs',
+      headers: authHeaders,
     });
     expect(eggsRes.statusCode).toBe(200);
     const eggs = eggsRes.json();

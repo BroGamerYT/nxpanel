@@ -10,6 +10,83 @@ import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig, ServerStatus } from '../../types.js';
 import { config } from '../../config/index.js';
 import { logger } from '../../logger.js';
+import {
+  createSessionToken,
+  isValidSessionToken,
+  revokeSessionToken,
+  parseCookie,
+} from '../../protocol/security.js';
+
+export const ALL_SERVER_PERMISSIONS = [
+  'control.console',
+  'control.command',
+  'control.start',
+  'control.stop',
+  'control.restart',
+  'control.kill',
+  'file.read',
+  'file.write',
+  'file.delete',
+  'file.archive',
+  'file.sftp',
+  'backup.read',
+  'backup.create',
+  'backup.restore',
+  'backup.delete',
+  'backup.download',
+  'allocation.read',
+  'allocation.assign',
+  'startup.read',
+  'startup.update',
+  'startup.image',
+  'schedule.read',
+  'schedule.update',
+  'schedule.run',
+  'player.read',
+  'player.kick',
+  'player.ban',
+  'player.whitelist',
+  'subuser.read',
+  'subuser.create',
+  'subuser.update',
+  'subuser.delete',
+  'settings.rename',
+  'settings.reinstall',
+  'activity.read',
+  'player.ip_read',
+];
+
+const KNOWN_STEAM: Record<string, number> = {
+  '7 Days to Die': 251570,
+  'ARK: Survival Ascended': 2399830,
+  'Core Keeper': 1621690,
+  'Counter-Strike 2': 730,
+  'Enshrouded': 1203620,
+  'Factorio': 427520,
+  'Farming Simulator 25': 2300320,
+  'Palworld': 1623730,
+  'Rust': 252490,
+  'Satisfactory': 526870,
+  'Sons of the Forest': 1326470,
+  'V Rising': 1604030,
+  'Valheim': 892970,
+};
+
+function coverForEgg(name: string, id: string): { src: string; fit: 'banner' | 'icon'; source: 'steam' | 'branding' } {
+  const appId = KNOWN_STEAM[name] || KNOWN_STEAM[id];
+  if (appId) {
+    return {
+      src: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+      fit: 'banner',
+      source: 'steam',
+    };
+  }
+  return {
+    src: '/branding/themes/amber-classic/banner.png',
+    fit: 'banner',
+    source: 'branding',
+  };
+}
 
 interface RawEggFile {
   name: string;
@@ -111,17 +188,25 @@ export function registerApiV1Routes(
   registry: ServerRegistry,
 ): void {
   function findServer(idOrShortId: string): ServerInstanceConfig | undefined {
-    return (
-      registry.get(idOrShortId) ??
-      registry
-        .list()
-        .find((s) => s.id === idOrShortId || s.id.startsWith(idOrShortId) || s.id.slice(0, 8) === idOrShortId)
-    );
+    const list = registry.list();
+    const exact = list.find((s) => s.id === idOrShortId);
+    if (exact) return exact;
+    if (idOrShortId.length === 8) {
+      const byShort = list.filter((s) => s.id.slice(0, 8) === idOrShortId);
+      if (byShort.length === 1) return byShort[0];
+    }
+    return undefined;
   }
 
   // 1. Authentifizierung & Sitzung
-  server.post('/api/v1/auth/refresh', async () => {
-    return { accessToken: 'nexus-standalone-token' };
+  server.post('/api/v1/auth/refresh', async (req, reply) => {
+    const existingCookie = parseCookie(req.headers.cookie, 'nxp_session');
+    const token = existingCookie && isValidSessionToken(existingCookie)
+      ? existingCookie
+      : createSessionToken();
+
+    reply.header('Set-Cookie', `nxp_session=${token}; Path=/; HttpOnly; SameSite=Strict`);
+    return { accessToken: token };
   });
 
   server.get('/api/v1/auth/me', async () => {
@@ -152,11 +237,22 @@ export function registerApiV1Routes(
     return { ok: true };
   });
 
-  server.post('/api/v1/auth/login', async () => {
-    return { accessToken: 'nexus-standalone-token' };
+  server.post('/api/v1/auth/login', async (_req, reply) => {
+    const token = createSessionToken();
+    reply.header('Set-Cookie', `nxp_session=${token}; Path=/; HttpOnly; SameSite=Strict`);
+    return { accessToken: token };
   });
 
-  server.post('/api/v1/auth/logout', async () => {
+  server.post('/api/v1/auth/logout', async (req, reply) => {
+    const existingCookie = parseCookie(req.headers.cookie, 'nxp_session');
+    if (existingCookie) {
+      revokeSessionToken(existingCookie);
+    }
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      revokeSessionToken(authHeader.replace(/^Bearer\s+/i, '').trim());
+    }
+    reply.header('Set-Cookie', 'nxp_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
     return { ok: true };
   });
 
@@ -176,7 +272,7 @@ export function registerApiV1Routes(
     const runningCount = states.filter((s) => s.status === 'running').length;
 
     let totalRamMb = 0;
-    const perServer: Record<string, { cpuPercent: number; ramMb: number; status: ServerStatus }> = {};
+    const perServer: Record<string, { cpuPercent: number; memMb: number; rxRate: number; txRate: number }> = {};
     const diskUsed: Record<string, number> = {};
 
     for (const s of states) {
@@ -185,15 +281,14 @@ export function registerApiV1Routes(
           const stats = await driver.getServerStats(s.id);
           perServer[s.id] = {
             cpuPercent: stats.cpuPercent,
-            ramMb: stats.memoryMb,
-            status: s.status,
+            memMb: stats.memoryMb,
+            rxRate: 0,
+            txRate: 0,
           };
           totalRamMb += stats.memoryMb;
         } catch {
-          perServer[s.id] = { cpuPercent: 0, ramMb: 0, status: s.status };
+          perServer[s.id] = { cpuPercent: 0, memMb: 0, rxRate: 0, txRate: 0 };
         }
-      } else {
-        perServer[s.id] = { cpuPercent: 0, ramMb: 0, status: s.status };
       }
       diskUsed[s.id] = 1024; // MB Dummy
     }
@@ -267,10 +362,11 @@ export function registerApiV1Routes(
         primaryPort: c.ports[0]?.hostPort ?? 25565,
         publicHost: '127.0.0.1',
         isOwner: true,
-        permissions: ['*'],
+        permissions: ALL_SERVER_PERMISSIONS,
         startedAt: state?.startedAt ?? null,
         tags: [c.game || 'game'],
         isFavorite: false,
+        cover: coverForEgg(c.game || c.name, c.game || c.id),
         ports: c.ports.map((p, idx) => ({
           port: p.hostPort,
           protocol: p.protocol,
@@ -306,6 +402,7 @@ export function registerApiV1Routes(
           consoleMode: 'full',
           webInterface: null,
           hints: [],
+          gameKind: c.game?.toLowerCase().includes('minecraft') ? 'minecraft' : null,
         },
         limits: {
           ramMb: c.maxMemoryMb ?? 2048,
@@ -319,6 +416,7 @@ export function registerApiV1Routes(
         autoRestart: false,
         suspended: false,
         publicHost: '127.0.0.1',
+        cover: coverForEgg(c.game || c.name, c.game || c.id),
         ports: c.ports.map((p, idx) => ({
           port: p.hostPort,
           protocol: p.protocol,
@@ -328,7 +426,7 @@ export function registerApiV1Routes(
         startup: `${c.executable} ${c.args.join(' ')}`,
         variables: c.env || {},
       },
-      permissions: ['*'],
+      permissions: ALL_SERVER_PERMISSIONS,
     };
   });
 
@@ -409,7 +507,10 @@ export function registerApiV1Routes(
     '/api/v1/servers/:id/power',
     async (req, reply) => {
       const c = findServer(req.params.id);
-      const id = c ? c.id : req.params.id;
+      if (!c) {
+        return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
+      }
+      const id = c.id;
       const { action } = req.body;
 
       try {
@@ -433,7 +534,10 @@ export function registerApiV1Routes(
     '/api/v1/servers/:id/command',
     async (req, reply) => {
       const c = findServer(req.params.id);
-      const id = c ? c.id : req.params.id;
+      if (!c) {
+        return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
+      }
+      const id = c.id;
       const { command } = req.body;
       try {
         if ('sendCommand' in driver && typeof driver.sendCommand === 'function') {

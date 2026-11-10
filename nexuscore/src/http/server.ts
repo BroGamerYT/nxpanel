@@ -3,7 +3,12 @@ import websocket from '@fastify/websocket';
 import cors from '@fastify/cors';
 import { config } from '../config/index.js';
 import { logger } from '../logger.js';
-import { validateRequestToken } from '../protocol/security.js';
+import {
+  validateRequestToken,
+  normalizeRequestPath,
+  isPublicRoute,
+  parseCookie,
+} from '../protocol/security.js';
 import type { EventBus } from '../protocol/events.js';
 import type { HostDriver } from '../drivers/interface.js';
 import type { ServerRegistry } from '../store/registry.js';
@@ -17,14 +22,6 @@ import { registerLogRoutes } from './routes/logs.js';
 import { registerStandaloneRoutes } from './routes/standalone.js';
 import { registerApiV1Routes } from './routes/api-v1.js';
 import { registerWebRoutes } from './routes/web.js';
-
-/** Endpunkte, die ohne Token erreichbar sind. */
-const PUBLIC_ROUTES = new Set([
-  'GET /',
-  'GET /favicon.ico',
-  'GET /core/v1/info',
-  'POST /core/v1/pair',
-]);
 
 export async function createCoreServer(
   driver: HostDriver,
@@ -88,27 +85,42 @@ export async function createCoreServer(
    * kommen, weil der Browser beim WebSocket keine Header setzen kann.
    */
   server.addHook('onRequest', async (req, reply) => {
-    const path = (req.url.split('?')[0] ?? '').replace(/\/$/, '') || '/';
-    // Nur /core/v1-Routen sind token-geschuetzt. Alles fuer das Web-Frontend (/api/v1, Assets, SPA) ist frei
-    if (!path.startsWith('/core/')) {
-      return;
-    }
-    if (PUBLIC_ROUTES.has(`${req.method} ${path}`)) {
+    const normPath = normalizeRequestPath(req.url);
+
+    // 1. Oeffentliche Routen duerfen ohne Authentifizierung durch
+    if (isPublicRoute(req.method, normPath)) {
       return;
     }
 
+    // 2. Im Knoten-Modus (NEXUSCORE_ROLE=node) sind Panel-APIs (/api/*) generell verboten
+    if (
+      config.role === 'node' &&
+      (normPath.startsWith('/api/v1') || normPath.startsWith('/api/panel'))
+    ) {
+      return reply.status(403).send({
+        error: 'Verboten',
+        message: 'Im Knoten-Modus (NEXUSCORE_ROLE=node) sind Panel-APIs deaktiviert.',
+      });
+    }
+
+    // 3. Token ermitteln: Header > Query (WebSockets) > Cookie (Standalone UI)
     const queryToken = (req.query as Record<string, unknown> | undefined)?.token;
+    const cookieHeader = req.headers.cookie;
+    const cookieToken = parseCookie(cookieHeader, 'nxp_session');
+
     const header =
       req.headers.authorization ??
       (typeof queryToken === 'string' && queryToken.length > 0
         ? `Bearer ${queryToken}`
-        : undefined);
+        : cookieToken
+          ? `Bearer ${cookieToken}`
+          : undefined);
 
     const auth = validateRequestToken(header);
     if (!auth.valid) {
       return reply.status(401).send({
         error: 'Nicht autorisiert',
-        message: auth.reason ?? 'Ungueltiger Token.',
+        message: auth.reason ?? 'Ungueltiger oder fehlender Token.',
       });
     }
   });

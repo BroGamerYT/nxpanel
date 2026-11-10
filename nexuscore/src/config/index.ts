@@ -27,6 +27,7 @@ const here =
 const schema = z
   .object({
     NEXUSCORE_MODE: z.enum(['test', 'production']).default('test'),
+    NEXUSCORE_ROLE: z.enum(['standalone', 'node']).default('standalone'),
     NEXUSCORE_HOST: z.string().default('127.0.0.1'),
     NEXUSCORE_PORT: z.coerce.number().int().min(1).max(65535).default(8443),
     NEXUSCORE_RUNTIME: z.enum(['windows-native', 'docker', 'mock']).optional(),
@@ -71,6 +72,7 @@ export const isProduction = env.NEXUSCORE_MODE === 'production';
 
 export const config = {
   mode: env.NEXUSCORE_MODE,
+  role: env.NEXUSCORE_ROLE,
   host: env.NEXUSCORE_HOST,
   port: env.NEXUSCORE_PORT,
   runtime:

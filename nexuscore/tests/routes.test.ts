@@ -60,6 +60,23 @@ describe('HTTP-Routen', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('schuetzt auch /api/v1 und /api/panel Routen vor unauthentifiziertem Zugriff (Block A1)', async () => {
+    const apiRes = await server.inject({ method: 'GET', url: '/api/v1/servers' });
+    expect(apiRes.statusCode).toBe(401);
+
+    const panelRes = await server.inject({ method: 'GET', url: '/api/panel/servers' });
+    expect(panelRes.statusCode).toBe(401);
+  });
+
+  it('verhindert Umgehung des Tokenschutzes ueber Path Traversal (Block A1)', async () => {
+    // Versuch, ueber /core/v1/../ geschuetzte Routen ohne Auth aufzurufen
+    const res = await server.inject({
+      method: 'GET',
+      url: '/core/v1/%2e%2e/%2e%2e/api/v1/servers',
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
   it('lehnt einen falschen Token ab', async () => {
     const res = await server.inject({
       method: 'GET',

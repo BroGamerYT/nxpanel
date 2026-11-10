@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { config } from '../config/index.js';
 
 const PIN_TTL_MS = 10 * 60 * 1000;
@@ -14,6 +15,91 @@ export interface AuthValidationResult {
 let activePin = config.pairingPin.toUpperCase();
 let pinCreatedAt = Date.now();
 const attempts: number[] = [];
+
+/** Aktive Sitzungs-Tokens fuer den Standalone-Modus */
+const activeSessions = new Set<string>();
+
+export function createSessionToken(): string {
+  const token = `nxp_${crypto.randomBytes(24).toString('hex')}`;
+  activeSessions.add(token);
+  return token;
+}
+
+export function registerSessionToken(token: string): void {
+  activeSessions.add(token);
+}
+
+export function revokeSessionToken(token: string): void {
+  activeSessions.delete(token);
+}
+
+export function isValidSessionToken(token: string): boolean {
+  return activeSessions.has(token);
+}
+
+/**
+ * Liest ein benanntes Cookie aus dem Cookie-Header.
+ */
+export function parseCookie(cookieHeader?: string, name = 'nxp_session'): string | undefined {
+  if (!cookieHeader) return undefined;
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  const val = match?.[1];
+  return val !== undefined ? decodeURIComponent(val) : undefined;
+}
+
+/**
+ * Normalisiert einen Anfrage-Pfad:
+ * - Entfernt Query-Strings
+ * - Dekodiert URL-Encoding (auch mehrfach: %252e%252e -> %2e%2e -> ..)
+ * - Ersetzt Backslashes durch Forward Slashes
+ * - Löst Dot-Segments (..) und doppelte Slashes auf
+ * - Liefert einen sicheren POSIX-Pfad
+ */
+export function normalizeRequestPath(rawUrl: string): string {
+  try {
+    let p = rawUrl.split('?')[0] ?? '';
+    // Mehrfache Dekodierung abfangen (%252e -> %2e -> .)
+    for (let i = 0; i < 3; i++) {
+      try {
+        const next = decodeURIComponent(p);
+        if (next === p) break;
+        p = next;
+      } catch {
+        break;
+      }
+    }
+    p = p.replace(/\\/g, '/').trim();
+    const normalized = path.posix.normalize(p).replace(/\/+$/, '');
+    return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  } catch {
+    return '/_invalid_path_';
+  }
+}
+
+/**
+ * Prueft, ob ein Aufruf ohne Authentifizierung zulaessig ist.
+ * Standardmaessig ist ALLES geschuetzt, nur gelistete Routen duerfen durch.
+ */
+export function isPublicRoute(method: string, normalizedPath: string): boolean {
+  const m = method.toUpperCase();
+  const p = normalizedPath.toLowerCase();
+
+  // Spezifische oeffentliche Core- und Auth-Endpunkte
+  if (m === 'GET' && p === '/core/v1/info') return true;
+  if (m === 'POST' && p === '/core/v1/pair') return true;
+  if (m === 'POST' && p === '/api/v1/auth/login') return true;
+  if (m === 'POST' && p === '/api/v1/auth/refresh') return true;
+
+  // Statische Web-Assets & SPA-Frontend
+  if (m === 'GET') {
+    if (p === '/' || p === '/favicon.ico' || p === '/favicon.svg') return true;
+    if (p.startsWith('/assets/') || p.startsWith('/branding/')) return true;
+    // Jede GET-Anfrage ohne /api/ oder /core/ liefert die Weboberflaeche
+    if (!p.startsWith('/api/') && !p.startsWith('/core/')) return true;
+  }
+
+  return false;
+}
 
 /**
  * Zeit-sicherer Vergleich zweier Zeichenketten.
@@ -35,22 +121,24 @@ export function tokenFingerprint(): string {
 }
 
 export function validateRequestToken(headerToken?: string): AuthValidationResult {
-  if (!config.token) {
-    if (config.allowInsecureAuth) {
-      return { valid: true };
-    }
-    return {
-      valid: false,
-      reason: 'Server hat kein Token gesetzt (NEXUSCORE_TOKEN).',
-    };
-  }
-
   if (!headerToken) {
     return { valid: false, reason: 'Fehlender Authentifizierungs-Token.' };
   }
 
   const token = headerToken.replace(/^Bearer\s+/i, '').trim();
-  if (timingSafeEqualString(token, config.token)) {
+
+  // 1. Pruefung gegen konfiguriertes Master-Token (NEXUSCORE_TOKEN)
+  if (config.token && timingSafeEqualString(token, config.token)) {
+    return { valid: true };
+  }
+
+  // 2. Pruefung gegen aktive Sitzungs-Tokens (Standalone-Modus)
+  if (activeSessions.has(token)) {
+    return { valid: true };
+  }
+
+  // 3. Im Testmodus nur wenn NEXUSCORE_ALLOW_INSECURE_AUTH explizit aktiv
+  if (!config.token && config.allowInsecureAuth) {
     return { valid: true };
   }
 
