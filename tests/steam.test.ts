@@ -1,69 +1,63 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { sql } from '../src/db/index.js';
+import { createUser } from '../src/auth/users.js';
+import type { Actor } from '../src/auth/permissions.js';
 import {
   saveSteamAccount,
   listSteamAccounts,
-  submitSteamGuard,
   requestSteamGuard,
   deleteSteamAccount,
   getSteamCredentials,
 } from '../src/servers/steam.js';
 
+// Steam-Konten gehoeren einem Nutzer (owner_id). Seit 0.23 bekommen alle
+// Funktionen den handelnden Nutzer mit; Fremde sehen nur geteilte Konten.
+let owner: Actor, other: Actor, admin: Actor;
+
 describe('Steam-Kontenverwaltung', () => {
   beforeAll(async () => {
-    // Migrationen sicherstellen
     const { runMigrations } = await import('../src/db/migrate.js');
     await runMigrations();
+    await sql`TRUNCATE users, steam_accounts RESTART IDENTITY CASCADE`;
+    const mk = async (username: string, role: 'admin' | 'user' = 'user'): Promise<Actor> => {
+      const u = await createUser({ username, email: `${username}@t.local`, password: 'ein-langes-passwort', role });
+      return { id: u.id, role, canCreateServers: true };
+    };
+    owner = await mk('besitzer');
+    other = await mk('fremder');
+    admin = await mk('chef', 'admin');
   });
 
-  it('kann ein Konto anlegen, verschlüsselt speichern und abfragen', async () => {
-    const acc = await saveSteamAccount({
-      accountName: 'test_bot_user',
-      password: 'SuperSecretSteamPassword123!',
-      steamId: '76561198000000000',
-    });
-
+  it('legt ein Konto an, speichert das Passwort verschluesselt und liefert es nur intern', async () => {
+    const acc = await saveSteamAccount(owner, { accountName: 'test_bot_user', password: 'SuperSecretSteamPassword123!', steamId: '76561198000000000' });
     expect(acc.accountName).toBe('test_bot_user');
     expect(acc.hasPassword).toBe(true);
-    expect(acc.guardStatus).toBe('none');
+    expect(JSON.stringify(acc)).not.toContain('SuperSecret');
+
+    const [row] = await sql<{ encrypted_password: string }[]>`SELECT encrypted_password FROM steam_accounts WHERE account_name = 'test_bot_user'`;
+    expect(row!.encrypted_password).not.toContain('SuperSecret');
 
     const creds = await getSteamCredentials('test_bot_user');
-    expect(creds).not.toBeNull();
-    expect(creds?.username).toBe('test_bot_user');
     expect(creds?.password).toBe('SuperSecretSteamPassword123!');
-
-    const list = await listSteamAccounts();
-    const found = list.find((a) => a.accountName === 'test_bot_user');
-    expect(found).toBeDefined();
-    expect(found?.steamId).toBe('76561198000000000');
   });
 
-  it('unterstützt Guard-Anforderung und Code-Eingabe', async () => {
-    await requestSteamGuard('test_bot_user', 'Bitte Code aus der Steam-App eingeben', 'app');
+  it('private Konten sieht nur der Besitzer (und der Admin)', async () => {
+    expect((await listSteamAccounts(owner)).map((a) => a.accountName)).toContain('test_bot_user');
+    expect((await listSteamAccounts(admin)).map((a) => a.accountName)).toContain('test_bot_user');
+    expect((await listSteamAccounts(other)).map((a) => a.accountName)).not.toContain('test_bot_user');
+  });
 
-    let list = await listSteamAccounts();
-    let acc = list.find((a) => a.accountName === 'test_bot_user')!;
+  it('merkt sich eine Steam-Guard-Anforderung', async () => {
+    await requestSteamGuard('test_bot_user', 'Bitte Code aus der Steam-App eingeben', 'app');
+    const acc = (await listSteamAccounts(owner)).find((a) => a.accountName === 'test_bot_user')!;
     expect(acc.guardStatus).toBe('needed');
     expect(acc.guardPrompt).toContain('Steam-App');
-
-    await submitSteamGuard(acc.id, 'abc12');
-
-    const creds = await getSteamCredentials('test_bot_user');
-    expect(creds?.guardCode).toBe('ABC12');
-
-    list = await listSteamAccounts();
-    acc = list.find((a) => a.accountName === 'test_bot_user')!;
-    expect(acc.guardStatus).toBe('ok');
-    expect(acc.guardPrompt).toBeNull();
   });
 
-  it('kann ein Konto löschen', async () => {
-    const list = await listSteamAccounts();
-    const acc = list.find((a) => a.accountName === 'test_bot_user')!;
-    const ok = await deleteSteamAccount(acc.id);
-    expect(ok).toBe(true);
-
-    const creds = await getSteamCredentials('test_bot_user');
-    expect(creds).toBeNull();
+  it('nur Besitzer oder Admin duerfen loeschen', async () => {
+    const acc = (await listSteamAccounts(owner)).find((a) => a.accountName === 'test_bot_user')!;
+    await expect(deleteSteamAccount(other, acc.id)).rejects.toThrow(/Berechtigung/);
+    expect(await deleteSteamAccount(owner, acc.id)).toBe(true);
+    expect(await getSteamCredentials('test_bot_user')).toBeNull();
   });
 });

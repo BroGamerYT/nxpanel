@@ -37,6 +37,13 @@ function inside(base: string, p: string) {
 export async function listLogs(shortId: string, dirs: string[]) {
   const base = resolve(config.VOLUME_ROOT, shortId);
   const out: Array<{ path: string; name: string; bytes: number; modified: Date }> = [];
+
+  const installLogPath = join(base, '.panel', 'install.log');
+  const installSt = await stat(installLogPath).catch(() => null);
+  if (installSt?.isFile()) {
+    out.push({ path: '.panel/install.log', name: 'install.log (Installation)', bytes: installSt.size, modified: installSt.mtime });
+  }
+
   for (const d of dirs) {
     const dir = inside(base, d);
     if (!dir) continue;
@@ -62,8 +69,9 @@ export async function logRoutes(app: FastifyInstance) {
     const dirs = await logDirs(server.egg_id);
     const base = resolve(config.VOLUME_ROOT, server.short_id);
     const full = inside(base, q.path);
-    // Nur Dateien aus den Log-Ordnern - sonst waere das ein Dateimanager durch die Hintertuer.
-    const allowed = full && dirs.some((d) => { const dir = inside(base, d); return dir && full.startsWith(dir + sep); }) && LOG_EXT.test(full);
+    // Nur Dateien aus den Log-Ordnern oder das eigene Installationsprotokoll
+    const isInstallLog = full === join(base, '.panel', 'install.log');
+    const allowed = full && (isInstallLog || (dirs.some((d) => { const dir = inside(base, d); return dir && full.startsWith(dir + sep); }) && LOG_EXT.test(full)));
     if (!full || !allowed) throw new HttpError(404, 'Logdatei nicht gefunden', 'not_found');
     const st = await stat(full).catch(() => null);
     if (!st?.isFile()) throw new HttpError(404, 'Logdatei nicht gefunden', 'not_found');

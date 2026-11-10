@@ -10,6 +10,8 @@ import { config } from '../config.js';
 import { log } from '../log.js';
 import { findUserForLogin } from '../auth/users.js';
 import { verifyPassword } from '../auth/password.js';
+import { RateLimiter, createRedisStore, LIMITS } from '../auth/ratelimit.js';
+import { verifySftpPassword } from '../auth/sftp-passwords.js';
 import type { Actor } from '../auth/permissions.js';
 import { listServersForActor, type ServerListItem } from './access.js';
 import { safePath, FilePathSecurityError } from './files.js';
@@ -71,7 +73,13 @@ export function createSftpServer(): SshServer | null {
     return null;
   }
 
-  const server = new Server({ hostKeys: [hostKey] }, (client) => {
+  // Gleiche Sperre wie beim Web-Login (gleiche Schluessel): Fehlversuche ueber
+  // SFTP zaehlen auf dasselbe Konto. Ohne das liessen sich Passwoerter ueber
+  // Port 2022 unbegrenzt durchprobieren.
+  const limiter = new RateLimiter(createRedisStore(config.REDIS_URL));
+
+  const server = new Server({ hostKeys: [hostKey] }, (client, info) => {
+    const ip = info?.ip ?? 'unbekannt';
     let sessionState: SftpSessionState | null = null;
 
     client.on('authentication', async (ctx) => {
@@ -92,15 +100,35 @@ export function createSftpServer(): SshServer | null {
         targetShortId = rawUsername.slice(lastDot + 1).toLowerCase();
       }
 
-      const user = await findUserForLogin(loginName);
-      if (!user || user.suspended) {
-        return ctx.reject(['password']);
+      const acctKey = `login:acct:${loginName.toLowerCase()}`;
+      const ipKey = `login:ip:${ip}`;
+      for (const [key, limit] of [[acctKey, LIMITS.loginAccount], [ipKey, LIMITS.loginIp]] as const) {
+        if ((await limiter.isBlocked(key, limit)).blocked) {
+          log.warn({ user: loginName, ip }, 'SFTP-Login gesperrt (zu viele Fehlversuche)');
+          return ctx.reject(['password']);
+        }
       }
+      const fail = async () => {
+        await limiter.consume(acctKey, LIMITS.loginAccount);
+        await limiter.consume(ipKey, LIMITS.loginIp);
+        return ctx.reject(['password']);
+      };
 
-      const valid = await verifyPassword(user.password_hash, password);
-      if (!valid) {
-        return ctx.reject(['password']);
+      const user = await findUserForLogin(loginName);
+      if (!user || user.suspended) return fail();
+
+      // SFTP kann keinen zweiten Faktor abfragen. Mit Zwei-Faktor-Schutz gilt
+      // darum NUR ein eigenes SFTP-Passwort (Konto -> Sicherheit), nie das
+      // Kontopasswort - sonst waere 2FA ueber SFTP umgehbar. Ohne 2FA gehen beide.
+      const viaSftpPassword = await verifySftpPassword(user.id, password);
+      if (!viaSftpPassword) {
+        if (user.totp_enabled) {
+          log.warn({ user: user.username, ip }, 'SFTP-Login abgelehnt: Konto mit 2FA braucht ein SFTP-Passwort');
+          return fail();
+        }
+        if (!(await verifyPassword(user.password_hash, password))) return fail();
       }
+      await limiter.reset(acctKey);
 
       const actor: Actor & { username: string } = {
         id: user.id,

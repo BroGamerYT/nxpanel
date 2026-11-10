@@ -4,14 +4,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "========================================================"
-echo "  ⚡ Starte NexusCore im lokalen Linux/macOS Testmodus..."
+echo "  NEXUSCORE HOST DAEMON - lokaler Linux/macOS-Testbetrieb"
 echo "========================================================"
 echo ""
 
 if [ ! -d node_modules ]; then
-    echo "Installiere erforderliche Abhängigkeiten..."
-    npm install
+  echo "Installiere Abhaengigkeiten..."
+  npm install
 fi
 
-echo "Starte NexusCore Daemon..."
-npm run dev
+echo "Baue NexusCore..."
+npm run build
+
+echo ""
+echo "Starte Daemon (Beenden mit Strg+C)..."
+echo ""
+npm start

@@ -34,6 +34,7 @@ import { ConfigFormEditor } from './ConfigFormEditor';
 import { api, currentToken, refreshSession } from '../lib/api';
 import { t } from '../lib/i18n';
 import type { FileEntry, DirectoryListing } from '../lib/types';
+import type { About } from '../lib/version';
 import { Button, ErrorBox, Spinner } from './ui';
 
 function formatBytes(bytes: number): string {
@@ -107,6 +108,8 @@ export function FileManager({
 }) {
   const { me } = useAuth();
   const filesBase = apiBase ?? `/servers/${serverId}/files`;
+  const about = useQuery({ queryKey: ['about'], queryFn: () => api<About>('/about'), staleTime: 5 * 60_000 });
+  const sftpPort = about.data?.sftp?.port ?? 2022;
   const qc = useQueryClient();
   const [currentPath, setCurrentPath] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
@@ -692,12 +695,12 @@ export function FileManager({
                 <div className="p-3 rounded-xl bg-rack-2 border border-seam flex items-center justify-between">
                   <div>
                     <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">Port</div>
-                    <div className="text-ink font-semibold mt-0.5">2022</div>
+                    <div className="text-ink font-semibold mt-0.5">{sftpPort}</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText('2022');
+                      navigator.clipboard.writeText(String(sftpPort));
                       setCopiedField('port');
                       setTimeout(() => setCopiedField(null), 2000);
                     }}
@@ -711,7 +714,11 @@ export function FileManager({
                 <div className="p-3 rounded-xl bg-rack-2 border border-seam flex items-center justify-between">
                   <div>
                     <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">Passwort</div>
-                    <div className="text-ink font-sans text-xs mt-0.5">Dein NexusPanel Passwort</div>
+                    <div className="text-ink font-sans text-xs mt-0.5">
+                      {me?.user.totpEnabled
+                        ? <>SFTP-Passwort aus <a href="/account" className="text-amber underline">Konto → Sicherheit</a> (wegen 2FA)</>
+                        : 'Dein NexusPanel-Passwort oder ein SFTP-Passwort'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -742,13 +749,13 @@ export function FileManager({
                 <div className="truncate mr-2">
                   <div className="text-[10px] text-dim uppercase tracking-wider font-sans font-semibold">SFTP-Adresse (1-Klick FileZilla)</div>
                   <div className="text-amber truncate text-[11px] mt-0.5">
-                    sftp://{me?.user.username}.{serverShortId || serverId}@{window.location.hostname}:2022/
+                    sftp://{me?.user.username}.{serverShortId || serverId}@{window.location.hostname}:{sftpPort}/
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    const url = `sftp://${me?.user.username}.${serverShortId || serverId}@${window.location.hostname}:2022/`;
+                    const url = `sftp://${me?.user.username}.${serverShortId || serverId}@${window.location.hostname}:${sftpPort}/`;
                     navigator.clipboard.writeText(url);
                     setCopiedField('url');
                     setTimeout(() => setCopiedField(null), 2000);

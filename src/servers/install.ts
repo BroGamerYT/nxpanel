@@ -49,9 +49,12 @@ export async function installServer(server: ServerRecord, opts: InstallOptions =
   });
 
   let lineCount = 0;
+  const ringBuffer: string[] = [];
   const onLine = (line: string) => {
     lineCount++;
     opts.onLog?.(line);
+    ringBuffer.push(line);
+    if (ringBuffer.length > 50) ringBuffer.shift();
     void appendFile(logPath, `${line}\n`, 'utf8').catch(() => {});
   };
 
@@ -134,7 +137,7 @@ export async function installServer(server: ServerRecord, opts: InstallOptions =
       summary: `Installation fehlgeschlagen (Code ${exitCode}, ${lineCount} Logzeilen)`,
       code: 'install_failed_code',
       params: { exitCode, lines: lineCount },
-      payload: { exitCode, seconds, lines: lineCount },
+      payload: { exitCode, seconds, lines: lineCount, lastLines: ringBuffer },
       logFile: 'install.log',
     });
     return false;
@@ -148,7 +151,7 @@ export async function installServer(server: ServerRecord, opts: InstallOptions =
     summary: `Installation abgeschlossen in ${seconds} s`,
     code: 'install_done',
     params: { seconds },
-    payload: { seconds, lines: lineCount },
+    payload: { seconds, lines: lineCount, lastLines: ringBuffer },
     logFile: 'install.log',
   });
 

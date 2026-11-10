@@ -315,7 +315,8 @@
     "network": "Netzwerk",
     "search": "Suchen...",
     "servers": "Server",
-    "adminFiles": "Dateien (VM)"
+    "adminFiles": "Dateien (VM)",
+    "hosts": "Hosts"
   },
   "netcheck": {
     "clock": "Uhrzeit",
@@ -780,5 +781,32 @@
     "title": "Benachrichtigungen",
     "markAllRead": "Alle gelesen",
     "empty": "Keine neuen Warnungen oder Ereignisse."
+  },
+  "hosts": {
+    "title": "Hosts",
+    "intro": "Rechner, auf denen Gameserver laufen: der lokale Docker-Host und gekoppelte NexusCores.",
+    "list": "Alle Hosts",
+    "none": "Noch keine Hosts eingetragen.",
+    "typeLocal": "Lokal",
+    "typeCore": "NexusCore",
+    "localAddress": "Dieser Rechner (Docker)",
+    "runtime": "Laufzeit",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "servers": "Server",
+    "lastSeen": "Zuletzt erreicht",
+    "check": "Status pruefen",
+    "remove": "Host entfernen",
+    "removeConfirm": "Diesen Host wirklich entfernen?",
+    "addTitle": "NexusCore koppeln",
+    "addIntro": "Adresse und Token des Cores eintragen. Der Core wird sofort geprueft - ein falsches Token wird nicht gespeichert.",
+    "name": "Name",
+    "address": "Adresse",
+    "addressHint": "Zum Beispiel http://192.168.1.50:8443",
+    "token": "Token",
+    "tokenHint": "NEXUSCORE_TOKEN des Cores - wird verschluesselt gespeichert",
+    "pin": "PIN (optional)",
+    "pinHint": "Kopplungs-PIN des Cores - bestaetigt, dass Token und Core zusammengehoeren",
+    "add": "Host koppeln"
   }
 }

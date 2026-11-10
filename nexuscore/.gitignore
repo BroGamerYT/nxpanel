@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+*.log
+.env
+
+# Rust-Planungsteil: Build-Artefakte und Lockdatei gehoeren nicht ins Repo.
+target/
+Cargo.lock

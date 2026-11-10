@@ -49,13 +49,15 @@ export interface ServerListItem {
   subdomain?: string | null;
   customDomain?: string | null;
   srvRecordEnabled?: boolean;
+  ports?: Array<{ port: number; protocol: string; ref: string | null; is_primary: boolean }>;
+  steamAppId?: number | null;
 }
 
 export interface ServerDetail {
   server: {
     id: string; shortId: string; name: string; status: ServerStatus; ownerId: string;
     startedAt?: string | null;
-    egg: { id: string; name: string; consoleMode: 'full' | 'readonly' | 'none'; webInterface: unknown; hints?: ConsoleHint[]; gameKind?: string | null } | null;
+    egg: { id: string; name: string; consoleMode: 'full' | 'readonly' | 'none'; webInterface: unknown; hints?: ConsoleHint[]; gameKind?: string | null; steamAppId?: number | null } | null;
     limits: { ramMb: number; swapMb: number; cpuPercent: number; diskMb: number; bandwidthDownloadKbps: number | null; bandwidthUploadKbps: number | null };
     diskUsedMb?: number | null;
     containerLayerMb?: number | null;
@@ -179,6 +181,16 @@ export interface BackupSchedule {
 export interface NodeInfo {
   id: string; name: string; fqdn: string; ramTotalMb: number; diskTotalMb: number; ramAssignedMb: number; servers: number;
   publicHost: string | null; portFrom: number | null; portTo: number | null;
+}
+
+/** Ein Host: der lokale Rechner oder ein gekoppelter NexusCore. */
+export interface HostRow {
+  id: string; name: string; type: 'local' | 'core'; address: string | null;
+  runtime: 'docker' | 'podman' | 'windows-native' | 'mock';
+  status: 'online' | 'offline' | 'unreachable' | 'unknown';
+  certFingerprint: string | null; lastSeenAt: string | null;
+  ramTotalMb: number; ramUsedMb: number; diskTotalMb: number; diskUsedMb: number;
+  cpuPercent: number; servers: number;
 }
 
 export interface AllocationRow {

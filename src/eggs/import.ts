@@ -364,6 +364,10 @@ export function normalizeForeignEgg(input: RawEgg): { raw: RawEgg; notes: string
       const isReq = /(^|\|)required(\||$)/.test(rules);
       const isPw = PASSWORD_VAR.test(env) && !USER_ACCOUNT_VARS.has(env);
       const next = { ...v };
+      if (USER_ACCOUNT_VARS.has(env)) {
+        next.user_editable = true;
+        next.user_viewable = true;
+      }
       if (isPw && next.secret === undefined) {
         next.secret = true;
       }
@@ -432,6 +436,11 @@ export function convertForeignEggToBundled(input: RawEgg, sourceHint?: string): 
     let cleanedLabels = 0;
     raw.variables = raw.variables.map((v) => {
       const next = { ...v };
+      const env = v.env_variable ?? '';
+      if (USER_ACCOUNT_VARS.has(env)) {
+        next.user_editable = true;
+        next.user_viewable = true;
+      }
       if (typeof next.name === 'string') {
         const cleaned = next.name.replace(/^\s*\[[A-Za-z0-9_-]+\]\s*/, '').trim();
         if (cleaned && cleaned !== next.name) {

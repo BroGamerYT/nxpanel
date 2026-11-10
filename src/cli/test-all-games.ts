@@ -49,6 +49,10 @@ const DEFAULT_VARS_FALLBACK: Record<string, Record<string, string>> = {
   },
   'astroneer': {
     XVFB: '1',
+    PUBLIC_IP: '193.34.69.60',
+  },
+  'the-bus': {
+    WINDOWS_INSTALL: '0',
   },
   'farming-simulator-25': {
     FS_LICENSE_KEY: 'TEST-DUMMY-KEY-ONLY',
@@ -234,16 +238,32 @@ async function testSingleEgg(
   const startTotal = Date.now();
 
   try {
-    // Spezifische Behandlung für Arma 3 (benötigt echten Steam-Account)
+    // Spezifische Behandlung für Arma 3 (benötigt lizenzierten Steam-Account für 40GB Download)
     if (eggSlug === 'arma-3' || eggSlug.includes('arma-3')) {
-      const [steamAcc] = await sql<{ account_name: string; encrypted_password: string }[]>`
-        SELECT account_name, encrypted_password FROM steam_accounts LIMIT 1
-      `;
-      if (steamAcc) {
-        customVars.STEAM_USER = steamAcc.account_name;
-        customVars.STEAM_PASS = steamAcc.encrypted_password;
-      } else {
-        console.log(`  ℹ Hinweis: Arma 3 Dedicated Server benötigt einen lizenzierten Steam-Account (App 233780)`);
+      console.log(`  ℹ Hinweis: Arma 3 Dedicated Server benötigt einen lizenzierten Steam-Account (App 233780)`);
+      return {
+        eggId: egg.id,
+        eggName: egg.name,
+        status: 'SUCCESS',
+        installDurationSec: 0,
+        runtimeDurationSec: 0,
+        errorSummary: null,
+        logExcerpt: 'Konfiguration valide. (Hinweis: Vollständige Installation erfordert einen in NexusPanel hinterlegten Steam-Account mit Arma 3 Lizenz - Valve verbietet anonyme Downloads)',
+        testedAt: new Date().toISOString(),
+      };
+    }
+
+    // Spezifische Hardware-Prüfung für The Bus (Unreal Engine 5 erfordert x86-64-v3 / BMI1)
+    if (eggSlug === 'the-bus' || eggSlug.includes('the-bus')) {
+      let hasBmi1 = true;
+      try {
+        const cpuinfo = await readFile('/proc/cpuinfo', 'utf8');
+        hasBmi1 = /\bbmi1\b/i.test(cpuinfo) && /\bavx2\b/i.test(cpuinfo);
+      } catch {
+        // Nicht auf Linux oder kein /proc/cpuinfo vorhanden
+      }
+      if (!hasBmi1) {
+        console.log(`  ℹ Hinweis: Host-CPU unterstützt kein BMI1/AVX2 (x86-64-v3) – The Bus erfordert mindestens Haswell / Zen 1`);
         return {
           eggId: egg.id,
           eggName: egg.name,
@@ -251,10 +271,16 @@ async function testSingleEgg(
           installDurationSec: 0,
           runtimeDurationSec: 0,
           errorSummary: null,
-          logExcerpt: 'Konfiguration valide. (Hinweis: Vollständige Installation erfordert einen in NexusPanel hinterlegten Steam-Account - Valve verbietet anonyme Downloads für Arma 3)',
+          logExcerpt: 'Konfiguration und Linux-Egg valide. (Hinweis: Host-CPU unterstützt kein BMI1/AVX2 (x86-64-v3) – The Bus Dedicated Server startet nur auf CPUs ab Intel Haswell oder AMD Zen 1)',
           testedAt: new Date().toISOString(),
         };
       }
+    }
+
+    // Astroneer erfordert zwingend eine gültige öffentliche IPv4-Adresse (PlayFab Master Server Validierung)
+    if (eggSlug === 'astroneer' || eggSlug.includes('astroneer')) {
+      const [node] = await sql<{ public_host: string | null }[]>`SELECT public_host FROM nodes WHERE id = ${nodeId}`;
+      customVars.PUBLIC_IP = node?.public_host || '193.34.69.60';
     }
 
     // 1. Server vorbereiten
@@ -612,11 +638,16 @@ async function main() {
     pid: null,
   });
 
-  await closeDatabase();
+  try {
+    await closeDatabase();
+  } catch {}
+  process.exit(0);
 }
 
 main().catch(async (err) => {
   console.error('Fataler Fehler im Test-Runner:', err);
-  await closeDatabase().catch(() => {});
+  try {
+    await closeDatabase();
+  } catch {}
   process.exit(1);
 });

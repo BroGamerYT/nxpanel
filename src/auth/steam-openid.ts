@@ -4,6 +4,8 @@
  * des Steam-Profilnamens sowie Avatars.
  */
 
+import { seenBefore } from './one-time.js';
+
 export function getSteamOpenIdUrl(returnUrl: string, realm: string): string {
   const p = new URLSearchParams({
     'openid.ns': 'http://specs.openid.net/auth/2.0',
@@ -16,8 +18,18 @@ export function getSteamOpenIdUrl(returnUrl: string, realm: string): string {
   return `https://steamcommunity.com/openid/login?${p.toString()}`;
 }
 
-export async function verifySteamOpenId(query: Record<string, string | undefined>): Promise<string | null> {
+export async function verifySteamOpenId(query: Record<string, string | undefined>, expectedReturnTo?: string): Promise<string | null> {
   if (query['openid.mode'] !== 'id_res') return null;
+  if (query['openid.op_endpoint'] !== 'https://steamcommunity.com/openid/login') return null;
+  // Die signierte Rueckkehr-Adresse muss auf unseren Callback zeigen
+  // (sonst liessen sich Antworten fuer andere Seiten hier einloesen).
+  if (expectedReturnTo) {
+    const rt = query['openid.return_to'] ?? '';
+    if (rt !== expectedReturnTo && !rt.startsWith(`${expectedReturnTo}?`)) return null;
+  }
+  // Jede Antwort nur einmal (Schutz vor Wiedereinspielen)
+  const nonce = query['openid.response_nonce'];
+  if (!nonce || seenBefore('steam-openid', nonce, 6 * 3600_000)) return null;
 
   const claimedId = query['openid.claimed_id'];
   if (!claimedId) return null;

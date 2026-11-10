@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Check, Globe, RefreshCw, Radio } from 'lucide-react';
+import { Copy, Check, Globe, RefreshCw, Radio, ChevronLeft } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
 import type { AllocationRow, NodeInfo, DnsConfig, ServerSyncTarget } from '../lib/types';
@@ -20,6 +20,14 @@ export function Network() {
 
   return (
     <div className="max-w-5xl space-y-10">
+      <Link
+        to="/admin"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-dim hover:text-amber transition-colors"
+      >
+        <ChevronLeft className="size-4" />
+        Zurück zum Admin-Hub
+      </Link>
+
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{t('network.title')}</h1>
         <p className="text-dim text-sm mt-1">{t('network.intro')}</p>

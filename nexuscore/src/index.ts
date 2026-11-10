@@ -1,55 +1,162 @@
+import os from 'node:os';
 import { config } from './config/index.js';
+import { logger } from './logger.js';
 import { MockDriver } from './drivers/mock-driver.js';
 import { WindowsNativeDriver } from './drivers/windows-native.js';
 import { DockerDriver } from './drivers/docker-driver.js';
-import { HostDriver } from './drivers/interface.js';
+import type { HostDriver } from './drivers/interface.js';
 import { createCoreServer } from './http/server.js';
+import { EventBus } from './protocol/events.js';
+import { currentPairingPin, tokenFingerprint } from './protocol/security.js';
+import { ServerRegistry } from './store/registry.js';
+import { getSystemMetrics } from './system/monitor.js';
 
-async function main() {
-  console.log(`
-  ╔═══════════════════════════════════════════════════════════╗
-  ║              ⚡ NEXUSCORE HOST DAEMON (v0.1.0)           ║
-  ║  Plattform: ${process.platform.padEnd(12)} Mode: ${config.mode.padEnd(14)} ║
-  ╚═══════════════════════════════════════════════════════════╝
-  `);
+const STATE_POLL_MS = 2000;
+const METRICS_PUSH_MS = 5000;
 
-  let driver: HostDriver;
+function pickDriver(): HostDriver {
+  if (config.runtime === 'windows-native') return new WindowsNativeDriver();
+  if (config.runtime === 'docker') return new DockerDriver();
+  return new MockDriver();
+}
 
-  if (config.runtime === 'windows-native') {
-    driver = new WindowsNativeDriver();
-  } else if (config.runtime === 'docker') {
-    driver = new DockerDriver();
-  } else {
-    driver = new MockDriver();
-  }
+/**
+ * Beobachtet die Instanzen und meldet Zustandswechsel.
+ *
+ * So werden auch Prozesse erfasst, die von ausserhalb beendet werden - ein
+ * Gameserver, der sich selbst beendet, darf im Panel nicht als "laeuft"
+ * stehen bleiben.
+ */
+function startStateWatcher(driver: HostDriver, bus: EventBus): NodeJS.Timeout {
+  const known = new Map<string, string>();
 
-  console.log(`[NexusCore] Aktiver Treiber: "${driver.name}"`);
+  const timer = setInterval(() => {
+    void (async () => {
+      try {
+        const states = await driver.listServers();
+        for (const state of states) {
+          const signature = `${state.status}:${state.pid ?? '-'}`;
+          if (known.get(state.id) === signature) continue;
+          known.set(state.id, signature);
+          bus.emit({ type: 'state', serverId: state.id, state, ts: new Date().toISOString() });
+        }
+      } catch (err) {
+        logger.error({ err }, 'Zustandsabfrage fehlgeschlagen');
+      }
+    })();
+  }, STATE_POLL_MS);
+
+  timer.unref();
+  return timer;
+}
+
+async function main(): Promise<void> {
+  logger.info(
+    {
+      runtime: config.runtime,
+      mode: config.mode,
+      platform: process.platform,
+      host: config.host,
+      port: config.port,
+      dataDir: config.dataDir,
+    },
+    'NexusCore Host Daemon startet',
+  );
+
+  const bus = new EventBus();
+  const driver = pickDriver();
   await driver.initialize();
 
-  // Beispiel-Testserver im Test-Modus registrieren
-  if (config.mode === 'test') {
+  // Konsolenausgaben des Treibers in den Event-Bus leiten.
+  driver.setLogSink((line) => {
+    bus.emit({ type: 'console', ...line });
+  });
+
+  // Registry oeffnen und gespeicherte Instanzen uebernehmen.
+  const registry = await ServerRegistry.open(config.dataDir);
+  for (const server of registry.list()) {
+    try {
+      await driver.registerServer(server);
+      logger.info({ serverId: server.id }, 'Instanz aus Registry uebernommen');
+    } catch (err) {
+      logger.error({ err, serverId: server.id }, 'Instanz konnte nicht uebernommen werden');
+    }
+  }
+
+  // Im Testmodus gibt es immer eine Beispiel-Instanz, damit /core/v1/servers
+  // nicht leer ist und der Smoke-Test etwas zum Starten hat.
+  if (config.mode === 'test' && !registry.get('test-minecraft-01')) {
     await driver.registerServer({
       id: 'test-minecraft-01',
       name: 'Test Minecraft Server (Local)',
       game: 'minecraft',
-      executable: 'cmd.exe',
-      args: ['/c', 'echo Starte Test-Gameserver... && timeout /t 10'],
+      executable: process.execPath,
+      args: ['-e', 'console.log("NexusCore Testserver laeuft."); setInterval(() => {}, 1000)'],
+      workingDir: process.cwd(),
+      ports: [{ name: 'game', hostPort: 25565, protocol: 'tcp' }],
+    });
+    await registry.add({
+      id: 'test-minecraft-01',
+      name: 'Test Minecraft Server (Local)',
+      game: 'minecraft',
+      executable: process.execPath,
+      args: ['-e', 'console.log("NexusCore Testserver laeuft."); setInterval(() => {}, 1000)'],
       workingDir: process.cwd(),
       ports: [{ name: 'game', hostPort: 25565, protocol: 'tcp' }],
     });
   }
 
-  const server = await createCoreServer(driver);
+  const server = await createCoreServer(driver, bus, registry);
+  const address = await server.listen({ port: config.port, host: config.host });
 
-  try {
-    const address = await server.listen({ port: config.port, host: config.host });
-    console.log(`[NexusCore] Daemon lauscht erfolgreich auf: ${address}`);
-    console.log(`[NexusCore] HTTP API: ${address}/core/v1/info`);
-    console.log(`[NexusCore] Kopplungs-PIN: ${config.pairingPin}`);
-  } catch (err) {
-    console.error('[NexusCore] Fehler beim Starten des Daemons:', err);
-    process.exit(1);
-  }
+  const stateTimer = startStateWatcher(driver, bus);
+  const metricsTimer = setInterval(() => {
+    void (async () => {
+      try {
+        const metrics = await getSystemMetrics(config.dataDir);
+        bus.emit({ type: 'metrics', metrics, ts: new Date().toISOString() });
+      } catch (err) {
+        logger.error({ err }, 'Metriken konnten nicht gelesen werden');
+      }
+    })();
+  }, METRICS_PUSH_MS);
+  metricsTimer.unref();
+
+  logger.info(
+    {
+      url: address,
+      pin: currentPairingPin(),
+      tokenFingerprint: tokenFingerprint(),
+      host: os.hostname(),
+    },
+    'NexusCore laeuft',
+  );
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, 'NexusCore wird beendet');
+
+    clearInterval(stateTimer);
+    clearInterval(metricsTimer);
+
+    try {
+      await server.close();
+      await driver.shutdown();
+      await registry.save();
+    } catch (err) {
+      logger.error({ err }, 'Fehler beim Beenden');
+    }
+
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
-main();
+main().catch((err) => {
+  logger.error({ err }, 'NexusCore konnte nicht starten');
+  process.exit(1);
+});

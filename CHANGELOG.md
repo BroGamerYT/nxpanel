@@ -21,6 +21,46 @@ Bis 0.4.x wurden Nachträge ohne eigene Nummer ausgespielt; sie sind hier
 nachträglich anhand des Entwicklungslogs eingeordnet. Ab 0.5.0 bekommt
 jede Auslieferung eine eigene Nummer.
 
+## [0.26.2] - 2026-11-10 – Spiele-Kompatibilität 100% & Bereinigung der Navigation
+
+### Geändert
+- **Admin-Navigation & Seitenleiste**: Alle 8 administrativen Einzelpunkte (`Netzwerk`, `Hosts`, `Nutzer`, `Audit-Log`, `Host-Logs`, `Dateien (VM)`, `Testbericht`, `Integrationen`) wurden aus der Seitenleiste und dem mobilen Overlay-Menü entfernt. Administratoren sehen in der Navigation nun ausschließlich den **Admin-Hub** (`/admin`). Von dort aus sind alle 8 Module übersichtlich in Kategorien erreichbar; jedes Modul bietet nun einen direkten Zurück-Link (`← Zurück zum Admin-Hub`).
+
+### Behoben
+- **Arma 3**: `STEAM_USER` und `STEAM_PASS` werden beim Importieren nicht mehr als statisch/nicht editierbar markiert. Der Testrunner erkennt die Lizenzpflicht von App 233780 und besteht sauber.
+- **The Bus**: Vorlage auf native Linux-Binärdatei (`TheBusServer.sh`) umgestellt. CPU-Befehlssatzprüfung (BMI1/AVX2) im Testrunner verhindert irreführende Abstürze auf älteren Virtualisierungshosts.
+- **Astroneer**: INI-Konfigurations-Engine für Sektionen `[Section].Key` erweitert; fehlende Konfigurationsdateien werden bei der Bereitstellung automatisch erzeugt. Dynamische Zuweisung der Host-IP verhindert Serverabmeldung bei PlayFab.
+- **Test-Runner**: Sauberes Beenden von Datenbankverbindungen (`closeDatabase`) verhindert `CONNECTION_ENDED`-Fehler beim Herunterfahren nach Durchlauf.
+
+## [0.26.1] - 2026-11-10
+
+### Behoben
+- Tests des Admin-Dateimanagers liefen unter Windows nicht (Pfade `C:\…`, Symlink brauchte Admin-Rechte, `du` fehlt). Jetzt plattformunabhängig, der Deploy bricht nicht mehr ab.
+- Speicherbelegung im Admin-Dateimanager funktioniert auch ohne `du` (Windows, später NexusCore): zählt dann selbst und folgt keinen Verknüpfungen.
+
+## [0.26.0] - 2026-11-10 – SFTP-Passwörter und SFTP aus dem Internet
+
+### Hinzugefügt
+- **SFTP-Passwörter** unter „Konto → Sicherheit“: zufällig erzeugt (z. B. `abcdef-ghijkl-mnopqr-stuvwx`), nur einmal im Klartext angezeigt, gespeichert als Hash, einzeln löschbar, mit „zuletzt genutzt“. Mit Zwei-Faktor-Schutz geht SFTP **nur** damit (das Kontopasswort reicht dort nicht), ohne 2FA zusätzlich zum Kontopasswort. Höchstens 10 je Konto, Anlegen und Löschen im Audit-Log.
+- Das SFTP-Fenster im Dateimanager zeigt den von außen erreichbaren Port (`SFTP_PUBLIC_PORT`) und bei 2FA den Hinweis auf das SFTP-Passwort.
+
+### Behoben
+- `docker-compose.yml`: Wer `SFTP_PORT` in der `.env` änderte, legte damit auch den Port **im** Container fest, die Portfreigabe zeigte aber weiter auf 2022 – SFTP war dann nicht erreichbar. Jetzt lauscht SFTP im Container immer auf 2022, `SFTP_PORT` ist der Port auf der VM.
+- Der SFTP-Port wird nie an einen Spielserver vergeben, auch wenn er im Spiel-Portbereich liegt.
+
+## [0.25.1] - 2026-11-10 – Sicherheitsprüfung: Imitation, Steam-Login, SFTP, Live-Strom
+
+### Sicherheit
+- **Kritisch – Hintertür zu jedem Admin-Konto geschlossen:** `POST /auth/impersonate/stop` war ohne Anmeldung erreichbar und gab für jede Admin-ID eine volle Admin-Sitzung aus. Jetzt nur noch angemeldet als der imitierte Nutzer und mit einem Einmal-Rückkehr-Token (12 h), das beim Start der Imitation ausgegeben wird. Die Imitations-Sitzung wird beim Zurückkehren beendet.
+- **Kritisch – Kontoübernahme über Steam-Verknüpfung geschlossen:** Die Ziel-Nutzer-ID stand in der Rückkehr-Adresse (`uid=`). Mit eigenem Steam-Konto ließ sich so die eigene Steam-ID an ein fremdes Konto (auch Admin) hängen und danach per Steam-Login übernehmen. Jetzt holt die Oberfläche über `POST /auth/steam/link-start` ein serverseitiges Einmal-Token, das an das angemeldete Konto gebunden ist. Das Zugangstoken steht nicht mehr in der Adresse.
+- Steam-OpenID: Endpunkt und signierte Rückkehr-Adresse werden geprüft, jede Antwort nur einmal angenommen (Schutz vor Wiedereinspielen).
+- **SFTP:** Fehlversuche zählen auf dieselbe Sperre wie beim Web-Login (5 je Konto, 20 je IP in 15 Min). Konten mit Zwei-Faktor-Schutz können sich nicht mehr nur mit dem Passwort per SFTP anmelden (2FA wäre sonst umgehbar).
+- **Live-Strom:** Nutzer bekommen nur noch Ereignisse von Servern, die sie sehen dürfen (vorher alle Server inkl. Namen und Meldungen).
+
+### Behoben
+- Zwei Tabs gleichzeitig: Der langsamere Tab überschrieb das frische Refresh-Cookie mit einem leeren Wert, beide flogen später raus.
+- Tests an die neuen Schnittstellen angepasst (Steam-Konten mit Besitzer, Statuswechsel offline → running), 32 neue Routen in der API-Doku. 498/498 Tests grün.
+
 ## [0.25.0] - 2026-11-09 – Live-Echtzeit, Toast-Meldungen & Massenaktionen
 
 ### Hinzugefügt

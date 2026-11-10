@@ -151,6 +151,12 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [ ] Windows-Varianten in den Eggs (zuerst ARK Ascended, Enshrouded, Farming Simulator, Palworld)
 - [ ] Podman (rootless) als optionale Laufzeit unter Linux, Testlauf aller Eggs
 - [ ] NexusPanel OS: schlankes Linux-Abbild (ISO, Proxmox/Hyper-V), Einrichtung im Browser, A/B-Updates
+- [ ] NexusCore Ökosystem: Plattform-Masterkonzept (`docs/KONZEPT-NEXUSCORE-ECOSYSTEM.md`) umsetzen
+- [ ] NexusCore Standalone: Universelle Web-Verwaltung in der `.exe` für jeden Nutzer weltweit (Server erstellen, Start/Stop, Konsole)
+- [ ] Zero-Config Reverse-Tunnel: Ausgehender Tunnel zum Master (keine Portfreigaben / DS-Lite Bypass) für Windows, macOS und Linux
+- [ ] NexusCluster (Freundeskreis-Verbund): Power Pooling (mehrere PCs bündeln), 1-Klick Invite-Code, Smart Placement, Gaming-Schutzmodus
+- [ ] Intelligentes Failover & Live-Sync: Savegame-Delta-Replikation, 30s-Heartbeat-Timeout, Notfall-Spawn bei Stromausfall, Split-Brain-Schutz
+- [ ] NexusCore (Windows): `.msi` / `.exe` Setup-Assistent, Windows-Dienst `nexuscored`, Systray-Icon mit PIN-Kopplung
 - [ ] NexusCore (Rust): gemeinsamer Kern für alle Hosts – Dienst `nexuscored`, Kommandozeile `nxctl`, Kopplung mit mTLS (Konzept Abschnitt 9)
 - [ ] Host-Schicht im Panel: alle Server-Aktionen über „lokal“ oder „NexusCore“
 - [ ] NexusCore übernimmt Docker/Podman, danach Dateien und Backups; mehrere Hosts im Panel
@@ -207,3 +213,13 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Auto-Start an-/abschaltbar je Server mit 5-Versuche-Limit und direkter „Nicht startbar“-Anzeige am Panel (0.23.0)
 - [x] Mod- & Plugin-Konfigurator (`config/`, `defaultconfigs/`, `world/serverconfig/`, `BepInEx/config/` etc.) inkl. `.toml`- und `.yml`-Formular-Editor (0.23.0)
 - [x] Deploy (`deploy.bat`) durch lokalen Vorab-Build und stabiles Docker-Layer-Caching beschleunigt (0.23.0)
+
+## Sicherheitsprüfung 10.11. (0.25.1)
+- [x] Imitation: Rückkehr nur mit Einmal-Token
+- [x] Steam-Verknüpfung: serverseitiges state-Token statt uid
+- [x] SFTP: Sperre gegen Passwort-Raten, kein Login mit Passwort allein bei 2FA
+- [x] Live-WebSocket nach Sichtbarkeit filtern
+- [x] Steam-Login ohne 2FA-Abfrage – bleibt so, Steam Guard schützt (Entscheidung 10.11.)
+- [x] SFTP-Passwörter für 2FA-Konten (0.26.0)
+- [x] SFTP soll aus dem Internet erreichbar sein (Entscheidung 10.11.)
+- [ ] Auf der VM: `SFTP_PORT=28999` und `PORT_RANGE=28000-28998` in der `.env` (nutzt die vorhandene Weiterleitung), danach testen

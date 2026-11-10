@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 import { sql } from '../db/index.js';
 import { config } from '../config.js';
 import { log } from '../log.js';
@@ -426,17 +426,17 @@ export async function applyConfigFiles(
       await patchSqlite(full, spec, ctx, relPath);
       continue;
     }
-    let original: string;
+    let original = '';
     try {
       original = await readFile(full, 'utf8');
     } catch {
-      log.debug({ file: relPath }, 'Konfigurationsdatei noch nicht vorhanden');
-      continue;
+      log.debug({ file: relPath }, 'Konfigurationsdatei noch nicht vorhanden, versuche initiale Erstellung');
     }
 
     const result = patchConfigFile(original, spec, ctx);
     if (result.changed.length === 0 && result.added.length === 0) continue;
 
+    await mkdir(dirname(full), { recursive: true });
     await writeFile(full, result.content, 'utf8');
     log.info({ file: relPath, changed: result.changed, added: result.added }, 'Konfiguration angepasst');
 
@@ -482,7 +482,8 @@ async function patchSqlite(file: string, spec: ConfigFileSpec, ctx: Substitution
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(file);
   try {
-    for (const [key, template] of Object.entries(spec.find)) {
+    const rules = spec.find ?? spec.set ?? {};
+    for (const [key, template] of Object.entries(rules)) {
       const [table, column] = key.split('.');
       const ident = /^[A-Za-z_][A-Za-z0-9_]*$/;
       if (!table || !column || !ident.test(table) || !ident.test(column)) {

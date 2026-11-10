@@ -1,10 +1,11 @@
 //! NexusCore Rust Core – Host-Abstraktionsschicht für Treiber & Server-Management.
 
 pub mod server;
+pub mod http;
 pub use server::ServerHandle;
 
 /// Konfiguration für einen Gameserver-Prozess.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessConfig {
     pub executable: String,
     pub args: Vec<String>,
@@ -13,7 +14,7 @@ pub struct ProcessConfig {
 }
 
 /// Status eines Servers.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerStatus {
     Offline,
     Starting,

@@ -1,0 +1,46 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="NexusCore Host Daemon" 
+           Manufacturer="NexusPanel Team" 
+           Version="0.2.0" 
+           UpgradeCode="e38f6b01-5764-4e3a-92ea-df73cf763291" 
+           Scope="perMachine">
+    
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von NexusCore ist bereits installiert." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="NexusCore" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="NexusCore" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="NexusCoreExe" Guid="9a8e742a-1163-4482-bb34-8c01b44ec401">
+        <File Id="NexusCoreExeFile" Source="nexuscore\dist\nexuscore.exe" KeyPath="yes" />
+        <Shortcut Id="NexusCoreStartMenuShortcut" 
+                  Directory="ApplicationProgramsFolder" 
+                  Name="NexusCore Host Daemon" 
+                  WorkingDirectory="INSTALLFOLDER" 
+                  Advertise="yes" />
+      </Component>
+      <Component Id="NexusCoreEnvExample" Guid="319a3b90-1c02-4fc8-9f06-99cf80197d10">
+        <File Id="EnvExampleFile" Source="nexuscore\.env.example" KeyPath="yes" />
+      </Component>
+      <Component Id="NexusCoreReadme" Guid="42a8b91c-7d04-4b92-91f8-08df8192a301">
+        <File Id="ReadmeFile" Source="nexuscore\README.md" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Component Id="ProgramMenuDir" Directory="ApplicationProgramsFolder" Guid="724b0193-2940-410a-8bf6-11f87920ab32">
+      <RemoveFolder Id="CleanUpProgramMenuDir" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\NexusPanel\NexusCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="MainFeature" Title="NexusCore Host Daemon" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ProgramMenuDir" />
+    </Feature>
+  </Package>
+</Wix>

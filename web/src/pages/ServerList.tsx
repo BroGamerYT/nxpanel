@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GameCover } from '../components/GameCover';
-import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical, RotateCcw, AlertTriangle, Star, Tag, Play, Square, Activity, CheckSquare, Square as SquareIcon, X } from 'lucide-react';
+import { Search, Copy, Check, LayoutGrid, List as ListIcon, ArrowDown, ArrowUp, Package, FlaskConical, RotateCcw, AlertTriangle, Star, Tag, Play, Square, Activity, CheckSquare, Square as SquareIcon, X, ExternalLink } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
 import { useAuth } from '../lib/auth';
@@ -369,7 +369,21 @@ export function ServerList() {
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">{s.primaryPort ? <Address port={s.primaryPort} host={s.publicHost} subdomain={s.subdomain} srvRecordEnabled={s.srvRecordEnabled} eggName={s.eggName} /> : <span className="text-dim">–</span>}</td>
+                      <td className="px-3 py-2.5 hidden md:table-cell whitespace-nowrap">
+                        {s.primaryPort ? (
+                          <Address
+                            port={s.primaryPort}
+                            host={s.publicHost}
+                            subdomain={s.subdomain}
+                            srvRecordEnabled={s.srvRecordEnabled}
+                            eggName={s.eggName}
+                            ports={s.ports}
+                            steamAppId={s.steamAppId}
+                          />
+                        ) : (
+                          <span className="text-dim">–</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-dim hidden lg:table-cell tabular-nums whitespace-nowrap"><LoadCell s={s} live={liveOf(s.id)} /></td>
                       <td className="px-3 py-2.5 text-dim hidden xl:table-cell tabular-nums whitespace-nowrap">{dash.data?.diskUsed[s.id] !== undefined ? t('server.ramOf', { used: formatMb(dash.data.diskUsed[s.id]!), max: formatMb(s.diskMb) }) : formatMb(s.diskMb)}</td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
@@ -628,7 +642,20 @@ function Tile({
             </div>
           )}
         </div>
-        {s.primaryPort && <p className="font-mono text-[13px] text-dim">{(s.publicHost || window.location.hostname)}:{s.primaryPort}</p>}
+        {s.primaryPort && (
+          <div className="pt-0.5" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+            <Address
+              port={s.primaryPort}
+              host={s.publicHost}
+              subdomain={s.subdomain}
+              srvRecordEnabled={s.srvRecordEnabled}
+              eggName={s.eggName}
+              ports={s.ports}
+              steamAppId={s.steamAppId}
+              compact
+            />
+          </div>
+        )}
         <QuickPowerButtons s={s} />
         <div className="space-y-2 text-xs">
           <div>
@@ -655,29 +682,60 @@ function Tile({
   );
 }
 
-/** Adresse zum Kopieren - genau das, was man Mitspielern schickt. */
+export function SteamIcon({ className = 'size-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.005.105.005.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 14.819C1.968 19.986 6.721 24 11.979 24c6.627 0 12-5.373 12-12s-5.373-12-12-12z" />
+    </svg>
+  );
+}
+
+/** Adresse zum Kopieren, Steam Connect (steam://connect) und Direktlink zum Webinterface. */
 export function Address({
   port,
   host,
   subdomain,
   srvRecordEnabled,
   eggName,
+  ports,
+  steamAppId,
+  webInterface,
+  compact = false,
 }: {
   port: number;
   host?: string | null;
   subdomain?: string | null;
   srvRecordEnabled?: boolean;
   eggName?: string | null;
+  ports?: Array<{ port: number; protocol: string; ref: string | null; is_primary: boolean }>;
+  steamAppId?: number | null;
+  webInterface?: unknown;
+  compact?: boolean;
 }) {
   const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle');
+
+  const rawHost = host || window.location.hostname;
+
+  // Ports differenzieren: Spielport vs. Webinterface-Port
+  const gamePortObj = ports?.find((p) => p.ref === 'game') ?? ports?.find((p) => p.ref !== 'web' && p.ref !== 'webtls');
+  const gamePort = gamePortObj?.port ?? port;
+  const webPortObj = ports?.find((p) => p.ref === 'web') ?? ports?.find((p) => p.ref === 'webtls');
+  const webPort = webPortObj?.port ?? (webInterface ? port : null);
+
+  const isSteam = Boolean(steamAppId) || Boolean(
+    eggName &&
+    /(farming|simulator|counter-strike|cs2|ark|valheim|rust|palworld|enshrouded|7days|unturned|zomboid|forest|squad|assetto|garry|left-4-dead|insurgency|mordhau|necesse|satisfactory|soulmask|v-rising|eco|starve|empyrion|hurtworld|truck|sven)/i.test(eggName)
+  );
+
+  const isTeamSpeak = Boolean(eggName && /teamspeak|ts3/i.test(eggName));
 
   const isSrv = Boolean(
     srvRecordEnabled !== false &&
     eggName &&
-    (/minecraft|paper|purpur|fabric|forge/i.test(eggName) || /teamspeak|ts3/i.test(eggName) || /terraria/i.test(eggName))
+    (/minecraft|paper|purpur|fabric|forge/i.test(eggName) || isTeamSpeak || /terraria/i.test(eggName))
   );
 
-  let addr = `${host || window.location.hostname}:${port}`;
+  let addr = `${rawHost}:${isSteam ? gamePort : port}`;
   let isSub = false;
 
   if (subdomain) {
@@ -687,28 +745,85 @@ export function Address({
       addr = fqdn;
       isSub = true;
     } else {
-      addr = `${fqdn}:${port}`;
+      addr = `${fqdn}:${isSteam ? gamePort : port}`;
       isSub = true;
     }
   }
 
+  const steamUrl = isSteam && gamePort ? `steam://connect/${rawHost}:${gamePort}` : null;
+  const webUrl = webPort ? `http://${rawHost}:${webPort}` : null;
+  const tsUrl = isTeamSpeak ? `ts3server://${rawHost}?port=${port}` : null;
+
   return (
-    <button
-      type="button"
-      onClick={async () => {
-        setState((await copyText(addr)) ? 'ok' : 'fail');
-        setTimeout(() => setState('idle'), 1800);
-      }}
-      className="inline-flex items-center gap-1.5 font-mono text-[13px] text-ink hover:text-amber"
-      title={state === 'fail' ? t('copy.failTitle') : (isSub && isSrv ? 'Direktadresse (SRV ohne Port)' : t('copy.address'))}
-    >
-      <span className={isSub ? 'text-amber font-semibold' : ''}>{addr}</span>
-      {isSub && isSrv && (
-        <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-sans border border-emerald-500/30">
-          SRV
-        </span>
+    <div className={`inline-flex flex-wrap items-center gap-1.5 ${compact ? 'text-xs' : ''}`}>
+      {/* Klickbare Adresse zum Kopieren */}
+      <button
+        type="button"
+        onClick={async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setState((await copyText(addr)) ? 'ok' : 'fail');
+          setTimeout(() => setState('idle'), 1800);
+        }}
+        className="inline-flex items-center gap-1.5 font-mono text-[13px] text-ink hover:text-amber transition-colors px-1.5 py-0.5 rounded hover:bg-rack-2/60 border border-transparent hover:border-seam group/addr"
+        title={state === 'fail' ? t('copy.failTitle') : (isSub && isSrv ? 'Direktadresse (SRV ohne Port) - Klick zum Kopieren' : 'Server-Adresse - Klick zum Kopieren')}
+      >
+        <span className={isSub ? 'text-amber font-semibold' : ''}>{addr}</span>
+        {isSub && isSrv && (
+          <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-sans border border-emerald-500/30">
+            SRV
+          </span>
+        )}
+        {state === 'ok' ? (
+          <span className="inline-flex items-center gap-0.5 text-[11px] text-emerald-400 font-sans font-medium">
+            <Check className="size-3.5" /> Kopiert
+          </span>
+        ) : state === 'fail' ? (
+          <span className="text-xs text-led-crash">{t('copy.failShort')}</span>
+        ) : (
+          <Copy className="size-3 text-dim group-hover/addr:text-ink transition-colors" />
+        )}
+      </button>
+
+      {/* Steam 1-Klick Connect Link */}
+      {steamUrl && (
+        <a
+          href={steamUrl}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#171a21] hover:bg-[#2a475e] text-slate-200 border border-slate-700/80 hover:border-sky-400 transition-all shadow-sm select-none"
+          title={`Direkt über Steam dem Spiel beitreten (${steamUrl})`}
+        >
+          <SteamIcon className="size-3 text-sky-400" />
+          <span>Steam</span>
+        </a>
       )}
-      {state === 'ok' ? <Check className="size-3.5 text-led-run" /> : state === 'fail' ? <span className="text-xs text-led-crash">{t('copy.failShort')}</span> : <Copy className="size-3.5 text-dim" />}
-    </button>
+
+      {/* Webinterface Link */}
+      {webUrl && (
+        <a
+          href={webUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber/15 hover:bg-amber/25 text-amber border border-amber/40 transition-all shadow-sm select-none"
+          title={`Webinterface des Spiels im neuen Tab öffnen (${webUrl})`}
+        >
+          <ExternalLink className="size-3" />
+          <span>Webinterface</span>
+        </a>
+      )}
+
+      {/* TeamSpeak Link */}
+      {tsUrl && (
+        <a
+          href={tsUrl}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/40 transition-all shadow-sm select-none"
+          title={`Im TeamSpeak-Client öffnen (${tsUrl})`}
+        >
+          <span>TS verbinden</span>
+        </a>
+      )}
+    </div>
   );
 }

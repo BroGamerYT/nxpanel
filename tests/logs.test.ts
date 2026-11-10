@@ -59,7 +59,8 @@ describe('Verbindungstest', () => {
       if (String(url).includes('ipify')) return new Response(JSON.stringify({ ip: '203.0.113.9' }), { headers: { date: skewed } });
       return new Response('', { status: 404 });
     }) as typeof fetch;
-    const r = await networkCheck('193.34.69.60', fake);
+    const fakeDns = async () => ({ address: '127.0.0.1' });
+    const r = await networkCheck('193.34.69.60', fake, fakeDns);
     const by = Object.fromEntries(r.map((x) => [x.key, x]));
     expect(by.https).toMatchObject({ ok: true, value: 'HTTP 404' });
     expect(by.publicIp).toMatchObject({ ok: false, value: '203.0.113.9' });

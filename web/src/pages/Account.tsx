@@ -26,8 +26,9 @@ import {
   Key,
 } from 'lucide-react';
 import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
-import { api, currentToken } from '../lib/api';
+import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { SftpPasswords } from '../components/SftpPasswords';
 import { Button, Input, Field, Spinner } from '../components/ui';
 import { UserAvatar, AVATAR_PRESETS } from '../components/UserAvatar';
 import type { SteamAccount, UserSession } from '../lib/types';
@@ -361,9 +362,9 @@ export function Account() {
     }
   };
 
-  const startSteamLoginLink = () => {
-    const token = currentToken();
-    const url = `/api/v1/auth/steam/login?action=link${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+  const startSteamLoginLink = async () => {
+    // Server gibt eine Adresse mit Einmal-Token zurueck (an dieses Konto gebunden)
+    const { url } = await api<{ url: string }>('/auth/steam/link-start', { method: 'POST' });
     window.location.href = url;
   };
 
@@ -426,7 +427,7 @@ export function Account() {
           ) : (
             <button
               type="button"
-              onClick={startSteamLoginLink}
+              onClick={() => { void startSteamLoginLink(); }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-[#171a21] hover:bg-[#2a475e] text-white border border-[#2a475e] shadow-md transition-all group"
             >
               <SteamIcon className="size-4 text-[#66c0f4] group-hover:scale-110 transition-transform" />
@@ -1245,6 +1246,9 @@ export function Account() {
               </div>
             )}
           </div>
+
+          {/* ================= SFTP-Passwoerter ================= */}
+          <SftpPasswords />
 
           {/* ================= Passkeys (WebAuthn / FIDO2) ================= */}
           <div className="p-6 rounded-2xl border border-seam bg-rack space-y-5 md:col-span-2">

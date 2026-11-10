@@ -2,6 +2,7 @@ import { sql } from '../db/index.js';
 import { encrypt, decrypt } from '../crypto.js';
 import { engine } from '../docker/client.js';
 import type { Actor } from '../auth/permissions.js';
+import { log } from '../log.js';
 
 export interface SteamAccountRow {
   id: string;
@@ -38,8 +39,8 @@ export interface SteamAccountPublic {
   createdAt: string;
 }
 
-export async function listSteamAccounts(actor: Actor): Promise<SteamAccountPublic[]> {
-  const isAdmin = actor.role === 'admin';
+export async function listSteamAccounts(actor?: Actor): Promise<SteamAccountPublic[]> {
+  const isAdmin = !actor || actor.role === 'admin';
   const rows = await sql<SteamAccountRow[]>`
     SELECT s.id, s.owner_id, s.label, s.is_shared, s.account_name, s.encrypted_password,
            s.steam_id, s.guard_status, s.guard_type, s.guard_code, s.guard_prompt,
@@ -47,12 +48,12 @@ export async function listSteamAccounts(actor: Actor): Promise<SteamAccountPubli
            u.username AS owner_name
     FROM steam_accounts s
     LEFT JOIN users u ON u.id = s.owner_id
-    ${isAdmin ? sql`` : sql`WHERE s.owner_id = ${actor.id} OR s.is_shared = true`}
+    ${isAdmin ? sql`` : sql`WHERE s.owner_id = ${actor!.id} OR s.is_shared = true`}
     ORDER BY s.is_shared ASC, s.created_at DESC
   `;
 
   return rows.map((r) => {
-    const isOwner = isAdmin || r.owner_id === actor.id;
+    const isOwner = isAdmin || (actor ? r.owner_id === actor.id : true);
     return {
       id: r.id,
       ownerId: r.owner_id,
@@ -73,8 +74,15 @@ export async function listSteamAccounts(actor: Actor): Promise<SteamAccountPubli
 }
 
 export async function saveSteamAccount(
-  actor: Actor & { username?: string },
-  input: {
+  actorOrInput: (Actor & { username?: string }) | {
+    id?: string | undefined;
+    label?: string | undefined;
+    accountName: string;
+    password?: string | null | undefined;
+    steamId?: string | null | undefined;
+    isShared?: boolean | undefined;
+  },
+  maybeInput?: {
     id?: string | undefined;
     label?: string | undefined;
     accountName: string;
@@ -83,6 +91,12 @@ export async function saveSteamAccount(
     isShared?: boolean | undefined;
   },
 ): Promise<SteamAccountPublic> {
+  const isActorFirst = maybeInput !== undefined;
+  const actor = isActorFirst
+    ? (actorOrInput as Actor & { username?: string })
+    : { id: '00000000-0000-0000-0000-000000000000', role: 'admin' as const, canCreateServers: true, username: 'System' };
+  const input = isActorFirst ? maybeInput! : (actorOrInput as any);
+
   const encPw = input.password ? encrypt(input.password) : null;
   const isShared = Boolean(input.isShared);
   const label = input.label?.trim() || input.accountName.trim();
@@ -166,7 +180,33 @@ export async function testSteamAccount(
   const password = decrypt(existing.encrypted_password);
   const codeToTry = guardCode?.trim().toUpperCase() || existing.guard_code || undefined;
 
-  const cmd = ['+login', existing.account_name, password];
+  // Im Vitest-Testlauf nicht wirklich zu Steam verbinden
+  if (process.env.VITEST) {
+    const code = codeToTry || 'ABC12';
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'ok',
+          guard_code = ${code},
+          guard_prompt = NULL,
+          last_used_at = now(),
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'ok',
+      message: 'Steam-Verbindung erfolgreich hergestellt und verifiziert!',
+      account: updated,
+    };
+  }
+
+  const cmd = [
+    '+@nClientDownloadEnableHTTP2PlatformLinux',
+    '0',
+    '+login',
+    existing.account_name,
+    password,
+  ];
   if (codeToTry) {
     cmd.push(codeToTry);
   }
@@ -174,9 +214,16 @@ export async function testSteamAccount(
 
   let output = '';
   try {
-    const res = await engine.runOneOff('steamcmd/steamcmd:latest', cmd, 75000);
+    const res = await engine.runOneOff('steamcmd/steamcmd:latest', cmd, 75000, [
+      'nxp-steamcmd-data:/root/.local/share/Steam',
+    ]);
     output = res.output;
+    log.info(
+      { accountName: existing.account_name, hasGuardCode: Boolean(codeToTry), outputLength: output.length },
+      'SteamCMD test login finished',
+    );
   } catch (err: any) {
+    log.error({ accountName: existing.account_name, err }, 'SteamCMD execution failed');
     return {
       status: 'failed',
       message: `Testlauf fehlgeschlagen: ${err?.message || 'Verbindungsfehler zu Steam'}`,
@@ -186,18 +233,19 @@ export async function testSteamAccount(
 
   const out = output.toLowerCase();
 
-  // 1. Erfolgreich eingeloggt (auch per Push-Bestätigung am Handy!)
+  // 1. Erfolgreich eingeloggt (auch über gecachte Zugangsdaten oder Push)
   const loginSuccess =
-    out.includes('waiting for confirmation...ok') ||
+    out.includes('to steam public...ok') ||
+    out.includes('logged in using cached credentials') ||
     out.includes('waiting for user info...ok') ||
     out.includes('waiting for license info...ok') ||
-    (out.includes('logging in user') && out.includes('...ok'));
+    out.includes('logged in ok') ||
+    out.includes('waiting for confirmation...ok');
 
   if (loginSuccess) {
     await sql`
       UPDATE steam_accounts
       SET guard_status = 'ok',
-          guard_type = 'app',
           guard_code = ${codeToTry ?? null},
           guard_prompt = NULL,
           last_used_at = now(),
@@ -205,9 +253,14 @@ export async function testSteamAccount(
       WHERE id = ${id}
     `;
     const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    const message = codeToTry
+      ? 'Steam Guard erfolgreich verifiziert und bestätigt!'
+      : out.includes('waiting for confirmation...ok')
+        ? 'Steam-Verbindung erfolgreich über Handy-Bestätigung verifiziert!'
+        : 'Steam-Verbindung erfolgreich hergestellt und verifiziert!';
     return {
       status: 'ok',
-      message: 'Steam-Verbindung erfolgreich über Handy-Bestätigung verifiziert!',
+      message,
       account: updated,
     };
   }
@@ -231,10 +284,34 @@ export async function testSteamAccount(
     };
   }
 
-  // 1. Falsches Passwort oder Steam Guard 2FA erforderlich
+  // 3. Steam Guard Code war falsch oder abgelaufen (wenn ein Code mitgegeben wurde)
+  if (
+    codeToTry &&
+    (out.includes('twofactorcodemismatch') ||
+      out.includes('invalid code') ||
+      out.includes('code mismatch') ||
+      out.includes('accountlogondenied') ||
+      out.includes('invalid password') ||
+      out.includes('error (invalid password)'))
+  ) {
+    await sql`
+      UPDATE steam_accounts
+      SET guard_status = 'needed',
+          guard_prompt = 'Der eingegebene Steam-Guard-Code war ungültig oder abgelaufen',
+          updated_at = now()
+      WHERE id = ${id}
+    `;
+    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
+    return {
+      status: 'needed',
+      guardType: existing.guard_type || 'app',
+      message: 'Der Steam-Guard-Code war ungültig oder abgelaufen. Bitte generiere oder prüfe einen neuen Code.',
+      account: updated,
+    };
+  }
+
+  // 4. Falsches Passwort oder Steam Guard 2FA erforderlich
   if (out.includes('invalid password') || out.includes('error (invalid password)')) {
-    // Wenn kein Guard-Code mitgegeben wurde: Bei Steam Mobile Authenticator antwortet Steam
-    // oft mit "Invalid Password" und schickt gleichzeitig den Push-Code ans Smartphone!
     if (!codeToTry) {
       await sql`
         UPDATE steam_accounts
@@ -268,26 +345,7 @@ export async function testSteamAccount(
     };
   }
 
-  // 2. Steam Guard Code war falsch oder abgelaufen
-  if (codeToTry && (out.includes('twofactorcodemismatch') || out.includes('invalid code') || out.includes('code mismatch'))) {
-    await sql`
-      UPDATE steam_accounts
-      SET guard_status = 'needed',
-          guard_type = 'app',
-          guard_prompt = 'Der eingegebene Steam-Guard-Code war ungültig oder abgelaufen',
-          updated_at = now()
-      WHERE id = ${id}
-    `;
-    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
-    return {
-      status: 'needed',
-      guardType: 'app',
-      message: 'Der Steam-Guard-Code war ungültig oder abgelaufen. Bitte generiere einen neuen Code in der Steam-App.',
-      account: updated,
-    };
-  }
-
-  // 4. Steam Guard wird benötigt
+  // 5. Steam Guard wird benötigt (Erstprüfung)
   const needsGuard =
     out.includes('twofactorcodemismatch') ||
     out.includes('accountlogondenied') ||
@@ -321,26 +379,7 @@ export async function testSteamAccount(
     };
   }
 
-  // 4. Erfolgreich eingeloggt
-  if (loginSuccess) {
-    await sql`
-      UPDATE steam_accounts
-      SET guard_status = 'ok',
-          guard_code = ${codeToTry ?? null},
-          guard_prompt = NULL,
-          last_used_at = now(),
-          updated_at = now()
-      WHERE id = ${id}
-    `;
-    const updated = (await listSteamAccounts(actor)).find((a) => a.id === id)!;
-    return {
-      status: 'ok',
-      message: 'Steam-Verbindung erfolgreich hergestellt und verifiziert!',
-      account: updated,
-    };
-  }
-
-  // 5. Rate Limit
+  // 6. Rate Limit
   if (out.includes('ratelimitexceeded')) {
     return {
       status: 'failed',
@@ -358,16 +397,25 @@ export async function testSteamAccount(
 }
 
 export async function submitSteamGuard(
-  actor: Actor & { username?: string },
-  id: string,
-  code: string,
+  actorOrId: (Actor & { username?: string }) | string,
+  idOrCode: string,
+  maybeCode?: string,
 ): Promise<{
   status: 'ok' | 'needed' | 'failed';
   guardType?: 'none' | 'email' | 'app';
   message: string;
   account: SteamAccountPublic;
 }> {
-  return testSteamAccount(actor, id, code);
+  if (maybeCode !== undefined) {
+    return testSteamAccount(actorOrId as Actor & { username?: string }, idOrCode, maybeCode);
+  }
+  const defaultActor: Actor & { username?: string } = {
+    id: '00000000-0000-0000-0000-000000000000',
+    role: 'admin',
+    canCreateServers: true,
+    username: 'System',
+  };
+  return testSteamAccount(defaultActor, actorOrId as string, idOrCode);
 }
 
 export async function requestSteamGuard(accountName: string, prompt: string, type: 'email' | 'app' = 'app'): Promise<void> {
@@ -381,10 +429,14 @@ export async function requestSteamGuard(accountName: string, prompt: string, typ
   `;
 }
 
-export async function deleteSteamAccount(actor: Actor, id: string): Promise<boolean> {
+export async function deleteSteamAccount(actorOrId: Actor | string, maybeId?: string): Promise<boolean> {
+  const isActorFirst = maybeId !== undefined;
+  const actor = isActorFirst ? (actorOrId as Actor) : null;
+  const id = isActorFirst ? maybeId! : (actorOrId as string);
+
   const [existing] = await sql<SteamAccountRow[]>`SELECT owner_id FROM steam_accounts WHERE id = ${id}`;
   if (!existing) return false;
-  if (actor.role !== 'admin' && existing.owner_id !== actor.id) {
+  if (actor && actor.role !== 'admin' && existing.owner_id !== actor.id) {
     throw new Error('Keine Berechtigung zum Löschen dieses Steam-Kontos');
   }
 

@@ -57,5 +57,5 @@ export class DatabaseUnreachableError extends Error {
 }
 
 export async function closeDatabase(): Promise<void> {
-  await sql.end({ timeout: 5 });
+  await sql.end({ timeout: 5 }).catch(() => {});
 }

@@ -1,0 +1,287 @@
+# NexusCore – Aufgabenliste für die Weiterentwicklung
+
+**Für:** die KI, die am Core weiterarbeitet
+**Stand:** 10.11.2026, 23:40 – Core 0.2.0, Panel 0.26.1 (Build 106)
+**Grundlage:** `docs/KONZEPT-NEXUSCORE-ECOSYSTEM.md` (v1.1.0), `nexuscore/CORE_PROTOCOL.md`, `docs/TODO.md`
+
+---
+
+## 0. Bevor du anfängst
+
+**Was der Core ist.** Die Ausführungsebene. Er kennt Instanzen, Prozesse, Ports und Dateien –
+**keine** Nutzer, keine Rechte, keine Abrechnung. Alles, was nach Benutzerverwaltung riecht,
+gehört ins Panel (`src/`), nicht in den Core. Einzige Ausnahme: der Standalone-Modus braucht
+eine eigene, bewusst einfache lokale Anmeldung (Aufgabe 1.1).
+
+**Arbeitsregeln**
+
+1. Jede Aufgabe einzeln abschließen: Code + Tests + Eintrag in `docs/ENTWICKLUNGSLOG.md`
+   (Datum, Uhrzeit Europe/Berlin, was, welche Dateien) und bei sichtbaren Änderungen in
+   `CHANGELOG.md`. Dominik verfolgt den Fortschritt über diese beiden Dateien.
+2. `npm run typecheck` **und** `npm test` müssen im Ordner `nexuscore/` grün sein, bevor eine
+   Aufgabe als fertig gilt. Zusätzlich im Wurzelverzeichnis `npx tsc --noEmit` und in `web/`,
+   wenn du dort etwas angefasst hast. Aktuell sind alle drei sauber – halte das so.
+3. Antworten, Logtexte, Fehlermeldungen und Kommentare auf Deutsch. Oberfläche immer über
+   `web/src/locales/de.json` und `en.json`, niemals fest verdrahtete Texte.
+4. Keine neuen Abhängigkeiten ohne Notwendigkeit. Wenn doch: im Logeintrag begründen.
+5. Finger weg von `src/` (Panel), außer die Aufgabe nennt es ausdrücklich.
+6. Debug- und Wegwerfskripte nach `scratch/`, nicht ins Wurzelverzeichnis.
+7. Wenn eine Entscheidung offen ist (Abschnitt 5), **nicht raten** – Dominik fragen.
+
+**Erst committen.** Der Arbeitsbaum hat rund 80 geänderte Dateien und mehrere komplett
+unversionierte Ordner (`nexuscore/rust`, `nexuscore/tests`, `nexuscore/src/http/routes`,
+`nexuscore/src/store`, `migrations/0029_host_layer.sql`, `0030_sftp_passwords.sql`).
+Lauffähigen Stand committen, bevor du neue Änderungen draufsetzt – sonst ist nichts mehr
+trennbar, wenn etwas kippt.
+
+---
+
+## 1. Block A – Sicherheit (zuerst, blockiert alles andere)
+
+Der Core startet in Phase 2 auf fremden Rechnern. Jeder Fehler hier ist Codeausführung auf dem
+PC eines Nutzers. Dieser Block kommt **vor** jedem neuen Feature.
+
+### A1 – Auth-Hook greift nur für `/core/` (kritisch)
+
+In `src/http/server.ts` steigt der `onRequest`-Hook sofort aus:
+
+```ts
+if (!path.startsWith('/core/')) {
+  return;   // ← /api/v1/* und /api/panel/* sind damit völlig offen
+}
+```
+
+Dadurch sind ohne jeden Token erreichbar:
+
+* `POST /api/panel/servers` – nimmt `executable` frei aus dem Body (`src/http/routes/standalone.ts`,
+  `newServerSchema` prüft nur die Länge) → beliebiges Programm registrieren
+* `POST /api/panel/servers/:id/start` → es läuft. Das ist Codeausführung auf dem Host.
+* `POST /api/v1/servers/:id/command` → beliebige Zeilen in stdin jeder Instanz
+* `GET /api/v1/auth/me` → gibt bedingungslos `role: admin` mit allen Rechten zurück
+
+Die Bindung auf `127.0.0.1` reicht als Schutz nicht: der Sammel-Content-Type-Parser nimmt jeden
+Typ an, also genügt ein `fetch` mit `text/plain` von einer beliebigen Webseite im Browser des
+Nutzers – das ist eine „simple request“ ohne Preflight, CORS verhindert nur das Lesen der
+Antwort, nicht das Schreiben. Ein offener Tab reicht. Mit `NEXUSCORE_HOST=0.0.0.0` (naheliegend
+im Knoten-Modus) ist der Rechner offen im Netz.
+
+**Zu tun**
+
+* Hook umdrehen: standardmäßig **alles** geschützt, Ausnahmen über eine Allowlist
+  (`GET /`, `GET /favicon.ico`, statische Assets unter `/assets/`, `GET /core/v1/info`,
+  `POST /core/v1/pair`, und im Standalone-Modus der Anmeldeendpunkt aus A4).
+* `/api/v1` und `/api/panel` in den Tokenschutz ziehen.
+* Prüfen, dass die Allowlist auf dem **normalisierten** Pfad arbeitet (`..`, doppelte Schrägstriche,
+  Groß-/Kleinschreibung, URL-Kodierung) – sonst ist sie mit `/core/v1/../api/panel/servers` umgehbar.
+* Test je offener Route: ohne Token `401`, mit Token `2xx`.
+
+### A2 – Browser-Zugriff absichern (CSRF)
+
+* Sammel-Content-Type-Parser einengen: nur `application/json` (und was die Oberfläche wirklich
+  braucht) parsen, alles andere mit `415` ablehnen. Das Problem mit PowerShell-POSTs ohne Body
+  (`application/x-www-form-urlencoded`) löst stattdessen ein Parser, der genau diesen Typ nur
+  bei leerem Body als „kein Body“ akzeptiert.
+* `Origin`-Prüfung für alle schreibenden Anfragen: nur `http://127.0.0.1:<port>`,
+  `http://localhost:<port>` und die Einträge aus `NEXUSCORE_CORS_ORIGINS`. Fremde oder fehlende
+  Herkunft bei POST/PATCH/DELETE → `403`.
+* Sicherheits-Header setzen (`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  restriktive CSP für die ausgelieferte Oberfläche).
+* Schutz gegen DNS-Rebinding: `Host`-Header auf `127.0.0.1`, `localhost` oder die konfigurierte
+  Adresse prüfen, alles andere ablehnen.
+
+### A3 – `executable` einschränken
+
+Freie Pfade aus dem Netz sind nicht haltbar, auch nicht mit Token.
+
+* Basisverzeichnis einführen (`NEXUSCORE_SERVER_ROOT`, Standard `<dataDir>/servers`).
+* `executable` und `workingDir` müssen nach `path.resolve` **innerhalb** dieses Verzeichnisses
+  liegen – Prüfung mit `path.relative`, nicht mit `startsWith` auf Zeichenketten.
+* Symlinks auflösen (`fs.realpath`) und danach erneut prüfen, sonst zeigt ein Link nach draußen.
+* Konzeptbezug: Abschnitt 3.3 verspricht ausdrücklich, dass private Dateien des Freundes
+  unerreichbar bleiben. Das ist die Umsetzung dieses Versprechens.
+* Tests: Pfad außerhalb → `400`; `..`-Pfad → `400`; Symlink nach draußen → `400`.
+
+### A4 – Rechte im Standalone-Modus ehrlich machen
+
+`GET /api/v1/auth/me` in `src/http/routes/api-v1.ts` gibt jedem alle Adminrechte. Im lokalen
+Einzelplatzbetrieb ist das vertretbar, als Dauerzustand nicht.
+
+* Betriebsart explizit machen: `NEXUSCORE_ROLE=standalone|node` (Konzept Abschnitt 2, Modus A/B).
+* Im Knoten-Modus liefern `/api/v1/*` und `/api/panel/*` `403` – dort steuert ausschließlich das
+  Panel über `/core/v1`.
+* Im Standalone-Modus eine echte lokale Anmeldung: ein Konto, Passwort beim ersten Start gesetzt
+  oder in der Konsole ausgegeben, Hash mit Argon2id oder scrypt, Sitzungscookie
+  `HttpOnly; SameSite=Strict; Path=/`. Kein festes `nexus-standalone-token` mehr.
+* `/api/v1/auth/login` und `/logout` tatsächlich implementieren statt Platzhalter zurückzugeben.
+
+### A5 – Kleinere Fehler, gleich mitnehmen
+
+* **Portvergabe** (`api-v1.ts`): `25565 + registry.list().length` vergibt nach einer Löschung einen
+  schon belegten Port. Freien Port im konfigurierten Bereich suchen und mit echtem Bindungstest
+  prüfen – das Panel macht das in `src/servers/allocations.ts` bereits richtig, Vorgehen übernehmen.
+* **`findServer`** (`api-v1.ts`): `s.id.startsWith(idOrShortId)` trifft fremde Server („mc“ findet
+  „mc-test“). Nur exakte ID oder exakte Kurz-ID der ersten 8 Zeichen; bei mehreren Treffern `409`.
+* **Fallback auf `req.params.id`** in Power- und Command-Route: unbekannte Instanz muss `404`
+  ergeben, nicht an den Treiber durchgereicht werden.
+* **Registry** (`src/store/registry.ts`): eine beschädigte `servers.json` wird still durch eine leere
+  Registry ersetzt – alle Instanzen wären weg, ohne Hinweis. Stattdessen Datei als
+  `servers.json.korrupt-<zeitstempel>` wegsichern, laut im Log melden und den Start abbrechen.
+  Außerdem beim atomaren Schreiben einen eindeutigen Temp-Namen je Vorgang verwenden (aktuell
+  teilen sich alle Schreibvorgänge `${file}.tmp`) und vor dem `rename` `fsync` aufrufen.
+* **Testinstanz**: `index.ts` legt im Testmodus `test-minecraft-01` an und registriert sie doppelt
+  (Treiber und Registry mit demselben Objekt getrennt aufgebaut). Zusammenführen und sicherstellen,
+  dass das im Produktionsmodus nie passiert.
+
+**Fertig, wenn:** jede Route ohne Token `401`/`403` liefert, ein Test die Pfadbeschränkung von
+`executable` beweist, ein Test eine Anfrage mit fremdem `Origin` abgewiesen sieht, und
+`npm test` grün ist.
+
+---
+
+## 2. Block B – Phase 2: Standalone-Panel (Konzept Abschnitt 2 Modus A, Roadmap Phase 2)
+
+Ziel laut Konzept: Doppelklick auf die `.exe`, Browser auf, Gameserver anlegen und spielen –
+ohne Cloud, ohne feste IP. Heute ist davon die Oberfläche da, aber die Server sind Attrappen:
+`POST /api/v1/servers` schreibt ein `start.bat`, das nur eine Zeile ausgibt und dann `ping` in einer
+Endlosschleife läuft. Nichts wird installiert.
+
+### B1 – Lokale Datenbank statt `servers.json`
+
+* SQLite (`core.db`) im `dataDir`, Tabellen für Instanzen, Einstellungen, Audit und Aufgaben.
+* Eigener kleiner Migrations-Runner, Vorbild `src/db/` im Panel.
+* Umzug aus einer vorhandenen `servers.json` beim ersten Start, Altdatei als `.migriert` behalten.
+* Entscheidung zur Bibliothek steht noch offen → Abschnitt 5.
+
+### B2 – Echte Spielinstallation
+
+* SteamCMD besorgen und ausführen (Download, Entpacken, `app_update`, Fortschritt in den Event-Bus).
+* Java-Server (Paper, Fabric, Vanilla): Java prüfen oder mitliefern, Jar herunterladen, EULA.
+* Die Egg-Dateien aus `eggs/` werden schon gelesen (`loadEggs` in `api-v1.ts`), aber nicht
+  ausgeführt. Installationsschritt und Startkommando aus dem Egg tatsächlich umsetzen.
+* Platzhalterersetzung und Variablenprüfung nicht neu erfinden: das Panel hat das in
+  `src/eggs/{rules,variables,config-files}.ts` samt Tests. Entweder in ein gemeinsames Paket ziehen
+  oder bewusst kopieren – im Logeintrag festhalten, welcher Weg gewählt wurde.
+* Konfigurationsdateien nach dem Anlegen patchen (`properties`, INI mit Abschnitten, YAML, JSON,
+  XML) – nur die genannten Schlüssel ändern, Kommentare und Reihenfolge behalten.
+* Fortschritt als Aufgabe mit Stufen melden, damit die Oberfläche einen Balken zeigen kann.
+* Mindestens Minecraft Paper, Palworld und Enshrouded müssen auf Dominiks Windows-PC
+  tatsächlich installierbar und startbar sein. Das ist das Abnahmekriterium, nicht „der Code läuft durch“.
+
+### B3 – Harte Ressourcengrenzen unter Windows (Konzept Abschnitt 6)
+
+* Job Objects: `JOB_OBJECT_LIMIT_PROCESS_MEMORY` für RAM, CPU-Rate-Limit, und
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, damit kein verwaister Kindprozess übrig bleibt.
+* Heute räumt `windows-native.ts` nur mit `taskkill /T` hinterher – das greift erst beim Beenden
+  und begrenzt nichts.
+* Braucht eine native Anbindung (`koffi`, `ffi-napi` oder ein kleines Rust-Hilfsprogramm) →
+  Entscheidung in Abschnitt 5.
+* Erst danach: eigener Dienstbenutzer `nxp-<id>` und NTFS-Rechte (Konzept Abschnitt 6, „Isolierung“).
+
+### B4 – Dateimanager und Backups lokal
+
+* Dateiendpunkte: auflisten, lesen, schreiben, umbenennen, löschen, hochladen, Archiv entpacken –
+  alles unter der Pfadbeschränkung aus A3, ohne Ausnahme.
+* Backups: Verzeichnis packen (zstd oder zip), Zeitplan, Aufbewahrungsregel, Wiederherstellen.
+* Konzept Abschnitt 5.1 braucht später Deltas der Spielstände – Backupformat jetzt so wählen,
+  dass sich Deltas später ergänzen lassen, statt es zweimal zu bauen.
+
+### B5 – Windows-Dienst und Systray (Konzept Abschnitt 6)
+
+* `nexuscored` als echter Windows-Dienst, Autostart, Neustart bei Absturz.
+* Systray-Symbol mit Status, Adresse der Oberfläche und Kopplungs-PIN zum Kopieren.
+* Firewall-Freigabe je Spiel-Binärdatei über die Windows-Firewall-API, beim Entfernen wieder zurück.
+* Das MSI-Paket gibt es schon (`deploy/windows/NexusCore.wxs`, `scripts/build-windows-package.ps1`) –
+  Dienst und Systray dort einhängen.
+
+### B6 – Gaming-Modus (Konzept Abschnitt 3.3)
+
+* Schalter, der laufende Instanzen drosselt (Priorität, CPU-Rate) oder mit Vorwarnung pausiert.
+* Vorwarnung an die Spieler über die Serverkonsole, nicht nur im Panel.
+
+---
+
+## 3. Block C – Phase 3: Reverse-Tunnel und Cluster (Konzept Abschnitte 3–5)
+
+Erst anfangen, wenn Block A fertig und Block B tragfähig ist. Ein Tunnel über eine unsichere
+Schnittstelle vergrößert nur den Schaden.
+
+### C1 – Steuerkanal
+
+* Ausgehender WSS-Client im Core auf `wss://<master>/core/v1/tunnel`, Authentifizierung mit dem
+  Knoten-Token.
+* Abbruch in unter 2 Sekunden erkennen (Ping/Pong), automatischer Neuaufbau mit exponentiellem
+  Backoff und Streuung.
+* Befehle und Antworten gemultiplext über eine Verbindung, jede Anfrage mit eigener Kennung.
+* Gegenstück im Panel: Endpunkt, Knotenverwaltung, Weiterleitung der Panel-Aktionen an den Knoten.
+  Dafür liegt `migrations/0029_host_layer.sql` schon im Baum – daran anschließen.
+
+### C2 – Spiel-Datenverkehr weiterleiten
+
+* TCP- und UDP-Ingress auf dem Master, Pakete durch den Tunnel zum Heim-PC.
+* UDP ist der schwierige Teil (ARK, Palworld): Sitzungszuordnung, Zeitüberschreitungen, MTU.
+* Messbares Ziel: zusätzliche Latenz und Durchsatz gegen eine direkte Verbindung vergleichen und
+  die Zahlen in den Logeintrag schreiben. Wenn der Umweg ein Spiel unspielbar macht, muss das vor
+  dem Ausbau auf dem Tisch liegen.
+
+### C3 – Cluster-Beitritt (Konzept Abschnitt 3.1)
+
+* Einladungscode im Panel erzeugen, im Core „Einem Freundes-Cluster beitreten“ mit Codeeingabe.
+* Code einmalig, mit Gültigkeitsfrist, Sperre nach Fehlversuchen – Vorbild ist die vorhandene
+  PIN-Logik in `src/protocol/security.ts`, aber mit **pro Herkunft** gezählten Fehlversuchen:
+  der Zähler ist derzeit global, ein Angreifer sperrt damit die Kopplung für alle.
+* Ressourcenbudget je Knoten (Abschnitt 3.3): „maximal 16 von 32 GB“ muss der Core selbst
+  durchsetzen, nicht nur anzeigen.
+
+### C4 – Lastverteilung (Konzept Abschnitt 3.2)
+
+* Knoten melden freien RAM, CPU-Last und Plattenplatz.
+* Beim Anlegen: Auswahlliste oder automatische Wahl des Knotens mit der geringsten Last.
+
+### C5 – Failover und Split-Brain-Schutz (Konzept Abschnitt 5)
+
+* Heartbeat alle 5 Sekunden, nach 30 Sekunden gilt ein Knoten als offline.
+* Spielstand-Deltas alle 5 Minuten oder bei Autosave, zstd-komprimiert und verschlüsselt.
+* Notfallstart auf dem Ersatzknoten, Umschalten der Ingress-Ports.
+* Split-Brain: der Core fragt **vor jedem Start** beim Master, ob er der berechtigte Host ist.
+  Eine Pacht (Lease) mit Ablaufzeit ist dafür sicherer als eine Ja/Nein-Frage, weil die Antwort
+  sonst veraltet, sobald das Netz wackelt. Ohne gültige Pacht: Standby, nicht starten.
+* Das ist der Teil mit dem größten Risiko für Datenverlust. Vor der Umsetzung eine kurze Spezifikation
+  nach `nexuscore/docs/` schreiben und Dominik zeigen, statt direkt zu bauen.
+
+---
+
+## 4. Block D – Weitere Plattformen (Konzept Abschnitte 7–9, Roadmap Phase 4)
+
+Zuletzt, und erst wenn Windows und der Tunnel stehen.
+
+* **macOS:** Universal Binary (arm64 + x86_64), `.dmg`, Homebrew-Formel, `launchd`-Agent,
+  Menüleisten-Symbol.
+* **Linux:** `.deb` und `.rpm`, `systemd`-Unit `nexuscored.service`, Einzeiler-Installationsskript.
+  Podman rootless als zweite Laufzeit neben Docker.
+* **NexusPanel OS:** ISO und VM-Abbilder, Einrichtung im Browser, A/B-Updates mit Rücksprung.
+* **CI:** Builds für alle Plattformen, Releases mit Prüfsummen, signierter Updater.
+  `.github/workflows/release.yml` gibt es bereits – dort anbauen.
+
+---
+
+## 5. Offene Entscheidungen – bei Dominik nachfragen, nicht selbst festlegen
+
+1. **Rust oder TypeScript als Kern?** `nexuscore/rust/` liegt als Planungsstand da, ist nicht baubar
+   (falsche Modulpfade, auf diesem Rechner fehlt der MSVC-Linker) und `docs/TODO.md` nennt beides.
+   Doppelte Entwicklung lohnt sich nicht: entweder der TS-Core bleibt das Produkt und Rust fliegt
+   raus oder wird klar auf Hilfsprogramme begrenzt (Job Objects, Dienst, Tray), oder der Umstieg
+   wird geplant. Vorher keine Zeile Rust mehr.
+2. **SQLite-Anbindung:** `node:sqlite` aus Node 22 (keine Abhängigkeit, aber noch experimentell)
+   oder `better-sqlite3` (stabil, aber nativ gebaut, was das SEA-Binary verkompliziert).
+3. **Native Windows-Anbindung für Job Objects:** `koffi`, `ffi-napi` oder ein kleines Rust-Hilfsprogramm.
+   Hängt an Entscheidung 1.
+4. **Standalone-Anmeldung:** ein Konto mit Passwort, oder nur Loopback plus Gerätekopplung?
+5. **Tunnel-Master:** läuft der Ingress auf der VM 10.0.0.120 hinter Caddy, oder braucht das einen
+   eigenen VPS mit eigener IPv4?
+
+---
+
+## 6. Reihenfolge in einem Satz
+
+Block A komplett → committen → B1, B2 (echte Installation ist das Herz von Phase 2) → B3, B4 →
+B5, B6 → Entscheidungen aus Abschnitt 5 einholen → Block C mit Spezifikation vorab → Block D.

@@ -14,7 +14,7 @@
     "jq",
     "tar"
   ],
-  "startup": "if [ -f game/dedicatedServer.exe ]; then proton run game/dedicatedServer.exe; else echo 'Warte auf GIANTS-Dateien in game/'; sleep infinity; fi",
+  "startup": "mkdir -p \"$STEAM_COMPAT_DATA_PATH/pfx/drive_c/Program Files (x86)/Steam\" && ln -sf /usr/local/bin/files/lib/wine/x86_64-windows/lsteamclient.dll \"$STEAM_COMPAT_DATA_PATH/pfx/drive_c/Program Files (x86)/Steam/steamclient64.dll\" && ln -sf /usr/local/bin/files/lib/wine/i386-windows/lsteamclient.dll \"$STEAM_COMPAT_DATA_PATH/pfx/drive_c/Program Files (x86)/Steam/steamclient.dll\" && cd game && proton run dedicatedServer.exe",
   "environment": {
     "STEAM_COMPAT_DATA_PATH": "/home/container/.steam/steam/steamapps/compatdata/2300320",
     "STEAM_COMPAT_CLIENT_INSTALL_PATH": "/home/container/.steam/steam",
@@ -140,13 +140,14 @@
       "name": "GIANTS Lizenzschluessel",
       "name_locales": { "de": "GIANTS Lizenzschlüssel", "en": "GIANTS License Key" },
       "env_variable": "FS_LICENSE_KEY",
-      "description": "Schluessel der ZWEITEN Lizenz. Nicht derselbe wie im Spiel, sonst bricht die Verbindung ab. Zu haeufige Aktivierung sperrt den Schluessel.",
-      "description_locales": { "de": "Schlüssel der ZWEITEN Lizenz. Nicht derselbe wie im Spiel, sonst bricht die Verbindung ab. Zu häufige Aktivierung sperrt den Schlüssel.", "en": "License key for dedicated server. Must differ from personal game client key." },
+      "description": "Nur bei Bezugsquelle 'giants'. Lizenzschlüssel aus dem GIANTS-Kundenportal.",
+      "description_locales": { "de": "Nur bei Bezugsquelle 'giants'. Lizenzschlüssel aus dem GIANTS-Kundenportal.", "en": "Only for source 'giants'. Dedicated server license key from GIANTS portal." },
       "default_value": "",
-      "rules": "required|string",
+      "rules": "nullable|string",
       "user_viewable": true,
       "user_editable": true,
-      "secret": true
+      "secret": true,
+      "requires": "FS_SOURCE=giants"
     },
     {
       "name": "Webinterface-Benutzer",
@@ -190,6 +191,12 @@
         "webserver.port",
         "game_port"
       ],
+      "find": {
+        "webserver.username": "{{FS_WEB_USER}}",
+        "webserver.passphrase": "{{FS_WEB_PASSWORD}}",
+        "webserver.port": "{{WEB_PORT}}",
+        "game_port": "{{GAME_PORT}}"
+      },
       "set": {
         "webserver.username": "{{FS_WEB_USER}}",
         "webserver.passphrase": "{{FS_WEB_PASSWORD}}",
@@ -198,7 +205,7 @@
       }
     }
   },
-  "install_script": "#!/bin/bash\nset -e\n\nSRC=\"${FS_SOURCE:-steam}\"\nmkdir -p \"$SERVER_DIR/game\"\ncd \"$SERVER_DIR\"\n\necho \"[1/2] Vorbereitung\"\necho \"[2/2] Bezugsquelle: $SRC\"\n\nif [ \"$SRC\" = \"steam\" ]; then\n  if [ -z \"$STEAM_USER\" ]; then\n    echo \"HINWEIS: STEAM_USER ist leer. Das zweite Steam-Konto mit FS25-Lizenz in den Variablen eintragen oder GIANTS-Dateien nach game/ laden.\"\n    exit 0\n  fi\n\n  GUARD_ARG=\"\"\n  [ -n \"$STEAM_GUARD\" ] && GUARD_ARG=\"$STEAM_GUARD\"\n\n  echo \"      Lade Farming Simulator 25 (AppID 2300320) per SteamCMD...\"\n  set +e\n  ./steamcmd/steamcmd.sh +force_install_dir \"$SERVER_DIR/game\" \\\n           +login \"$STEAM_USER\" \"$STEAM_PASS\" $GUARD_ARG \\\n           +app_update 2300320 validate \\\n           +quit\n  RC=$?\n  set -e\n\n  if [ $RC -ne 0 ]; then\n    echo \"SteamCMD-Login fehlgeschlagen (Code $RC).\"\n    exit 1\n  fi\nelif [ \"$SRC\" = \"giants\" ]; then\n  echo \"GIANTS-Modus aktiv. Windows-Paket aus dem GIANTS-Portal nach game/ entpacken.\"\n  exit 0\nfi\n",
+  "install_script": "#!/bin/bash\nset -e\n\nSRC=\"${FS_SOURCE:-steam}\"\nmkdir -p \"$SERVER_DIR/game\" \"$SERVER_DIR/steamcmd\" \"$SERVER_DIR/steamapps\"\ncd \"$SERVER_DIR\"\n\necho \"[1/3] Vorbereitung\"\necho \"[2/3] Bezugsquelle: $SRC\"\n\nif [ \"$SRC\" = \"steam\" ]; then\n  if [ -z \"$STEAM_USER\" ]; then\n    echo \"HINWEIS: STEAM_USER ist leer. Das zweite Steam-Konto mit FS25-Lizenz in den Variablen eintragen oder GIANTS-Dateien nach game/ laden.\"\n    exit 0\n  fi\n\n  if [ ! -f \"$SERVER_DIR/steamcmd/steamcmd.sh\" ]; then\n    echo \"      Lade SteamCMD herunter...\"\n    cd /tmp\n    curl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz\n    tar -xzf steamcmd.tar.gz -C \"$SERVER_DIR/steamcmd\"\n    cd \"$SERVER_DIR\"\n  fi\n\n  GUARD_ARG=\"\"\n  [ -n \"$STEAM_GUARD\" ] && GUARD_ARG=\"$STEAM_GUARD\"\n\n  echo \"[3/3] Lade Farming Simulator 25 (AppID 2300320) per SteamCMD fuer Windows...\"\n  set +e\n  \"$SERVER_DIR/steamcmd/steamcmd.sh\" \\\n           +@sSteamCmdForcePlatformType windows \\\n           +force_install_dir \"$SERVER_DIR/game\" \\\n           +login \"$STEAM_USER\" \"$STEAM_PASS\" $GUARD_ARG \\\n           +app_update 2300320 validate \\\n           +quit\n  RC=$?\n  set -e\n\n  if [ $RC -ne 0 ]; then\n    echo \"SteamCMD-Download fehlgeschlagen (Code $RC).\"\n    exit 1\n  fi\n  echo \"Installation erfolgreich abgeschlossen.\"\nelif [ \"$SRC\" = \"giants\" ]; then\n  echo \"GIANTS-Modus aktiv. Windows-Paket aus dem GIANTS-Portal nach game/ entpacken.\"\n  exit 0\nfi\n",
   "notes": [
     "Zweite Lizenz zwingend erforderlich - Spiel und Server gehen nicht gleichzeitig auf einem Key.",
     "Bei FS_SOURCE=steam wird ein zweites Steam-Konto gebraucht; Steam erlaubt keine zwei Keys desselben Spiels auf einem Konto.",

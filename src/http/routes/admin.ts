@@ -11,6 +11,7 @@ import { createUser, publicUser, setPassword, UserInputError, type UserRow } fro
 import { revokeAllUserSessions, createSession } from '../../auth/sessions.js';
 import { signAccessToken } from '../../auth/tokens.js';
 import { disableTotp } from '../../auth/twofactor.js';
+import { issueOneTimeToken } from '../../auth/one-time.js';
 import { writeAudit } from '../../audit.js';
 import { isServerFlag, SERVER_FLAGS } from '../../auth/permissions.js';
 import { getPresenceForUser } from '../../presence.js';
@@ -31,6 +32,7 @@ import {
   startTestRunner,
   stopTestRunner,
 } from '../../servers/test-runner.js';
+import { PANEL_VERSION, BUILD } from '../../version.js';
 
 export const auditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(2000).default(100),
@@ -42,6 +44,34 @@ export const auditQuery = z.object({
 });
 
 export async function adminRoutes(app: FastifyInstance) {
+  /** Zentrale Admin-Uebersicht & Systemstatistiken */
+  app.get('/admin/overview', { preHandler: requireAdmin() }, async () => {
+    const [users] = await sql<[{ count: string }]>`SELECT count(*)::text AS count FROM users`;
+    const [servers] = await sql<[{ total: string; running: string }]>`
+      SELECT count(*)::text AS total, count(*) FILTER (WHERE status = 'running')::text AS running FROM servers
+    `;
+    const [auditToday] = await sql<[{ count: string }]>`
+      SELECT count(*)::text AS count FROM audit_log WHERE created_at >= date_trunc('day', now())
+    `;
+
+    const { engine } = await import('../../docker/client.js');
+    const containers = (await engine.listAllContainers?.()) ?? [];
+
+    return {
+      version: PANEL_VERSION,
+      build: BUILD,
+      uptimeSeconds: Math.floor(process.uptime()),
+      stats: {
+        users: Number(users?.count ?? 0),
+        serversTotal: Number(servers?.total ?? 0),
+        serversRunning: Number(servers?.running ?? 0),
+        containersTotal: containers.length,
+        containersRunning: containers.filter((c) => c.state === 'running').length,
+        auditToday: Number(auditToday?.count ?? 0),
+      },
+    };
+  });
+
   /** Globales Audit-Log. Filter nach Aktion (Praefix, z. B. "auth."), Suche, Nutzer und Server. */
   app.get('/admin/audit', { preHandler: requireGlobalPermission('admin.audit') }, async (req) => {
     const q = auditQuery.parse(req.query);
@@ -400,12 +430,15 @@ export async function adminUserRoutes(app: FastifyInstance) {
       metadata: { targetUserId: target.id, targetUsername: target.username },
     });
 
+    // Einmal-Token fuer die Rueckkehr (12 h), gebunden an Admin und Ziel
+    const returnToken = issueOneTimeToken('impersonate', { adminId: req.actor!.id, targetId: target.id }, 12 * 3600_000);
     return {
       accessToken,
       user: publicUser(target),
       originalAdmin: {
         id: req.actor!.id,
         username: req.actor!.username,
+        returnToken,
       },
     };
   });
@@ -734,6 +767,90 @@ export async function adminNetworkRoutes(app: FastifyInstance) {
     await setSetting(PLAYIT_SECRET_KEY, body.secretKey ?? null, { secret: true, actorId: req.actor!.id });
     await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'admin.playit_update', ip: req.ip });
     return { ok: true };
+  });
+
+  /** Host-Logs & Container-Logs fuer Administratoren (Nexus-Logs) */
+  app.get('/admin/host-logs', { preHandler: requireAdmin() }, async (req) => {
+    const query = z.object({
+      container: z.string().max(64).default('nxp-panel'),
+      lines: z.coerce.number().int().min(10).max(2000).default(300),
+      search: z.string().max(100).optional(),
+    }).parse(req.query);
+
+    const { engine } = await import('../../docker/client.js');
+    const containers = (await engine.listAllContainers?.()) ?? [];
+
+    const defaultContainers = [
+      { id: 'panel', name: 'nxp-panel', image: 'nxpanel', state: 'running', status: 'Up', isPanel: false },
+      { id: 'postgres', name: 'nxp-postgres', image: 'postgres:16-alpine', state: 'running', status: 'Up', isPanel: false },
+      { id: 'redis', name: 'nxp-redis', image: 'redis:7-alpine', state: 'running', status: 'Up', isPanel: false },
+    ];
+    const allContainers = containers.length > 0 ? containers : defaultContainers;
+
+    const targetContainer = query.container;
+    const rawLines = (await engine.getContainerLogs?.(targetContainer, query.lines)) ?? [];
+
+    const parsed = rawLines.map((raw, idx) => {
+      let timestamp = '';
+      let message = raw;
+      let level: 'info' | 'warn' | 'error' | 'debug' = 'info';
+
+      const tsMatch = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s*(.*)$/.exec(raw);
+      if (tsMatch) {
+        timestamp = tsMatch[1]!;
+        message = tsMatch[2]!;
+      }
+
+      if (message.startsWith('{') && message.endsWith('}')) {
+        try {
+          const json = JSON.parse(message);
+          if (json.msg) message = json.msg;
+          else if (json.message) message = json.message;
+          if (json.err?.message) message += ` - Fehler: ${json.err.message}`;
+
+          if (json.level) {
+            if (json.level >= 50) level = 'error';
+            else if (json.level >= 40) level = 'warn';
+            else if (json.level >= 30) level = 'info';
+            else level = 'debug';
+          }
+          if (json.time) {
+            timestamp = new Date(json.time).toISOString();
+          }
+        } catch {
+          // Plaintext
+        }
+      }
+
+      if (level === 'info') {
+        const lower = message.toLowerCase();
+        if (lower.includes('error') || lower.includes('fatal') || lower.includes('failed') || lower.includes('exception')) {
+          level = 'error';
+        } else if (lower.includes('warn')) {
+          level = 'warn';
+        }
+      }
+
+      return {
+        id: idx + 1,
+        timestamp,
+        level,
+        message,
+        raw,
+      };
+    });
+
+    const filtered = query.search
+      ? parsed.filter((entry) => entry.message.toLowerCase().includes(query.search!.toLowerCase()) || entry.raw.toLowerCase().includes(query.search!.toLowerCase()))
+      : parsed;
+
+    return {
+      container: targetContainer,
+      containers: allContainers,
+      logs: filtered,
+      count: filtered.length,
+      total: parsed.length,
+    };
   });
 }
 

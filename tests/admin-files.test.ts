@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
 import { sql, closeDatabase } from '../src/db/index.js';
 import { runMigrations } from '../src/db/migrate.js';
 import { buildServer } from '../src/http/server.js';
@@ -37,8 +38,9 @@ const rel = `volumes/admin-files-test`;
 describe('Admin-Dateimanager', () => {
   it('Ordnerliste: Panel-Ordner, NAS, eigene Zusatzordner, nie "/"', () => {
     const r = adminFileRoots({ VOLUME_ROOT: '/var/lib/panel/volumes', BACKUP_ROOT: '/var/lib/panel/backups', NAS_BACKUP_ROOT: '/mnt/nas/np', ADMIN_FILE_ROOTS: 'Installation=/opt/nxpanel;Alles=/' });
+    // resolve(): unter Windows wird daraus C:\\var\\lib\\panel usw.
     expect(r.map((x) => [x.id, x.path])).toEqual([
-      ['panel-daten', '/var/lib/panel'], ['nas-backups', '/mnt/nas/np'], ['installation', '/opt/nxpanel'],
+      ['panel-daten', resolve('/var/lib/panel')], ['nas-backups', resolve('/mnt/nas/np')], ['installation', resolve('/opt/nxpanel')],
     ]);
   });
 
@@ -66,7 +68,8 @@ describe('Admin-Dateimanager', () => {
   it('kein Ausbruch aus dem Ordner (.. und Symlinks)', async () => {
     const up = await app.inject({ method: 'GET', url: '/api/v1/admin/files/panel-daten/content?path=../../../etc/passwd', headers: auth(admin) });
     expect(up.statusCode).toBe(400);
-    if (!existsSync(join(testDir, 'raus'))) symlinkSync('/etc', join(testDir, 'raus'));
+    // 'junction' klappt unter Windows auch ohne Admin-Rechte; Ziel ausserhalb des Panel-Ordners
+    if (!existsSync(join(testDir, 'raus'))) symlinkSync(tmpdir(), join(testDir, 'raus'), 'junction');
     const sl = await app.inject({ method: 'GET', url: `/api/v1/admin/files/panel-daten?path=${rel}/raus`, headers: auth(admin) });
     expect(sl.statusCode).toBe(400);
   });

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { t } from '../lib/i18n';
@@ -7,7 +7,7 @@ import { Button, Input, Select, ErrorBox, Spinner } from '../components/ui';
 import type { AdminUserItem, EggSummary } from '../lib/types';
 import {
   Users, UserPlus, Shield, Key, Lock, Unlock, Edit2, Check,
-  X, AlertTriangle, Search, Server, Cpu, HardDrive, Gamepad2, Eye, Copy,
+  X, AlertTriangle, Search, Server, Cpu, HardDrive, Gamepad2, Eye, Copy, ChevronLeft,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { UserServerAssignModal } from '../components/UserServerAssignModal';
@@ -240,6 +240,14 @@ export function AdminUsers() {
 
   return (
     <div className="max-w-6xl space-y-6">
+      <Link
+        to="/admin"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-dim hover:text-amber transition-colors"
+      >
+        <ChevronLeft className="size-4" />
+        Zurück zum Admin-Hub
+      </Link>
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-xl border border-seam bg-rack">
         <div>

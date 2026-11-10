@@ -2,7 +2,7 @@ import { createServer } from 'node:net';
 import { createSocket } from 'node:dgram';
 import { sql } from '../db/index.js';
 import { log } from '../log.js';
-import { portRange } from '../config.js';
+import { portRange, config } from '../config.js';
 import { engine } from '../docker/client.js';
 import { existsSync } from 'node:fs';
 
@@ -53,7 +53,9 @@ export interface Allocation {
 const BLOCKED = new Set([22, 25, 53, 80, 443, 3306, 5432, 6379, 8080]);
 
 export function isBlocked(port: number): boolean {
-  return port < 1024 || BLOCKED.has(port);
+  // Der SFTP-Port des Panels liegt evtl. im Spiel-Portbereich (z. B. 28999,
+  // um die vorhandene Weiterleitung zu nutzen) - den nie an Spiele vergeben.
+  return port < 1024 || BLOCKED.has(port) || port === (config.SFTP_PUBLIC_PORT ?? config.SFTP_PORT);
 }
 
 /**

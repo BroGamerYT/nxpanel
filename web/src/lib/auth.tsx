@@ -9,6 +9,8 @@ import { setLocale, getLocale, takeChoiceBeforeLogin } from './i18n';
 interface ImpersonatorAdmin {
   id: string;
   username: string;
+  /** Einmal-Token fuer die Rueckkehr zum Admin-Konto (vom Server beim Start) */
+  returnToken?: string;
 }
 
 interface AuthState {
@@ -116,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api<{ accessToken: string; user: any }>('/auth/impersonate/stop', {
         method: 'POST',
-        body: { adminId: impersonatorAdmin.id },
+        body: { returnToken: impersonatorAdmin.returnToken ?? '' },
       });
       setAccessToken(res.accessToken);
     } catch (err) {

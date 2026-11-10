@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FlaskConical, CheckCircle2, XCircle, Clock, Play, RefreshCw,
   Terminal, Copy, Check, ChevronDown, ChevronRight, FileText,
   AlertTriangle, ShieldAlert, Square, RotateCcw, AlertCircle,
-  SlidersHorizontal, Cpu, Layers, Zap, X
+  SlidersHorizontal, Cpu, Layers, Zap, X, ChevronLeft,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Button, ErrorBox, Spinner } from '../components/ui';
@@ -102,6 +103,14 @@ export function GameTestReport() {
 
   return (
     <div className="max-w-6xl space-y-6">
+      <Link
+        to="/admin"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-dim hover:text-amber transition-colors"
+      >
+        <ChevronLeft className="size-4" />
+        Zurück zum Admin-Hub
+      </Link>
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>

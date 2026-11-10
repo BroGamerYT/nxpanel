@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { readdir, lstat } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { config } from '../config.js';
 import { safePath } from '../servers/files.js';
@@ -78,6 +79,18 @@ export function findAdminRoot(id: string): AdminFileRoot | undefined {
  */
 export async function folderUsage(root: string, relPath: string, timeoutMs = 60_000): Promise<{ path: string; entries: { name: string; path: string; bytes: number }[]; partial: boolean }> {
   const { fullPath, relPath: rel } = await safePath({ root }, relPath);
+  const res = process.platform === 'win32'
+    ? await usageNode(fullPath, timeoutMs)
+    : await usageDu(fullPath, timeoutMs).catch(() => usageNode(fullPath, timeoutMs));
+  const entries = res.sizes.map(([name, bytes]) => ({ name, path: rel ? `${rel}/${name}` : name, bytes }));
+  entries.sort((a, b) => b.bytes - a.bytes);
+  return { path: rel, entries, partial: res.partial };
+}
+
+type Sizes = { sizes: [string, number][]; partial: boolean };
+
+/** Schnell ueber "du" (Linux, auch BusyBox). Wirft, wenn es "du" nicht gibt. */
+function usageDu(fullPath: string, timeoutMs: number): Promise<Sizes> {
   return new Promise((resolvePromise, reject) => {
     // -x: auf demselben Dateisystem bleiben; -k: KiB; -d 1: eine Ebene (GNU und BusyBox)
     const p = spawn('du', ['-x', '-k', '-d', '1', fullPath], { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -88,20 +101,40 @@ export async function folderUsage(root: string, relPath: string, timeoutMs = 60_
     p.on('error', (e) => { clearTimeout(timer); reject(e); });
     p.on('close', () => {
       clearTimeout(timer);
-      const entries: { name: string; path: string; bytes: number }[] = [];
+      const sizes: [string, number][] = [];
       for (const line of out.split('\n')) {
         const m = line.match(/^(\d+)\s+(.+)$/);
         if (!m) continue;
         const abs = m[2]!;
         if (abs === fullPath) continue;
-        const name = abs.slice(fullPath.length).replace(/^\/+/, '');
+        const name = abs.slice(fullPath.length).replace(/^[\\/]+/, '');
         if (!name || name.includes('/')) continue;
-        entries.push({ name, path: rel ? `${rel}/${name}` : name, bytes: Number(m[1]) * 1024 });
+        sizes.push([name, Number(m[1]) * 1024]);
       }
-      entries.sort((a, b) => b.bytes - a.bytes);
-      resolvePromise({ path: rel, entries, partial });
+      resolvePromise({ sizes, partial });
     });
   });
+}
+
+/** Ohne "du" (Windows, NexusCore): selbst zaehlen, Symlinks nicht folgen. */
+async function usageNode(fullPath: string, timeoutMs: number): Promise<Sizes> {
+  const deadline = Date.now() + timeoutMs;
+  let partial = false;
+  const sizeOf = async (p: string): Promise<number> => {
+    if (Date.now() > deadline) { partial = true; return 0; }
+    const st = await lstat(p).catch(() => null);
+    if (!st || st.isSymbolicLink()) return 0;
+    if (!st.isDirectory()) return st.size;
+    let sum = 0;
+    for (const e of await readdir(p).catch(() => [] as string[])) sum += await sizeOf(`${p}/${e}`);
+    return sum;
+  };
+  const sizes: [string, number][] = [];
+  for (const e of await readdir(fullPath, { withFileTypes: true })) {
+    if (!e.isDirectory() || e.isSymbolicLink()) continue;
+    sizes.push([e.name, await sizeOf(`${fullPath}/${e.name}`)]);
+  }
+  return { sizes, partial };
 }
 
 /**

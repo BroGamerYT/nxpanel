@@ -19,17 +19,22 @@ export interface CheckResult {
 }
 
 type Fetcher = typeof fetch;
+export type DnsLookup = (host: string) => Promise<{ address: string }>;
 
 async function timed<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error('Zeitüberschreitung')), ms))]);
 }
 
-export async function networkCheck(publicHost: string | null, f: Fetcher = fetch): Promise<CheckResult[]> {
+export async function networkCheck(
+  publicHost: string | null,
+  f: Fetcher = fetch,
+  dns: DnsLookup = lookup,
+): Promise<CheckResult[]> {
   const out: CheckResult[] = [];
 
   // 1. DNS fuer Epic
   try {
-    const r = await timed(lookup('api.epicgames.dev'), 5000);
+    const r = await timed(dns('api.epicgames.dev'), 5000);
     out.push({ key: 'dns', ok: true, value: r.address, detail: 'api.epicgames.dev' });
   } catch (err) {
     out.push({ key: 'dns', ok: false, value: null, detail: err instanceof Error ? err.message : String(err) });

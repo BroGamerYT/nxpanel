@@ -315,7 +315,8 @@
     "network": "Network",
     "search": "Search...",
     "servers": "Servers",
-    "adminFiles": "Files (VM)"
+    "adminFiles": "Files (VM)",
+    "hosts": "Hosts"
   },
   "netcheck": {
     "clock": "Clock",
@@ -780,5 +781,32 @@
     "title": "Notifications",
     "markAllRead": "Mark all read",
     "empty": "No recent warnings or events."
+  },
+  "hosts": {
+    "title": "Hosts",
+    "intro": "Machines that run game servers: the local Docker host and connected NexusCores.",
+    "list": "All hosts",
+    "none": "No hosts yet.",
+    "typeLocal": "Local",
+    "typeCore": "NexusCore",
+    "localAddress": "This machine (Docker)",
+    "runtime": "Runtime",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "servers": "Servers",
+    "lastSeen": "Last seen",
+    "check": "Check status",
+    "remove": "Remove host",
+    "removeConfirm": "Really remove this host?",
+    "addTitle": "Connect a NexusCore",
+    "addIntro": "Enter the address and token of the core. The core is checked right away - a wrong token is never stored.",
+    "name": "Name",
+    "address": "Address",
+    "addressHint": "For example http://192.168.1.50:8443",
+    "token": "Token",
+    "tokenHint": "The core's NEXUSCORE_TOKEN - stored encrypted",
+    "pin": "PIN (optional)",
+    "pinHint": "The core's pairing PIN - confirms that token and core belong together",
+    "add": "Connect host"
   }
 }

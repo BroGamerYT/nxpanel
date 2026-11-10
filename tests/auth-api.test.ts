@@ -189,11 +189,25 @@ describe('Refresh-Rotation', () => {
   it('zwei Tabs gleichzeitig: kein Rauswurf', async () => {
     const a = await login('owner', 'app');
     const r1 = (await app.inject({ method: 'POST', url: '/api/v1/auth/refresh', payload: { refreshToken: a.refresh } })).json();
+    // Zweiter Tab mit dem alten Token innerhalb der Schonfrist: bekommt ein
+    // Access-Token fuer die neue Sitzung, aber kein (leeres!) Refresh-Token.
     const race = await app.inject({ method: 'POST', url: '/api/v1/auth/refresh', payload: { refreshToken: a.refresh } });
-    expect(race.statusCode).toBe(401);
-    expect(race.json().code).toBe('refresh_race');
+    expect(race.statusCode).toBe(200);
+    expect(race.json().accessToken).toBeTruthy();
+    expect(race.json().refreshToken).toBeUndefined();
     const ok = await app.inject({ method: 'POST', url: '/api/v1/auth/refresh', payload: { refreshToken: r1.refreshToken } });
     expect(ok.statusCode).toBe(200);
+  });
+
+  it('Wettlauf im Browser: der langsamere Tab loescht den frischen Cookie nicht', async () => {
+    const l = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { login: 'owner', password: PW, client: 'web' } });
+    const cookie = String(l.headers['set-cookie']).match(/nxp_refresh=([^;]+)/)![1];
+    const first = await app.inject({ method: 'POST', url: '/api/v1/auth/refresh', cookies: { nxp_refresh: cookie! } });
+    expect(first.statusCode).toBe(200);
+    expect(String(first.headers['set-cookie'])).toMatch(/nxp_refresh=[^;]{20,}/);
+    const second = await app.inject({ method: 'POST', url: '/api/v1/auth/refresh', cookies: { nxp_refresh: cookie! } });
+    expect(second.statusCode).toBe(200);
+    expect(second.headers['set-cookie']).toBeUndefined();
   });
 
   it('Abmelden toetet Access- und Refresh-Token, auch aeltere rotierte', async () => {

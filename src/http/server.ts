@@ -10,6 +10,7 @@ import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { serverRoutes, type PowerHandlers, type ServerOps } from './routes/servers.js';
 import { adminRoutes, adminUserRoutes, adminNetworkRoutes } from './routes/admin.js';
+import { hostRoutes } from './routes/hosts.js';
 import { subuserRoutes } from './routes/subusers.js';
 import { modpackRoutes } from './routes/modpacks.js';
 import { eggRoutes } from './routes/eggs.js';
@@ -155,7 +156,11 @@ export async function buildServer(opts: BuildOptions = {}) {
     async (api) => {
       api.get('/', async () => ({ name: 'NexusPanel', version: API_VERSION, build: BUILD.build }));
       // Version, Aenderungen und Planung - fuer "Was ist neu" in der Oberflaeche.
-      api.get('/about', { preHandler: requireAuth }, async () => loadAbout());
+      api.get('/about', { preHandler: requireAuth }, async () => ({
+        ...(await loadAbout()),
+        // Fuer das SFTP-Fenster im Dateimanager: Port, unter dem SFTP von aussen erreichbar ist
+        sftp: { enabled: config.SFTP_ENABLED, port: config.SFTP_PUBLIC_PORT ?? config.SFTP_PORT },
+      }));
       // Dokumentation: Alle Markdown-Dateien auflisten und abrufen
       api.get('/docs', { preHandler: requireAuth }, async () => ({ docs: await listDocs() }));
       api.get<{ Params: { slug: string } }>('/docs/:slug', { preHandler: requireAuth }, async (req, reply) => {
@@ -186,6 +191,7 @@ export async function buildServer(opts: BuildOptions = {}) {
       await api.register(adminRoutes);
       await api.register(adminUserRoutes);
       await api.register(adminNetworkRoutes);
+      await api.register(hostRoutes);
     },
     { prefix: '/api/v1' },
   );

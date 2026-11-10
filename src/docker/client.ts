@@ -34,6 +34,9 @@ export interface ContainerEngine {
   runInstaller(spec: InstallerSpec, onLog: (line: string) => void): Promise<number>;
   streamLogs(containerId: string, onLine: (line: string) => void, onEnd?: () => void): Promise<() => void>;
   tailLogs(containerId: string, lines: number): Promise<string[]>;
+  listAllContainers?(): Promise<Array<{ id: string; name: string; image: string; state: string; status: string; isPanel: boolean }>>;
+  getContainerLogs?(nameOrId: string, lines?: number): Promise<string[]>;
+  restartContainer?(nameOrId: string): Promise<void>;
   listPublishedPorts(): Promise<Set<number>>;
   /** Eigenes Netz fuer Spielcontainer anlegen und das Panel (falls selbst im Container) dazuholen. */
   ensureGameNetwork(): Promise<void>;
@@ -54,7 +57,7 @@ export interface ContainerEngine {
   /** Labels eines Containers, null wenn es ihn nicht gibt. */
   labels(containerId: string): Promise<Record<string, string> | null>;
   /** Fuehrt einen einmaligen Befehl in einem temporaeren Container aus und faengt die Ausgabe ab. */
-  runOneOff(image: string, cmd: string[], timeoutMs?: number): Promise<{ exitCode: number; output: string }>;
+  runOneOff(image: string, cmd: string[], timeoutMs?: number, binds?: string[]): Promise<{ exitCode: number; output: string }>;
   /** Fuehrt einen Befehl in einem laufenden Container aus und faengt die Ausgabe ab. */
   exec(containerId: string, cmd: string[], timeoutMs?: number): Promise<{ exitCode: number; output: string }>;
 }
@@ -309,6 +312,50 @@ class LocalDockerEngine implements ContainerEngine {
     }));
   }
 
+  async listAllContainers(): Promise<Array<{ id: string; name: string; image: string; state: string; status: string; isPanel: boolean }>> {
+    try {
+      const raw = await this.docker.listContainers({ all: true });
+      return raw.map((c) => ({
+        id: c.Id.slice(0, 12),
+        name: (c.Names[0] || '').replace(/^\//, ''),
+        image: c.Image,
+        state: c.State,
+        status: c.Status,
+        isPanel: Boolean(c.Labels?.[PANEL_LABEL]),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getContainerLogs(nameOrId: string, lines: number = 200): Promise<string[]> {
+    try {
+      const raw = (await this.docker.getContainer(nameOrId).logs({
+        stdout: true,
+        stderr: true,
+        tail: lines,
+        follow: false,
+        timestamps: true,
+      })) as unknown as Buffer;
+      return stripFrames(Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw)))
+        .split('\n')
+        .map((l) => l.trimEnd())
+        .filter((l) => l.trim().length > 0);
+    } catch {
+      return [];
+    }
+  }
+
+  async restartContainer(nameOrId: string): Promise<void> {
+    try {
+      const c = this.docker.getContainer(nameOrId);
+      await c.restart({ t: 10 });
+    } catch (err) {
+      log.error({ err, nameOrId }, 'Container-Neustart fehlgeschlagen');
+      throw err;
+    }
+  }
+
   async ensureVolume(shortId: string, owner?: string | null): Promise<void> {
     if (isWindows) {
       await this.docker.createVolume({ Name: volumeName(shortId), Labels: { 'panel.short_id': shortId } });
@@ -555,7 +602,7 @@ class LocalDockerEngine implements ContainerEngine {
     return result.StatusCode as number;
   }
 
-  async runOneOff(image: string, cmd: string[], timeoutMs = 35000): Promise<{ exitCode: number; output: string }> {
+  async runOneOff(image: string, cmd: string[], timeoutMs = 35000, binds?: string[]): Promise<{ exitCode: number; output: string }> {
     if (!(await this.hasImage(image))) {
       await this.pullImage(image);
     }
@@ -569,6 +616,7 @@ class LocalDockerEngine implements ContainerEngine {
         AutoRemove: false,
         NetworkMode: 'bridge',
         Memory: 1024 * 1024 * 1024,
+        Binds: binds ?? [],
       },
     });
 

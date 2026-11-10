@@ -36,6 +36,7 @@ import {
   Cpu,
   Server,
   Eye,
+  ChevronLeft,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Button, Input, Spinner } from '../components/ui';
@@ -293,6 +294,14 @@ export function AdminAudit() {
 
   return (
     <div className="w-full space-y-6">
+      <Link
+        to="/admin"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-dim hover:text-amber transition-colors"
+      >
+        <ChevronLeft className="size-4" />
+        Zurück zum Admin-Hub
+      </Link>
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-2xl border border-seam bg-rack shadow-sm">
         <div>

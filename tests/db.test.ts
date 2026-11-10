@@ -46,9 +46,10 @@ describe('Statusmaschine', () => {
   });
 
   it('weist unmoegliche Spruenge ab', async () => {
-    // offline -> running ohne starting darf nicht passieren, sonst steht
-    // irgendwann ein Server auf running, dessen Container nie startete.
-    expect(await setStatus(serverId, 'running')).toBe(false);
+    // offline -> stopping ergibt keinen Sinn. (offline -> running ist seit
+    // 0.23 erlaubt: der Abgleich mit Docker meldet von aussen gestartete
+    // Container, siehe supervisor.ts.)
+    expect(await setStatus(serverId, 'stopping')).toBe(false);
     expect(await getStatus(serverId)).toBe('offline');
   });
 

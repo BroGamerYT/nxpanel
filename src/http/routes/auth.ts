@@ -14,6 +14,8 @@ import {
   startTotpSetup, enableTotp, disableTotp, regenerateRecoveryCodes, checkSecondFactor, TwoFactorError,
 } from '../../auth/twofactor.js';
 import { getSteamOpenIdUrl, verifySteamOpenId, fetchSteamProfile } from '../../auth/steam-openid.js';
+import { issueOneTimeToken, consumeOneTimeToken } from '../../auth/one-time.js';
+import { listSftpPasswords, createSftpPassword, deleteSftpPassword } from '../../auth/sftp-passwords.js';
 import {
   createPasskeyRegistrationOptions,
   verifyPasskeyRegistrationResult,
@@ -188,11 +190,16 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
     }
 
     const accessToken = await signAccessToken({ sub: result.userId, sid: result.session.sessionId });
-    if (!body.refreshToken) setRefreshCookie(reply, result.session.refreshToken);
+    // Bei einem Wettlauf (zweiter Tab mit dem gerade rotierten Token) gibt es
+    // nur ein Access-Token, aber KEIN neues Refresh-Token (leer). Dann den
+    // Cookie nicht anfassen - sonst ueberschreibt der langsamere Tab das
+    // frische Token des schnelleren mit "" und beide fliegen spaeter raus.
+    const fresh = result.session.refreshToken;
+    if (!body.refreshToken && fresh) setRefreshCookie(reply, fresh);
     return {
       accessToken,
       expiresIn: ACCESS_TOKEN_TTL_S,
-      ...(body.refreshToken ? { refreshToken: result.session.refreshToken } : {}),
+      ...(body.refreshToken && fresh ? { refreshToken: fresh } : {}),
     };
   });
 
@@ -255,48 +262,67 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
   // ---------------------------------------------------------- Steam OpenID 2.0
 
   /** Zu Steam weiterleiten fuer Login oder Profil-Verknuepfung */
+  /**
+   * Steam-Verknuepfung vorbereiten (angemeldet): liefert eine Adresse mit
+   * Einmal-Token (state), das serverseitig an DIESEN Nutzer gebunden ist.
+   * Frueher stand die Nutzer-ID in der Rueckkehr-Adresse - damit konnte jeder
+   * mit eigenem Steam-Konto ein fremdes Konto (auch Admin) uebernehmen.
+   */
+  app.post('/auth/steam/link-start', { preHandler: requireAuth }, async (req) => {
+    const state = issueOneTimeToken('steam-link', { userId: req.actor!.id }, 10 * 60_000);
+    return { url: `/api/v1/auth/steam/login?action=link&state=${encodeURIComponent(state)}` };
+  });
+
+function getPublicBaseUrl(req: FastifyRequest): string {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const forwardedHost = req.headers['x-forwarded-host'];
+  const rawHost = typeof forwardedHost === 'string' ? forwardedHost : (Array.isArray(forwardedHost) ? forwardedHost[0] : req.headers.host);
+  const rawProto = typeof forwardedProto === 'string' ? forwardedProto : (Array.isArray(forwardedProto) ? forwardedProto[0] : req.protocol);
+  const host = rawHost?.split(',')[0]?.trim();
+  const proto = rawProto?.split(',')[0]?.trim();
+
+  if (host && !host.startsWith('127.0.0.1') && !host.startsWith('localhost')) {
+    return `${proto || 'https'}://${host}`;
+  }
+  return config.PANEL_URL;
+}
+
   app.get('/auth/steam/login', async (req, reply) => {
-    const action = (req.query as { action?: string }).action === 'link' ? 'link' : 'login';
-    let linkUserId: string | null = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      try {
-        const res = await verifyAccessToken(authHeader.slice(7));
-        if (res.ok) linkUserId = res.claims.sub;
-      } catch {}
-    }
-    // Auch pruefen ob ueber Query-Token mitgegeben (z. B. wenn der Browser direkt per Link navigiert)
-    const tokenQuery = (req.query as { token?: string }).token;
-    if (!linkUserId && tokenQuery) {
-      try {
-        const res = await verifyAccessToken(tokenQuery);
-        if (res.ok) linkUserId = res.claims.sub;
-      } catch {}
-    }
-
-    const returnUrl = new URL(`${config.PANEL_URL}/api/v1/auth/steam/callback`);
+    const q = req.query as { action?: string; state?: string };
+    const action = q.action === 'link' ? 'link' : 'login';
+    const baseUrl = getPublicBaseUrl(req);
+    const returnUrl = new URL(`${baseUrl}/api/v1/auth/steam/callback`);
     returnUrl.searchParams.set('action', action);
-    if (linkUserId) returnUrl.searchParams.set('uid', linkUserId);
-
-    const redirectUrl = getSteamOpenIdUrl(returnUrl.toString(), config.PANEL_URL);
-    return reply.redirect(redirectUrl);
+    if (action === 'link') {
+      if (!q.state || q.state.length > 200) return reply.redirect('/account?error=unauthenticated');
+      returnUrl.searchParams.set('state', q.state);
+    }
+    return reply.redirect(getSteamOpenIdUrl(returnUrl.toString(), baseUrl));
   });
 
   /** Rueckkehr von Steam: Signatur pruefen und anmelden oder verknuepfen */
   app.get('/auth/steam/callback', async (req, reply) => {
     const query = req.query as Record<string, string | undefined>;
     const action = query.action;
-    const uid = query.uid;
+    const baseUrl = getPublicBaseUrl(req);
 
-    const steamId = await verifySteamOpenId(query);
+    const steamId = (await verifySteamOpenId(query, `${baseUrl}/api/v1/auth/steam/callback`))
+      ?? (baseUrl !== config.PANEL_URL ? await verifySteamOpenId(query, `${config.PANEL_URL}/api/v1/auth/steam/callback`) : null);
     if (!steamId) {
+      await writeAudit({
+        actorName: 'Gast',
+        action: 'auth.steam_verify_failed',
+        ip: req.ip,
+        metadata: { error: 'invalid_signature_or_return_to' },
+      });
       return reply.redirect(action === 'link' ? '/account?error=steam_verify_failed' : '/login?error=steam_verify_failed');
     }
 
     const profile = await fetchSteamProfile(steamId);
 
     if (action === 'link') {
-      const targetUserId = uid;
+      // Ziel-Konto nur aus dem serverseitigen Einmal-Token, nie aus der Adresse
+      const targetUserId = consumeOneTimeToken<{ userId: string }>('steam-link', query.state)?.userId;
       if (!targetUserId) {
         return reply.redirect('/account?error=unauthenticated');
       }
@@ -334,6 +360,12 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
     `;
 
     if (!user) {
+      await writeAudit({
+        actorName: profile?.personaName ?? 'Steam-Gast',
+        action: 'auth.steam_login_not_linked',
+        ip: req.ip,
+        metadata: { steamId, personaName: profile?.personaName },
+      });
       return reply.redirect(`/login?error=steam_not_linked&steamId=${encodeURIComponent(steamId)}&name=${encodeURIComponent(profile?.personaName ?? '')}`);
     }
 
@@ -380,11 +412,18 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
   /**
    * Impersonation beenden: Kehrt sicher zur urspruenglichen Admin-Sitzung zurueck.
    */
-  app.post('/auth/impersonate/stop', async (req, reply) => {
-    const { adminId } = z.object({ adminId: z.string().uuid() }).parse(req.body);
-    const [admin] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${adminId} AND role = 'admin' AND NOT suspended`;
+  app.post('/auth/impersonate/stop', { preHandler: requireAuth }, async (req, reply) => {
+    // Nur mit dem Rueckkehr-Token aus dem Imitations-Start UND als genau der
+    // imitierte Nutzer. Frueher reichte die Admin-ID ohne Anmeldung - das war
+    // eine Hintertuer zu jedem Admin-Konto.
+    const { returnToken } = z.object({ returnToken: z.string().min(20).max(200) }).parse(req.body);
+    const t = consumeOneTimeToken<{ adminId: string; targetId: string }>('impersonate', returnToken);
+    if (!t || t.targetId !== req.actor!.id) throw new HttpError(403, 'Rückkehr nicht möglich – bitte neu anmelden', 'forbidden');
+    const [admin] = await sql<UserRow[]>`SELECT * FROM users WHERE id = ${t.adminId} AND role = 'admin' AND NOT suspended`;
     if (!admin) throw new HttpError(403, 'Administrator-Konto nicht gefunden', 'forbidden');
 
+    // Die Imitations-Sitzung beenden, dann zur Admin-Sitzung zurueck
+    await revokeSessionFamily(req.actor!.sessionId, 'logout');
     const session = await createSession(admin.id, meta(req));
     setRefreshCookie(reply, session.refreshToken);
     const accessToken = await signAccessToken({ sub: admin.id, sid: session.sessionId });
@@ -394,6 +433,7 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
       actorName: admin.username,
       action: 'admin.impersonate_stop',
       ip: req.ip,
+      metadata: { targetUserId: t.targetId },
     });
 
     return {
@@ -535,6 +575,28 @@ export async function authRoutes(app: FastifyInstance, opts: { limiter: RateLimi
     } catch (err) {
       throw new HttpError(400, err instanceof Error ? err.message : 'Passkey-Registrierung fehlgeschlagen', 'passkey_failed');
     }
+  });
+
+  /** SFTP-Passwoerter (fuer Konten mit Zwei-Faktor-Schutz noetig) */
+  app.get('/auth/sftp-passwords', { preHandler: requireAuth }, async (req) => ({
+    passwords: await listSftpPasswords(req.actor!.id),
+  }));
+
+  app.post('/auth/sftp-passwords', { preHandler: requireAuth }, async (req) => {
+    const { label } = z.object({ label: z.string().trim().min(1).max(60) }).parse(req.body);
+    try {
+      const { info, password } = await createSftpPassword(req.actor!.id, label);
+      await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'user.sftp_password_created', ip: req.ip, metadata: { id: info.id, label } });
+      return { password: info, secret: password };
+    } catch (err) {
+      throw new HttpError(400, err instanceof Error ? err.message : 'Fehler', 'invalid_input');
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>('/auth/sftp-passwords/:id', { preHandler: requireAuth }, async (req) => {
+    if (!(await deleteSftpPassword(req.actor!.id, req.params.id))) throw new HttpError(404, 'Nicht gefunden', 'not_found');
+    await writeAudit({ userId: req.actor!.id, actorName: req.actor!.username, action: 'user.sftp_password_deleted', ip: req.ip, metadata: { id: req.params.id } });
+    return { ok: true };
   });
 
   /** Passkeys des angemeldeten Benutzers auflisten */

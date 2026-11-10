@@ -1,0 +1,200 @@
+{
+  "_comment": "NexusPanel-Egg fuer The Bus Dedicated Server (Nativer Linux-Server).",
+  "name": "The Bus",
+  "author": "nxpanel",
+  "nest": "Simulation",
+  "cover": {
+    "steam": 491540
+  },
+  "docker_images": {
+    "Debian (Pelican)": "ghcr.io/pelican-eggs/yolks:debian",
+    "Debian (ParkerVCP)": "ghcr.io/parkervcp/steamcmd:debian"
+  },
+  "startup": "chmod +x ./TheBusServer.sh ./TheBus/Binaries/Linux/TheBusServer_Linux 2>/dev/null || true; ./TheBusServer.sh -Port={{SERVER_PORT}}",
+  "data_dir": "/home/container",
+  "run_as": "1000:1000",
+  "capabilities": [
+    "CHOWN",
+    "SETUID",
+    "SETGID",
+    "DAC_OVERRIDE",
+    "FOWNER"
+  ],
+  "console": "full",
+  "stop": {
+    "method": "SIGTERM",
+    "timeout_seconds": 60
+  },
+  "ready_check": {
+    "kind": "done",
+    "regex": "Start Session Success|Server can be reached with the GUID|Game server connected|Listening on|SetState to Ready",
+    "timeout_seconds": 600
+  },
+  "ports": {
+    "primary": {
+      "ref": "game",
+      "name": "Spiel (UDP)",
+      "start": 7777,
+      "end": 7876,
+      "protocol": "udp"
+    },
+    "secondary": [
+      {
+        "ref": "query",
+        "name": "Steam Query",
+        "start": 27015,
+        "end": 27114,
+        "protocol": "udp",
+        "optional": false
+      }
+    ]
+  },
+  "resources": {
+    "base_ram_mb": 6144,
+    "ram_per_player_mb": 200,
+    "min_cpu_percent": 200,
+    "disk_mb": 15000,
+    "notes": "The Bus Dedicated Server benoetigt unter Proton mindestens 6-8 GB RAM."
+  },
+  "config_files": {
+    "TheBus/Settings/ServerSettings.cfg": {
+      "parser": "json",
+      "find": {
+        "serverName": "{{SERVER_NAME}}",
+        "serverPassword": "{{SERVER_PASSWORD}}",
+        "maxPlayers": "{{MAX_PLAYERS}}"
+      }
+    }
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\n# SteamCMD Installations-Skript fuer The Bus Dedicated Server\n\nif [[ \"${STEAM_USER}\" == \"\" ]] || [[ \"${STEAM_PASS}\" == \"\" ]]; then\n    echo \"Nutze anonymen Steam-Login...\"\n    STEAM_USER=anonymous\n    STEAM_PASS=\"\"\n    STEAM_AUTH=\"\"\nelse\n    echo \"Steam-Benutzer: ${STEAM_USER}\"\nfi\n\ncd /tmp\nmkdir -p /mnt/server/steamcmd\ncurl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz\ntar -xzvf steamcmd.tar.gz -C /mnt/server/steamcmd\nmkdir -p /mnt/server/steamapps\ncd /mnt/server/steamcmd\n\nchown -R root:root /mnt\nexport HOME=/mnt/server\n\n./steamcmd.sh +force_install_dir /mnt/server +login ${STEAM_USER} ${STEAM_PASS} ${STEAM_AUTH} +app_update ${SRCDS_APPID} validate +quit\n\nmkdir -p /mnt/server/.steam/sdk32\ncp -v linux32/steamclient.so /mnt/server/.steam/sdk32/steamclient.so 2>/dev/null || true\n\nmkdir -p /mnt/server/.steam/sdk64\ncp -v linux64/steamclient.so /mnt/server/.steam/sdk64/steamclient.so 2>/dev/null || true\n\nmkdir -p /mnt/server/TheBus/Settings\nif [ ! -f /mnt/server/TheBus/Settings/ServerSettings.cfg ]; then\ncat << 'EOF' > /mnt/server/TheBus/Settings/ServerSettings.cfg\n{\n  \"serverName\": \"The Bus Server\",\n  \"serverPassword\": \"\",\n  \"maxPlayers\": 16\n}\nEOF\nfi\n\necho \"-----------------------------------------\"\necho \"Installation abgeschlossen!\"\necho \"-----------------------------------------\"",
+      "container": "ghcr.io/parkervcp/installers:debian",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "App-ID",
+      "name_locales": {
+        "de": "Steam App-ID",
+        "en": "Steam App ID"
+      },
+      "env_variable": "SRCDS_APPID",
+      "default_value": "507320",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "required|numeric|in:507320"
+    },
+    {
+      "name": "Windows-Installation",
+      "name_locales": {
+        "de": "Windows-Installation",
+        "en": "Windows Installation"
+      },
+      "env_variable": "WINDOWS_INSTALL",
+      "default_value": "0",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "boolean"
+    },
+    {
+      "name": "Automatisch aktualisieren",
+      "name_locales": {
+        "de": "Automatisch aktualisieren",
+        "en": "Auto Update"
+      },
+      "description": "Prueft beim Serverstart auf Updates.",
+      "description_locales": {
+        "de": "Prueft beim Serverstart auf Updates.",
+        "en": "Checks for updates on server startup."
+      },
+      "env_variable": "AUTO_UPDATE",
+      "default_value": "1",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "boolean"
+    },
+    {
+      "name": "Servername",
+      "name_locales": {
+        "de": "Servername",
+        "en": "Server Name"
+      },
+      "description": "Angezeigter Name in der Serverliste.",
+      "description_locales": {
+        "de": "Angezeigter Name in der Serverliste.",
+        "en": "Server name shown in multiplayer browser."
+      },
+      "env_variable": "SERVER_NAME",
+      "default_value": "The Bus Dedicated Server",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|max:64"
+    },
+    {
+      "name": "Server-Passwort",
+      "name_locales": {
+        "de": "Server-Passwort",
+        "en": "Server Password"
+      },
+      "description": "Passwort fuer den Serverbeitritt (leer lassen fuer oeffentlich).",
+      "description_locales": {
+        "de": "Passwort fuer den Serverbeitritt (leer lassen fuer oeffentlich).",
+        "en": "Password to join the server (leave empty for public)."
+      },
+      "env_variable": "SERVER_PASSWORD",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|max:64",
+      "secret": true
+    },
+    {
+      "name": "Maximale Spieler",
+      "name_locales": {
+        "de": "Maximale Spieler",
+        "en": "Max Players"
+      },
+      "description": "Maximale Anzahl gleichzeitiger Spieler.",
+      "description_locales": {
+        "de": "Maximale Anzahl gleichzeitiger Spieler.",
+        "en": "Maximum number of simultaneous players."
+      },
+      "env_variable": "MAX_PLAYERS",
+      "default_value": "16",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|numeric|between:1,64"
+    },
+    {
+      "name": "Query-Port",
+      "name_locales": {
+        "de": "Query-Port",
+        "en": "Query Port"
+      },
+      "description": "Steam Query Port fuer Server-Browser.",
+      "description_locales": {
+        "de": "Steam Query Port fuer Server-Browser.",
+        "en": "Steam query port for server browser."
+      },
+      "env_variable": "QUERY_PORT",
+      "default_value": "27015",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|numeric"
+    },
+    {
+      "name": "Xvfb Display",
+      "name_locales": {
+        "de": "Xvfb Display",
+        "en": "Xvfb Display"
+      },
+      "env_variable": "XVFB",
+      "default_value": "1",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "nullable|string"
+    }
+  ]
+}

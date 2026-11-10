@@ -389,7 +389,15 @@ export async function serverRoutes(
         status: server.status,
         startedAt: server.started_at ? new Date(server.started_at).toISOString() : null,
         ownerId: server.owner_id,
-        egg: egg ? { id: server.egg_id, name: egg.name, consoleMode: egg.console_mode, webInterface: egg.web_interface, hints: cleanHints(egg.hints), gameKind: egg.game_kind } : null,
+        egg: egg ? {
+          id: server.egg_id,
+          name: egg.name,
+          consoleMode: egg.console_mode,
+          webInterface: egg.web_interface,
+          hints: cleanHints(egg.hints),
+          gameKind: egg.game_kind,
+          steamAppId: (egg.raw_egg as { steam_app_id?: number } | undefined)?.steam_app_id ?? null,
+        } : null,
         limits: { ramMb: server.ram_mb, swapMb: server.swap_mb, cpuPercent: server.cpu_percent, diskMb: server.disk_mb },
         // Belegt laut letzter Messung (alle paar Minuten), null = noch nicht gemessen.
         diskUsedMb: diskCollector.serverMb().get(server.id) ?? null,

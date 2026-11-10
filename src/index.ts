@@ -16,6 +16,7 @@ import { startAutoSleep, stopAutoSleep } from './servers/auto-sleep.js';
 import { startDdnsBackgroundService } from './network/dns.js';
 import { resumeTestRunnerIfInterrupted, stopTestRunner } from './servers/test-runner.js';
 import { startSftpService } from './servers/sftp.js';
+import { startHostMonitor } from './hosts/monitor.js';
 
 function hint(lines: string[]): void {
   const width = Math.max(...lines.map((l) => l.length)) + 2;
@@ -53,6 +54,8 @@ async function main(): Promise<void> {
   startScheduleWorker();
   startAutoSleep();
   startDdnsBackgroundService();
+  // Status und Auslastung der Hosts im Blick behalten (lokaler Host und gekoppelte Cores).
+  startHostMonitor();
   const sftp = await startSftpService();
 
   const app = await buildServer();

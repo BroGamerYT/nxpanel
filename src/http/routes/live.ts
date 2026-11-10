@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { eventBus, type LiveEvent } from '../../events.js';
 import { loadAuthContext } from '../../auth/users.js';
 import { requireAuth } from '../auth.js';
+import { listServersForActor } from '../../servers/access.js';
 
 /**
  * Panelweiter Live-Strom über WebSocket.
@@ -59,7 +60,15 @@ export async function liveRoutes(app: FastifyInstance) {
 
     send({ type: 'hello' });
 
+    // Nur Ereignisse von Servern, die dieser Nutzer sehen darf. Ohne Filter
+    // bekam jeder angemeldete Nutzer Namen und Meldungen ALLER Server.
+    const visibleIds = async (a: NonNullable<typeof actor>) =>
+      new Set((await listServersForActor(a)).map((s) => s.id));
+    let visible = await visibleIds(actor);
+
     const onEvent = (e: LiveEvent) => {
+      // Panelweite Meldungen (ohne Server) nur fuer Admins/Moderatoren
+      if (e.serverId ? !visible.has(e.serverId) : actor.role === 'user') return;
       send({
         type: 'event',
         event: {
@@ -77,7 +86,8 @@ export async function liveRoutes(app: FastifyInstance) {
     // Rechte periodisch nachprüfen: ein Rechteentzug beendet auch offene Verbindungen.
     const recheck = setInterval(async () => {
       const fresh = await loadAuthContext(t.userId, t.sessionId);
-      if (!fresh) socket.close(4401, 'Sitzung beendet');
+      if (!fresh) { socket.close(4401, 'Sitzung beendet'); return; }
+      visible = await visibleIds(fresh).catch(() => visible);
     }, 30_000);
 
     socket.on('close', () => {

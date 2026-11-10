@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { FolderTree, HardDrive, ChevronRight, AlertTriangle, Folder } from 'lucide-react';
+import { FolderTree, HardDrive, ChevronRight, AlertTriangle, Folder, ChevronLeft } from 'lucide-react';
 import { api } from '../lib/api';
 import { t } from '../lib/i18n';
 import { FileManager } from '../components/FileManager';
@@ -30,6 +31,14 @@ export function AdminFiles() {
 
   return (
     <div className="space-y-5">
+      <Link
+        to="/admin"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-dim hover:text-amber transition-colors"
+      >
+        <ChevronLeft className="size-4" />
+        Zurück zum Admin-Hub
+      </Link>
+
       <div>
         <h1 className="text-2xl font-semibold flex items-center gap-2"><FolderTree className="size-6 text-amber" aria-hidden />{t('adminFiles.title')}</h1>
         <p className="text-dim text-sm mt-1">{t('adminFiles.intro')}</p>

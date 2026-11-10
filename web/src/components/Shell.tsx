@@ -2,8 +2,8 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Server, LogOut, Plus, Network as NetIcon, Users, Search, Shield, History,
-  FlaskConical, Blocks, HelpCircle, FolderTree, Bell, Menu, X, AlertTriangle, CheckCircle2, Info, CheckCheck, Eye,
+  Server, LogOut, Plus, Users, Search, Shield,
+  HelpCircle, Bell, Menu, X, AlertTriangle, CheckCircle2, Info, CheckCheck, Eye,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
@@ -175,6 +175,14 @@ export function Shell() {
   const loc = useLocation();
   const { me, logout, impersonatorAdmin, stopImpersonation } = useAuth();
   const canCreate = me?.permissions['server.create'];
+  const hasAdminAccess = Boolean(
+    me?.user.role === 'admin' || Object.keys(me?.permissions ?? {}).some((k) => k.startsWith('admin.'))
+  );
+  const isAdminActive =
+    loc.pathname === '/admin' ||
+    loc.pathname.startsWith('/admin/') ||
+    loc.pathname === '/netzwerk' ||
+    loc.pathname.startsWith('/netzwerk/');
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -281,34 +289,18 @@ export function Shell() {
           <NavLink to="/community" className={link} title={t('nav.community')}>
             <Users className="size-4 shrink-0" /> <span className="hidden lg:inline">{t('nav.community')}</span>
           </NavLink>
-          {me?.permissions['admin.nodes'] && (
-            <NavLink to="/netzwerk" className={link} title={t('nav.network')}>
-              <NetIcon className="size-4 shrink-0" /> <span className="hidden lg:inline">{t('nav.network')}</span>
-            </NavLink>
-          )}
-          {me?.permissions['admin.users'] && (
-            <NavLink to="/admin/users" className={link} title="Benutzerverwaltung">
-              <Shield className="size-4 shrink-0" /> <span className="hidden lg:inline">Nutzer</span>
-            </NavLink>
-          )}
-          {me?.permissions['admin.audit'] && (
-            <NavLink to="/admin/audit" className={link} title="Audit-Protokoll">
-              <History className="size-4 shrink-0" /> <span className="hidden lg:inline">Audit-Log</span>
-            </NavLink>
-          )}
-          {Boolean(me?.permissions['admin.files'] ?? (me?.user.role === 'admin')) && (
-            <NavLink to="/admin/dateien" className={link} title={t('nav.adminFiles')}>
-              <FolderTree className="size-4 shrink-0" /> <span className="hidden lg:inline">{t('nav.adminFiles')}</span>
-            </NavLink>
-          )}
-          {Boolean(me?.permissions['admin.test_report'] ?? (me?.user.role === 'admin')) && (
-            <NavLink to="/admin/testbericht" className={link} title="Automatisierter Spiele-Testbericht">
-              <FlaskConical className="size-4 text-amber shrink-0" /> <span className="hidden lg:inline">Testbericht</span>
-            </NavLink>
-          )}
-          {Boolean(me?.permissions['admin.integrations'] ?? (me?.user.role === 'admin')) && (
-            <NavLink to="/admin/integrationen" className={link} title="Integrationen & Externe Dienste">
-              <Blocks className="size-4 text-sky-400 shrink-0" /> <span className="hidden lg:inline">Integrationen</span>
+          {hasAdminAccess && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center md:justify-center lg:justify-start gap-2.5 rounded-md px-3 h-10 md:h-9 text-sm transition-colors ${
+                  isActive || isAdminActive ? 'bg-rack-2 text-ink font-medium' : 'text-dim hover:text-ink hover:bg-rack-2/60'
+                }`
+              }
+              title="Admin-Hub"
+            >
+              <Shield className="size-4 text-amber shrink-0" />
+              <span className="hidden lg:inline font-semibold text-amber">Admin-Hub</span>
             </NavLink>
           )}
           <NavLink to="/hilfe" className={link} title={t('nav.help')}>
@@ -409,34 +401,18 @@ export function Shell() {
                 <NavLink to="/community" onClick={closeMobile} className={link}>
                   <Users className="size-4 shrink-0" /> <span>{t('nav.community')}</span>
                 </NavLink>
-                {me?.permissions['admin.nodes'] && (
-                  <NavLink to="/netzwerk" onClick={closeMobile} className={link}>
-                    <NetIcon className="size-4 shrink-0" /> <span>{t('nav.network')}</span>
-                  </NavLink>
-                )}
-                {me?.permissions['admin.users'] && (
-                  <NavLink to="/admin/users" onClick={closeMobile} className={link}>
-                    <Shield className="size-4 shrink-0" /> <span>Nutzer</span>
-                  </NavLink>
-                )}
-                {me?.permissions['admin.audit'] && (
-                  <NavLink to="/admin/audit" onClick={closeMobile} className={link}>
-                    <History className="size-4 shrink-0" /> <span>Audit-Log</span>
-                  </NavLink>
-                )}
-                {Boolean(me?.permissions['admin.files'] ?? (me?.user.role === 'admin')) && (
-                  <NavLink to="/admin/dateien" onClick={closeMobile} className={link}>
-                    <FolderTree className="size-4 shrink-0" /> <span>{t('nav.adminFiles')}</span>
-                  </NavLink>
-                )}
-                {Boolean(me?.permissions['admin.test_report'] ?? (me?.user.role === 'admin')) && (
-                  <NavLink to="/admin/testbericht" onClick={closeMobile} className={link}>
-                    <FlaskConical className="size-4 text-amber shrink-0" /> <span>Testbericht</span>
-                  </NavLink>
-                )}
-                {Boolean(me?.permissions['admin.integrations'] ?? (me?.user.role === 'admin')) && (
-                  <NavLink to="/admin/integrationen" onClick={closeMobile} className={link}>
-                    <Blocks className="size-4 text-sky-400 shrink-0" /> <span>Integrationen</span>
+                {hasAdminAccess && (
+                  <NavLink
+                    to="/admin"
+                    onClick={closeMobile}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2.5 rounded-md px-3 h-10 text-sm transition-colors ${
+                        isActive || isAdminActive ? 'bg-rack-2 text-ink font-medium' : 'text-dim hover:text-ink hover:bg-rack-2/60'
+                      }`
+                    }
+                  >
+                    <Shield className="size-4 text-amber shrink-0" />
+                    <span className="font-semibold text-amber">Admin-Hub</span>
                   </NavLink>
                 )}
                 <NavLink to="/hilfe" onClick={closeMobile} className={link}>

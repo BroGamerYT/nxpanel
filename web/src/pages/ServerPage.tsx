@@ -270,7 +270,18 @@ function Loaded({ detail }: { detail: ServerDetail }) {
                   </Tooltip>
                 )
               )}
-              {primary && <Address port={primary.port} host={server.publicHost} subdomain={server.subdomain} srvRecordEnabled={server.srvRecordEnabled} eggName={server.egg?.name} />}
+              {primary && (
+                <Address
+                  port={primary.port}
+                  host={server.publicHost}
+                  subdomain={server.subdomain}
+                  srvRecordEnabled={server.srvRecordEnabled}
+                  eggName={server.egg?.name}
+                  ports={server.ports}
+                  steamAppId={(server.egg as any)?.steamAppId}
+                  webInterface={server.egg?.webInterface}
+                />
+              )}
               {!live.connected && <span className="text-led-start">{t('server.connecting')}</span>}
               {otherUsers.length > 0 && (
                 <span

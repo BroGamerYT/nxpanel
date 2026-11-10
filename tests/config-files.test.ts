@@ -53,6 +53,15 @@ describe('server.properties', () => {
     }, ctx);
     expect(r.changed).toHaveLength(0);
   });
+
+  it('unterstuetzt auch "set" statt "find" ohne Fehler', () => {
+    const r = patchConfigFile('server-port=25565', {
+      parser: 'properties',
+      set: { 'server-port': '{{SERVER_PORT}}' },
+    } as any, ctx);
+    expect(r.content).toContain('server-port=25566');
+    expect(r.changed).toEqual(['server-port']);
+  });
 });
 
 describe('INI mit Abschnitten', () => {
@@ -80,6 +89,53 @@ describe('INI mit Abschnitten', () => {
     const doppelt = '[A]\nPort=1\n\n[B]\nPort=2';
     const r = patchConfigFile(doppelt, { parser: 'ini', find: { 'B.Port': '9999' } }, ctx);
     expect(r.content).toBe('[A]\nPort=1\n\n[B]\nPort=9999');
+  });
+
+  it('unterstuetzt eckige Klammern fuer Abschnitte wie bei Unreal Engine', () => {
+    const ini = [
+      '[/Script/Astro.AstroServerSettings]',
+      'PublicIP=0.0.0.0',
+      'OwnerName=AlterName',
+    ].join('\n');
+    const r = patchConfigFile(ini, {
+      parser: 'ini',
+      find: {
+        '[/Script/Astro.AstroServerSettings].PublicIP': '127.0.0.1',
+        '[/Script/Astro.AstroServerSettings].OwnerName': 'Test',
+      },
+    }, ctx);
+    expect(r.content).toContain('PublicIP=127.0.0.1');
+    expect(r.content).toContain('OwnerName=Test');
+    expect(r.changed.sort()).toEqual(['[/Script/Astro.AstroServerSettings].OwnerName', '[/Script/Astro.AstroServerSettings].PublicIP']);
+  });
+
+  it('haengt neue Schluessel an existierende und neue Abschnitte an', () => {
+    const ini = [
+      '[ServerSettings]',
+      'ServerName=Test',
+    ].join('\n');
+    const r = patchConfigFile(ini, {
+      parser: 'ini',
+      find: {
+        'ServerSettings.MaxPlayers': '{{MAX_PLAYERS}}',
+        '[NewSection].NewKey': 'NewVal',
+      },
+    }, ctx);
+    expect(r.content).toContain('[ServerSettings]\nServerName=Test\nMaxPlayers=20');
+    expect(r.content).toContain('[NewSection]\nNewKey=NewVal');
+    expect(r.added.sort()).toEqual(['ServerSettings.MaxPlayers', '[NewSection].NewKey']);
+  });
+
+  it('erstellt vollstaendige INI-Struktur bei leerer Ausgangsdatei', () => {
+    const r = patchConfigFile('', {
+      parser: 'ini',
+      find: {
+        '[/Script/Astro.AstroServerSettings].PublicIP': '127.0.0.1',
+        '[/Script/Astro.AstroServerSettings].ServerName': '{{MOTD}}',
+      },
+    }, ctx);
+    expect(r.content).toBe('[/Script/Astro.AstroServerSettings]\nPublicIP=127.0.0.1\nServerName=Willkommen');
+    expect(r.added.length).toBe(2);
   });
 });
 

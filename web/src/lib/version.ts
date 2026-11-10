@@ -34,6 +34,8 @@ export interface DocDetail extends DocMeta {
 export interface About {
   version: string; build: number | null; builtAt: string | null; dev: boolean;
   update?: GitHubUpdateInfo;
+  /** Von aussen erreichbarer SFTP-Port */
+  sftp?: { enabled: boolean; port: number };
   changelog: Array<{ version: string; date: string | null; title: string | null; sections: Array<{ title: string; items: string[] }> }>;
   todo: Array<{ title: string; items: Array<{ text: string; done: boolean; version: string | null }> }>;
   devlog?: DevlogEntry[];

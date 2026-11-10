@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Bell,
@@ -12,6 +13,7 @@ import {
   FileCode2,
   Sparkles,
   Info,
+  ChevronLeft,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Button, ErrorBox, Field, Input, Spinner } from '../components/ui';
@@ -76,6 +78,14 @@ export function Integrations() {
 
   return (
     <div className="max-w-4xl space-y-8">
+      <Link
+        to="/admin"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-dim hover:text-amber transition-colors"
+      >
+        <ChevronLeft className="size-4" />
+        Zurück zum Admin-Hub
+      </Link>
+
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-ink">Integrationen & Erweiterungen</h1>
         <p className="text-sm text-dim mt-1">

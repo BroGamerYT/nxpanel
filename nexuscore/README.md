@@ -1,0 +1,128 @@
+# NexusCore
+
+Der dezentrale Host-Daemon des Gameserver-Panels **NexusPanel**. Er läuft auf dem
+Rechner, auf dem die Gameserver laufen sollen, und steuert diese als Prozesse
+(Windows nativ) oder als Container (Docker/Podman).
+
+Der Panel bringt die Kontrollebene, der Core bringt die Ausführungsebene: Der Core
+kennt keine Nutzer, keine Spieleinstanzen und keine Rechte – er kennt nur
+Instanzen, Prozesse und Ports.
+
+---
+
+## Schnellstart (Windows)
+
+```powershell
+# 1. Abhängigkeiten + Build
+npm install
+npm run build
+
+# 2. Daemon starten (Beenden mit Strg+C)
+.\start-nexuscore.ps1
+```
+
+Danach ist der Core unter <http://127.0.0.1:8443> erreichbar:
+
+```powershell
+curl.exe http://127.0.0.1:8443/core/v1/info
+```
+
+### Vollständiger Selbsttest
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+```
+
+Der Selbsttest startet einen eigenen Daemon auf Port 18443, prüft alle Endpunkte
+und meldet je Schritt PASS oder FAIL. Ein bereits laufender Daemon lässt sich
+mit `-BaseUrl` und `-Token` prüfen.
+
+### Entwicklung
+
+```powershell
+npm run dev        # Watch-Modus (tsx)
+npm test           # Vitest
+npm run typecheck  # tsc --noEmit
+```
+
+---
+
+## Voraussetzungen
+
+* Node.js 22 oder neuer (`node --version`)
+* Für den Windows-Treiber: Windows. Für den Docker-Treiber: ein erreichbarer
+  Docker-Daemon. Für Tests: nichts – die Tests laufen ohne Docker und ohne Netz.
+
+---
+
+## Konfiguration
+
+Alles kommt aus der Umgebung. Eine `.env` im Projektordner wird automatisch
+gelesen; Vorlage ist `.env.example` (**nur leere Werte**).
+
+| Variable | Standard | Bedeutung |
+| --- | --- | --- |
+| `NEXUSCORE_MODE` | `test` | `test` \| `production` |
+| `NEXUSCORE_HOST` | `127.0.0.1` | Bindeadresse |
+| `NEXUSCORE_PORT` | `8443` | HTTP-Port |
+| `NEXUSCORE_RUNTIME` | plattformabhängig | `windows-native` \| `docker` \| `mock` |
+| `NEXUSCORE_DATA_DIR` | `<Projekt>/data` | Registry und Laufzeitdaten |
+| `NEXUSCORE_TOKEN` | leer | Bearer-Token für geschützte Routen |
+| `NEXUSCORE_PAIRING_PIN` | leer | Kopplungs-PIN (leer = zufällig erzeugen) |
+| `NEXUSCORE_CORS_ORIGINS` | leer | erlaubte CORS-Herkünfte |
+| `NEXUSCORE_LOG_LEVEL` | `info` | Log-Level |
+
+Im Modus `production` sind Token (mindestens 24 Zeichen) und PIN Pflicht – ohne
+sie startet der Core nicht, statt halb offen zu laufen.
+
+> **Geheimnisse gehören in die `.env`, nicht ins Repository.** `.env` und `data/`
+> sind von Git ausgenommen. Es gibt keine Default-Passwörter im Code: ohne
+> gesetztes Token sind alle geschützten Routen gesperrt.
+
+---
+
+## Protokoll
+
+Die vollständige Beschreibung steht in [`CORE_PROTOCOL.md`](./CORE_PROTOCOL.md).
+
+| Methode | Endpunkt | Beschreibung |
+| --- | --- | --- |
+| GET | `/core/v1/info` | Host-Status und Systemauslastung (öffentlich) |
+| POST | `/core/v1/pair` | Kopplung per PIN (öffentlich) |
+| GET | `/core/v1/servers` | Liste der Instanzen |
+| POST | `/core/v1/servers` | Instanz registrieren |
+| POST | `/core/v1/servers/:id/start` | Starten |
+| POST | `/core/v1/servers/:id/stop` | Beenden |
+| POST | `/core/v1/servers/:id/kill` | Abbrechen |
+| GET | `/core/v1/servers/:id/stats` | CPU, RAM, Laufzeit |
+| GET | `/core/v1/servers/:id/logs` | Konsolenausgaben |
+| WS | `/core/v1/stream` | Live-Ereignisse (`?serverId=` filtert) |
+
+---
+
+## Aufbau
+
+```
+src/
+├── index.ts             Bootstrap, Treiberwahl, geordneter Shutdown
+├── config/index.ts      Konfiguration aus der Umgebung (zod)
+├── logger.ts            pino-Logger mit Redaction
+├── protocol/
+│   ├── security.ts      Token, PIN, Rate-Limit, zeit-sicherer Vergleich
+│   └── events.ts        Event-Bus mit Ringpuffer je Server
+├── store/registry.ts    Persistenz der Instanzen (JSON, atomar geschrieben)
+├── system/monitor.ts    CPU-, RAM- und Plattenwerte
+├── drivers/             windows-native · docker · mock
+└── http/                Fastify-Server und Routen
+```
+
+Daten liegen in `data/` (`servers.json` = Registry). Der Ordner ist von Git
+ausgenommen und kann jederzeit gelöscht werden – der Core legt ihn neu an.
+
+---
+
+## Rust-Teil
+
+`rust/` enthält den älteren Rust-Prototyp. Er ist **Planung** und nicht baubar
+(siehe [`rust/README.md`](./rust/README.md)). Die Zielarchitektur des
+Rust-Kerns steht in [`../docs/ARCHITEKTUR.md`](../docs/ARCHITEKTUR.md).

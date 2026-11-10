@@ -16,9 +16,12 @@ const ServerPage = page(() => import('./pages/ServerPage'), 'ServerPage');
 const CreateServer = page(() => import('./pages/CreateServer'), 'CreateServer');
 const About = page(() => import('./pages/About'), 'About');
 const Network = page(() => import('./pages/Network'), 'Network');
+const Hosts = page(() => import('./pages/Hosts'), 'Hosts');
 const Community = page(() => import('./pages/Community'), 'Community');
 const AdminUsers = page(() => import('./pages/AdminUsers'), 'AdminUsers');
+const AdminHub = page(() => import('./pages/AdminHub'), 'AdminHub');
 const AdminAudit = page(() => import('./pages/AdminAudit'), 'AdminAudit');
+const AdminHostLogs = page(() => import('./pages/AdminHostLogs'), 'AdminHostLogs');
 const GameTestReport = page(() => import('./pages/GameTestReport'), 'GameTestReport');
 const Integrations = page(() => import('./pages/Integrations'), 'Integrations');
 const AdminFiles = page(() => import('./pages/AdminFiles'), 'AdminFiles');
@@ -48,9 +51,12 @@ function App() {
         <Route path="community" element={<Community />} />
         <Route path="account" element={<Account />} />
         <Route path="server/:id" element={<ServerPage />} />
+        {me.user.role === 'admin' && <Route path="admin" element={<AdminHub />} />}
         {me.permissions['admin.nodes'] && <Route path="netzwerk" element={<Network />} />}
+        {me.permissions['admin.nodes'] && <Route path="admin/hosts" element={<Hosts />} />}
         {me.permissions['admin.users'] && <Route path="admin/users" element={<AdminUsers />} />}
         {me.permissions['admin.audit'] && <Route path="admin/audit" element={<AdminAudit />} />}
+        {me.user.role === 'admin' && <Route path="admin/host-logs" element={<AdminHostLogs />} />}
         {me.user.role === 'admin' && <Route path="admin/testbericht" element={<GameTestReport />} />}
         {me.user.role === 'admin' && <Route path="admin/integrationen" element={<Integrations />} />}
         {me.user.role === 'admin' && <Route path="admin/dateien" element={<AdminFiles />} />}

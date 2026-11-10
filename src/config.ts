@@ -63,6 +63,11 @@ const schema = z.object({
   ADMIN_FILE_ROOTS: z.string().default(''),
 
   SFTP_PORT: z.coerce.number().int().min(1).max(65535).default(2022),
+  /**
+   * Port, unter dem SFTP von aussen erreichbar ist (wird im Panel angezeigt).
+   * Leer = SFTP_PORT. Beispiel: Weiterleitung 28999 -> VM:2022.
+   */
+  SFTP_PUBLIC_PORT: z.preprocess((v) => (v === '' || v == null ? undefined : v), z.coerce.number().int().min(1).max(65535).optional()),
   SFTP_ENABLED: envBool(true),
   PORT_RANGE: z.string().regex(/^\d+-\d+$/, 'PORT_RANGE muss z. B. 25500-25600 sein').default('25500-25600'),
   TZ: z.string().default('Europe/Berlin'),

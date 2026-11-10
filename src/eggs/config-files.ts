@@ -20,7 +20,8 @@ export type ParserKind = 'properties' | 'yaml' | 'yml' | 'ini' | 'json' | 'xml' 
 
 export interface ConfigFileSpec {
   parser: ParserKind;
-  find: Record<string, unknown>;
+  find?: Record<string, unknown>;
+  set?: Record<string, unknown>;
   protected?: string[];
 }
 
@@ -36,8 +37,9 @@ export function patchConfigFile(
   spec: ConfigFileSpec,
   ctx: SubstitutionContext,
 ): PatchResult {
+  const rules = spec.find ?? spec.set ?? {};
   const values: Record<string, string> = {};
-  for (const [key, template] of Object.entries(spec.find)) {
+  for (const [key, template] of Object.entries(rules)) {
     values[key] = substitute(typeof template === 'string' ? template : String(template ?? ''), ctx);
   }
 
@@ -110,43 +112,94 @@ function patchProperties(original: string, values: Record<string, string>): Patc
   return { content: out.join('\n'), changed, added, skipped: [] };
 }
 
-/** INI mit Abschnitten: [Abschnitt] dann schluessel=wert. Schluessel als "Abschnitt.schluessel". */
+function parseIniKey(rawKey: string): { section: string | null; property: string } {
+  const bracketMatch = rawKey.match(/^\[([^\]]+)\]\.(.+)$/);
+  if (bracketMatch) {
+    return { section: bracketMatch[1]!, property: bracketMatch[2]! };
+  }
+  const dotIdx = rawKey.indexOf('.');
+  if (dotIdx > 0) {
+    return { section: rawKey.slice(0, dotIdx), property: rawKey.slice(dotIdx + 1) };
+  }
+  return { section: null, property: rawKey };
+}
+
+/** INI mit Abschnitten: [Abschnitt] dann schluessel=wert. Schluessel als "Abschnitt.schluessel" oder "[Abschnitt].schluessel". */
 function patchIni(original: string, values: Record<string, string>): PatchResult {
-  const lines = original.split(/\r?\n/);
+  const eol = original.includes('\r\n') ? '\r\n' : '\n';
+  const lines = original ? original.split(/\r?\n/) : [];
   const changed: string[] = [];
   const seen = new Set<string>();
-  let section = '';
+
+  const targets = Object.entries(values).map(([rawKey, val]) => ({
+    rawKey,
+    ...parseIniKey(rawKey),
+    value: val,
+  }));
+
+  let currentSection = '';
 
   const out = lines.map((line) => {
     const sec = line.match(/^\s*\[([^\]]+)\]\s*$/);
     if (sec) {
-      section = sec[1]!;
+      currentSection = sec[1]!;
       return line;
     }
     const m = line.match(/^(\s*)([A-Za-z0-9._-]+)(\s*=\s*)(.*)$/);
     if (!m) return line;
     const bare = m[2]!;
-    const full = section ? `${section}.${bare}` : bare;
-    const key = full in values ? full : bare in values ? bare : null;
-    if (!key) return line;
-    seen.add(key);
-    const next = values[key]!;
-    if (m[4] === next) return line;
-    changed.push(key);
-    return `${m[1]}${bare}${m[3]}${next}`;
+
+    const match = targets.find(
+      (t) =>
+        t.property.toLowerCase() === bare.toLowerCase() &&
+        (t.section !== null
+          ? t.section.toLowerCase() === currentSection.toLowerCase()
+          : true),
+    );
+
+    if (!match) return line;
+    seen.add(match.rawKey);
+    if (m[4] === match.value) return line;
+    changed.push(match.rawKey);
+    return `${m[1]}${bare}${m[3]}${match.value}`;
   });
 
   const added: string[] = [];
-  for (const [key, value] of Object.entries(values)) {
-    if (!seen.has(key)) {
-      // Neue Schluessel in einem Abschnitt anzulegen waere Raten - lieber melden.
-      if (key.includes('.')) { added.push(key); continue; }
-      out.push(`${key}=${value}`);
-      added.push(key);
+  for (const t of targets) {
+    if (seen.has(t.rawKey)) continue;
+
+    if (!t.section) {
+      out.push(`${t.property}=${t.value}`);
+      added.push(t.rawKey);
+      continue;
+    }
+
+    const secIdx = out.findIndex((l) => {
+      const s = l.match(/^\s*\[([^\]]+)\]\s*$/);
+      return s && s[1]!.toLowerCase() === t.section!.toLowerCase();
+    });
+
+    if (secIdx >= 0) {
+      let insertIdx = out.length;
+      for (let i = secIdx + 1; i < out.length; i++) {
+        if (/^\s*\[([^\]]+)\]\s*$/.test(out[i]!)) {
+          insertIdx = i;
+          break;
+        }
+      }
+      out.splice(insertIdx, 0, `${t.property}=${t.value}`);
+      added.push(t.rawKey);
+    } else {
+      if (out.length > 0 && out[out.length - 1] !== '') {
+        out.push('');
+      }
+      out.push(`[${t.section}]`);
+      out.push(`${t.property}=${t.value}`);
+      added.push(t.rawKey);
     }
   }
 
-  return { content: out.join('\n'), changed, added, skipped: [] };
+  return { content: out.join(eol), changed, added, skipped: [] };
 }
 
 /**
