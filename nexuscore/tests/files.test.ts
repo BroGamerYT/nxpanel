@@ -487,7 +487,7 @@ describe('Funktionsliste des Cores', () => {
       expect(permissions, wanted).toContain(wanted);
     }
     // Ohne diese Rechte blendet die Oberflaeche Tabs und Schaltflaechen aus
-    for (const missing of ['file.archive', 'file.sftp', 'subuser.read', 'startup.image']) {
+    for (const missing of ['file.sftp', 'subuser.read', 'startup.image']) {
       expect(permissions, missing).not.toContain(missing);
     }
   });

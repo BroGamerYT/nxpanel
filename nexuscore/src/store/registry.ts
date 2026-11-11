@@ -223,8 +223,39 @@ export class ServerRegistry {
     this.db.prepare('DELETE FROM instances WHERE id = ?').run(id);
     this.db.prepare('DELETE FROM schedules WHERE server_id = ?').run(id);
     this.db.prepare('DELETE FROM backups WHERE server_id = ?').run(id);
+    this.db.prepare('DELETE FROM file_revisions WHERE server_id = ?').run(id);
     this.servers.delete(id);
     return true;
+  }
+
+  // ------------------------------------------------------------------ Dateiversionen
+
+  /** Speichert einen Stand einer Datei; behaelt die neuesten `keep` je Datei. */
+  saveRevision(r: FileRevisionRow, keep = 25): void {
+    this.db
+      .prepare(
+        'INSERT INTO file_revisions (id, server_id, path, content, author_name, change_summary, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(r.id, r.server_id, r.path, r.content, r.author_name, r.change_summary, r.bytes, r.created_at);
+    this.db
+      .prepare(
+        `DELETE FROM file_revisions WHERE server_id = ? AND path = ? AND id NOT IN (
+           SELECT id FROM file_revisions WHERE server_id = ? AND path = ? ORDER BY created_at DESC, rowid DESC LIMIT ?)`,
+      )
+      .run(r.server_id, r.path, r.server_id, r.path, keep);
+  }
+
+  /** Neueste zuerst, ohne den Inhalt. */
+  listRevisions(serverId: string, filePath: string): Array<Omit<FileRevisionRow, 'content'>> {
+    return this.db
+      .prepare(
+        'SELECT id, server_id, path, author_name, change_summary, bytes, created_at FROM file_revisions WHERE server_id = ? AND path = ? ORDER BY created_at DESC, rowid DESC',
+      )
+      .all(serverId, filePath) as unknown as Array<Omit<FileRevisionRow, 'content'>>;
+  }
+
+  getRevision(serverId: string, id: string): FileRevisionRow | undefined {
+    return this.db.prepare('SELECT * FROM file_revisions WHERE id = ? AND server_id = ?').get(id, serverId) as FileRevisionRow | undefined;
   }
 
   // ------------------------------------------------------------------ Backups
@@ -486,6 +517,17 @@ type RawSchedule = Omit<ScheduleRow, 'active' | 'interval_minutes'> & { active: 
 
 function toSchedule(row: RawSchedule): ScheduleRow {
   return { ...row, active: Number(row.active) === 1, interval_minutes: row.interval_minutes === null ? null : Number(row.interval_minutes) };
+}
+
+export interface FileRevisionRow {
+  id: string;
+  server_id: string;
+  path: string;
+  content: string;
+  author_name: string;
+  change_summary: string | null;
+  bytes: number;
+  created_at: string;
 }
 
 export interface BackupVerification {

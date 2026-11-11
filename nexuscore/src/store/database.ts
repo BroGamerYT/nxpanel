@@ -112,6 +112,23 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX backups_server ON backups (server_id, created_at);
     `,
   },
+  {
+    id: 4,
+    name: 'file_revisions',
+    sql: `
+      CREATE TABLE file_revisions (
+        id             TEXT PRIMARY KEY,
+        server_id      TEXT NOT NULL,
+        path           TEXT NOT NULL,
+        content        TEXT NOT NULL,
+        author_name    TEXT NOT NULL,
+        change_summary TEXT,
+        bytes          INTEGER NOT NULL,
+        created_at     TEXT NOT NULL
+      );
+      CREATE INDEX file_revisions_file ON file_revisions (server_id, path, created_at);
+    `,
+  },
 ];
 
 /** Die Datenbankdatei ist beschaedigt - der Core darf damit nicht weiterlaufen. */

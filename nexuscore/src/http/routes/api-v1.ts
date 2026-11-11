@@ -83,6 +83,7 @@ export const SERVER_PERMISSIONS = [
   'player.kick',
   'player.ban',
   'player.whitelist',
+  'file.archive',
 ];
 
 export function registerApiV1Routes(

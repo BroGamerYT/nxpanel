@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import crypto from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { rename, rm } from 'node:fs/promises';
+import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import {
@@ -16,6 +16,8 @@ import {
   writeFileContent,
 } from '../../files/files.js';
 import { resolveInstanceDir } from '../../files/instance-dir.js';
+import { createZip, extractArchive } from '../../files/archive.js';
+import { cleanRelative, resolveEntry } from '../../files/files.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig } from '../../types.js';
 
@@ -38,6 +40,14 @@ const requiredPathQuery = z.object({ path: required('Pfad darf nicht leer sein')
 const contentBody = z.object({
   path: required('Pfad darf nicht leer sein'),
   content: z.string({ required_error: 'Inhalt fehlt', invalid_type_error: 'Inhalt muss Text sein' }),
+});
+const compressBody = z.object({
+  paths: z.array(required('Pfad darf nicht leer sein')).min(1, 'Mindestens eine Datei erforderlich').max(1000),
+  destination: required('Zielarchivname erforderlich'),
+});
+const decompressBody = z.object({
+  path: required('Archivpfad erforderlich'),
+  destination: z.string().optional().default(''),
 });
 const pathBody = z.object({ path: required('Pfad darf nicht leer sein') });
 const renameBody = z.object({
@@ -149,6 +159,7 @@ export function registerFileRoutes(server: FastifyInstance, deps: FileRouteDeps)
       if (!body.success) return fail(reply, 400, body.error.issues[0]?.message ?? 'Ungültige Anfrage', 'invalid_request');
       try {
         await writeFileContent(t.root, body.data.path, body.data.content);
+        saveRevision(t.instance.id, body.data.path, body.data.content, 'Im Editor gespeichert');
         registry.audit('file.edit', t.instance.id, 'standalone', { path: body.data.path, bytes: Buffer.byteLength(body.data.content) });
         return { ok: true, path: body.data.path };
       } catch (err) {
@@ -253,11 +264,97 @@ export function registerFileRoutes(server: FastifyInstance, deps: FileRouteDeps)
     return { ok: true, path: uploaded };
   });
 
-  // Versionsverlauf: den fuehrt der Core noch nicht. Eine leere Liste ist ehrlich
-  // und laesst den Dialog der Oberflaeche funktionieren.
+  // ------------------------------------------------------------ Packen und Entpacken
+
+  server.post<{ Params: { id: string }; Body: unknown }>(`${base}/compress`, async (req, reply) => {
+    const t = await target(req.params.id, reply);
+    if (!t) return reply;
+    const body = compressBody.safeParse(req.body);
+    if (!body.success) return fail(reply, 400, body.error.issues[0]?.message ?? 'Ungültige Anfrage', 'invalid_request');
+    try {
+      const result = await createZip(t.root, body.data.paths, body.data.destination);
+      registry.audit('file.compress', t.instance.id, 'standalone', { destination: result.path, files: body.data.paths.length });
+      return { ok: true, ...result };
+    } catch (err) {
+      return sendFileError(reply, err);
+    }
+  });
+
+  server.post<{ Params: { id: string }; Body: unknown }>(`${base}/decompress`, async (req, reply) => {
+    const t = await target(req.params.id, reply);
+    if (!t) return reply;
+    const body = decompressBody.safeParse(req.body);
+    if (!body.success) return fail(reply, 400, body.error.issues[0]?.message ?? 'Ungültige Anfrage', 'invalid_request');
+    try {
+      const archive = await resolveEntry(t.root, body.data.path);
+      const dest = await resolveEntry(t.root, body.data.destination);
+      const info = await stat(archive).catch(() => null);
+      if (!info?.isFile()) return fail(reply, 404, `Archiv „${body.data.path}“ existiert nicht`, 'not_found');
+      await mkdir(dest, { recursive: true });
+      const result = await extractArchive(archive, dest);
+      registry.audit('file.decompress', t.instance.id, 'standalone', { path: body.data.path, files: result.filesCount, skipped: result.skipped });
+      return { ok: true, ...result };
+    } catch (err) {
+      return sendFileError(reply, err);
+    }
+  });
+
+  // ------------------------------------------------------------ Versionsverlauf
+
+  /** Haelt einen Stand fest. Schlaegt das fehl, darf das Speichern selbst nicht scheitern. */
+  function saveRevision(serverId: string, filePath: string, content: string, summary: string): void {
+    try {
+      registry.saveRevision({
+        id: crypto.randomUUID(),
+        server_id: serverId,
+        path: cleanRelative(filePath),
+        content,
+        author_name: 'admin',
+        change_summary: summary,
+        bytes: Buffer.byteLength(content, 'utf8'),
+        created_at: new Date().toISOString(),
+      });
+    } catch {
+      /* Versionsverlauf ist Zugabe */
+    }
+  }
+
   server.get<{ Params: { id: string }; Querystring: { path?: string } }>(`${base}/revisions`, async (req, reply) => {
     const t = await target(req.params.id, reply);
     if (!t) return reply;
-    return { ok: true, path: req.query?.path ?? '', revisions: [] };
+    const query = requiredPathQuery.safeParse(req.query);
+    if (!query.success) return fail(reply, 400, query.error.issues[0]?.message ?? 'Ungültige Anfrage', 'invalid_request');
+    try {
+      const rel = cleanRelative(query.data.path);
+      return { ok: true, path: query.data.path, revisions: registry.listRevisions(t.instance.id, rel) };
+    } catch (err) {
+      return sendFileError(reply, err);
+    }
+  });
+
+  server.get<{ Params: { id: string; revisionId: string } }>(`${base}/revisions/:revisionId`, async (req, reply) => {
+    const t = await target(req.params.id, reply);
+    if (!t) return reply;
+    const revision = registry.getRevision(t.instance.id, req.params.revisionId);
+    if (!revision) return fail(reply, 404, 'Revision nicht gefunden', 'revision_not_found');
+    return { ok: true, revision };
+  });
+
+  server.post<{ Params: { id: string; revisionId: string } }>(`${base}/revisions/:revisionId/rollback`, async (req, reply) => {
+    const t = await target(req.params.id, reply);
+    if (!t) return reply;
+    const revision = registry.getRevision(t.instance.id, req.params.revisionId);
+    if (!revision) return fail(reply, 404, 'Revision nicht gefunden', 'revision_not_found');
+    try {
+      // Zuerst den jetzigen Stand sichern, damit der Rollback selbst rueckgaengig zu machen ist
+      const current = await readFileContent(t.root, revision.path).catch(() => null);
+      if (current) saveRevision(t.instance.id, revision.path, current.content, `Stand vor Rollback auf Version vom ${new Date(revision.created_at).toLocaleString('de-DE')}`);
+      await writeFileContent(t.root, revision.path, revision.content);
+      saveRevision(t.instance.id, revision.path, revision.content, `Wiederhergestellt von Version ${revision.id.slice(0, 8)}`);
+      registry.audit('file.rollback', t.instance.id, 'standalone', { revisionId: revision.id, path: revision.path });
+      return { ok: true, path: revision.path, restoredBytes: revision.bytes };
+    } catch (err) {
+      return sendFileError(reply, err);
+    }
   });
 }
