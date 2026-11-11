@@ -370,3 +370,42 @@ describe('Installation über den ganzen Core', () => {
     expect(registry.get('leer-1')!.install).toMatchObject({ state: 'failed', error: expect.stringMatching(/PalServer\.exe/) });
   });
 });
+
+describe('Unreal-Optionen ohne Wert', () => {
+  it('leere Werte werden nicht geschrieben, vorhandene bleiben', () => {
+    const out = patchUnrealOptions('[S]\nOptionSettings=(A=1,B=2)\n', 'S', 'OptionSettings', { A: '{{FEHLT}}', C: '{{FEHLT}}', D: '4' }, {});
+    expect(out).toBe('[S]\nOptionSettings=(A=1,B=2,D=4)\n');
+  });
+});
+
+describe('Fortschritt aus dem Manifest', () => {
+  it('zeigt den Fortschritt, auch wenn SteamCMD erst am Ende schreibt', async () => {
+    const dir = await fresh();
+    const runner: SteamRunner = async (_exe, args, hooks) => {
+      const d = args[args.indexOf('+force_install_dir') + 1]!;
+      await fs.mkdir(path.join(d, 'steamapps'), { recursive: true });
+      const acf = path.join(d, 'steamapps', 'appmanifest_7.acf');
+      for (const done of [100, 500, 900]) {
+        await fs.writeFile(acf, `"AppState"\n{\n\t"BytesToDownload"\t"1000"\n\t"BytesDownloaded"\t"${done}"\n}\n`);
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      await fs.writeFile(acf, '"AppState"\n{\n\t"buildid"\t"5"\n}\n');
+      hooks.onLine("Success! App '7' fully installed.");
+      return 0;
+    };
+    const seen: Array<[number, string]> = [];
+    await installSteamApp({ exe: 'x', installDir: dir, appId: 7, runner, pollMs: 20, onProgress: (f, m) => seen.push([f, m]) });
+    const loading = seen.filter(([, m]) => /Lade Spieldateien/.test(m));
+    expect(loading.length).toBeGreaterThanOrEqual(2);
+    expect(loading.some(([, m]) => m.includes('50 %'))).toBe(true);
+    const fractions = seen.map(([f]) => f);
+    expect([...fractions].sort((a, b) => a - b)).toEqual(fractions);
+  });
+});
+
+describe('Alte leere Optionen', () => {
+  it('Reste wie "Name=," aus früheren Ständen werden entfernt', () => {
+    const out = patchUnrealOptions('[S]\nOptionSettings=(A=1,Leer=,B=2)\n', 'S', 'OptionSettings', { C: '3' }, {});
+    expect(out).toBe('[S]\nOptionSettings=(A=1,B=2,C=3)\n');
+  });
+});

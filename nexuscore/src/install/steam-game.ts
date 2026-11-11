@@ -136,12 +136,15 @@ export function patchUnrealOptions(existing: string | null, section: string, key
   let options: Array<[string, string]> = [];
   if (keyAt >= 0) {
     const m = /=\s*\((.*)\)\s*$/.exec(lines[keyAt]!);
-    if (m) options = splitOptions(m[1]!);
+    // Leere Werte ("Name=,") sind ungueltig - Reste aus frueheren Staenden entfernen
+    if (m) options = splitOptions(m[1]!).filter(([, v]) => v !== '');
   }
   for (const [name, raw] of Object.entries(set)) {
     const value = resolveValue(raw, values);
     // Text steht in Anfuehrungszeichen, Zahlen und Wahrheitswerte nicht - die Vorlage entscheidet ueber \" selbst
     const text = typeof value === 'boolean' ? (value ? 'True' : 'False') : String(value);
+    // Ohne Wert (Variable fehlt im Egg) bleibt die Option, wie sie ist - "Name=," ist keine gueltige Einstellung
+    if (text === '') continue;
     const at = options.findIndex(([k]) => k === name);
     if (at >= 0) options[at] = [name, text];
     else options.push([name, text]);

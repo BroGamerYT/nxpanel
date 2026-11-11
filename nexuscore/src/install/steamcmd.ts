@@ -144,6 +144,8 @@ export interface SteamAppOptions extends SteamCmdHooks {
   range?: [number, number];
   /** Wie oft SteamCMD bei den bekannten Zufallsfehlern erneut versucht wird. */
   retries?: number;
+  /** Abstand, in dem der Fortschritt aus dem Manifest gelesen wird (Tests: klein). */
+  pollMs?: number;
 }
 
 /** Zeilen wie "Update state (0x61) downloading, progress: 45.56 (123 / 456)". */
@@ -180,8 +182,33 @@ export async function installSteamApp(options: SteamAppOptions): Promise<SteamAp
     '+quit',
   ];
 
+  // SteamCMD schreibt seine Fortschrittszeilen bei umgeleiteter Ausgabe oft erst am Ende.
+  // Das Manifest neben dem Spiel (BytesToDownload/BytesDownloaded) ist waehrend des Ladens aktuell.
+  const manifest = path.join(options.installDir, 'steamapps', `appmanifest_${options.appId}.acf`);
+  let best = 0;
+  const emit = (fraction: number, message: string): void => {
+    if (fraction < best) return; // nie rueckwaerts
+    best = fraction;
+    report(from + (to - from) * fraction, message);
+  };
+  const poll = setInterval(() => {
+    void fs
+      .readFile(manifest, 'utf8')
+      .then((text) => {
+        const total = Number(/"BytesToDownload"\s+"(\d+)"/i.exec(text)?.[1] ?? 0);
+        const done = Number(/"BytesDownloaded"\s+"(\d+)"/i.exec(text)?.[1] ?? 0);
+        if (total > 0) {
+          const pct = Math.min(100, (done / total) * 100);
+          emit((pct / 100) * 0.9, `Lade Spieldateien: ${Math.floor(pct)} % (${Math.round(done / 1048576)} von ${Math.round(total / 1048576)} MB)`);
+        }
+      })
+      .catch(() => {});
+  }, options.pollMs ?? 2000);
+  poll.unref();
+
   const attempts = 1 + Math.max(0, options.retries ?? 2);
   let lastError = '';
+  try {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let success = false;
     let failure = '';
@@ -195,7 +222,7 @@ export async function installSteamApp(options: SteamAppOptions): Promise<SteamAp
           // Laden und Pruefen laufen nacheinander; beides zusammen fuellt den Bereich
           const verifying = /verif/i.test(state);
           const fraction = verifying ? 0.9 + pct / 1000 : (pct / 100) * 0.9;
-          report(from + (to - from) * fraction, `${verifying ? 'Prüfe' : 'Lade'} Spieldateien: ${Math.floor(pct)} %`);
+          emit(fraction, `${verifying ? 'Prüfe' : 'Lade'} Spieldateien: ${Math.floor(pct)} %`);
         }
         if (SUCCESS.test(line)) success = true;
         const f = FAILURE.exec(line);
@@ -212,6 +239,9 @@ export async function installSteamApp(options: SteamAppOptions): Promise<SteamAp
     if (PERMANENT.test(lastError) || options.signal?.aborted) break;
     logger.warn({ attempt, lastError }, 'SteamCMD-Versuch fehlgeschlagen');
     if (attempt < attempts) report(from, `SteamCMD-Versuch ${attempt} fehlgeschlagen, wiederhole`);
+  }
+  } finally {
+    clearInterval(poll);
   }
   throw new Error(`Steam-Installation fehlgeschlagen: ${lastError}`);
 }
