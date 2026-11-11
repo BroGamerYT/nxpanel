@@ -323,15 +323,15 @@
       "-gproj",
       "addons/data/ArmaReforger.gproj",
       "-config",
-      "config.json",
+      "{{SERVER_DIR}}/config.json",
       "-profile",
-      "profile",
+      "{{SERVER_DIR}}/profile",
       "-backendlog",
       "-nothrow",
       "-maxFPS",
       "{{MAX_FPS}}",
       "-addonTempDir",
-      "tmp"
+      "{{SERVER_DIR}}/tmp"
     ],
     "stop": {
       "timeout_seconds": 60

@@ -132,7 +132,7 @@ export async function installDownloadGame(input: DownloadInstallInput, hooks: Do
   });
 
   progress(0.97, 'Schreibe Einstellungen');
-  const values = steamValues({ ports: input.ports, maxMemoryMb: input.ramMb, name: input.serverName }, input.variables);
+  const values = steamValues({ ports: input.ports, maxMemoryMb: input.ramMb, name: input.serverName, workingDir: input.serverDir }, input.variables);
   await writeSteamFiles(input.serverDir, launch.files ?? [], values);
   progress(1, 'Fertig');
   return { executable, args: resolveArgs(launch.args, values), version: source.version, sha256: downloaded.sha256 };

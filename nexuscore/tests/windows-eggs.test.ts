@@ -36,7 +36,7 @@ const upper = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
 
 /** Alle Platzhalter, die der Core beim Start fuer dieses Spiel kennt. */
 function known(egg: Egg): Set<string> {
-  const set = new Set(['SERVER_PORT', 'MAX_MEMORY_MB', 'SERVER_NAME']);
+  const set = new Set(['SERVER_PORT', 'MAX_MEMORY_MB', 'SERVER_NAME', 'SERVER_DIR']);
   for (const v of egg.variables ?? []) set.add(v.env_variable.toUpperCase());
   const ports = [egg.ports?.primary, ...(egg.ports?.secondary ?? [])].filter(Boolean);
   ports.forEach((p, i) => {
@@ -100,7 +100,7 @@ describe('windows-Blöcke der Spielvorlagen', () => {
         hostPort: 30000 + i,
         protocol: 'udp' as const,
       }));
-      const values = steamValues({ ports: ports.length ? ports : [{ name: 'game', hostPort: 30000, protocol: 'udp' }], maxMemoryMb: 4096, name: 'Test' }, variables);
+      const values = steamValues({ ports: ports.length ? ports : [{ name: 'game', hostPort: 30000, protocol: 'udp' }], maxMemoryMb: 4096, name: 'Test', workingDir: 'C:\\Spiele\\test' }, variables);
       const args = resolveArgs(w.args ?? [], values);
       if ((w.args ?? []).length > 0) expect(args.length).toBeGreaterThan(0);
       expect(args.every((a) => a.trim() !== '')).toBe(true);
@@ -117,7 +117,7 @@ describe('windows-Blöcke der Spielvorlagen', () => {
         hostPort: 30000 + i,
         protocol: 'udp' as const,
       }));
-      const values = steamValues({ ports: ports.length ? ports : [{ name: 'game', hostPort: 30000, protocol: 'udp' }], maxMemoryMb: 4096, name: 'Test Server' }, variables);
+      const values = steamValues({ ports: ports.length ? ports : [{ name: 'game', hostPort: 30000, protocol: 'udp' }], maxMemoryMb: 4096, name: 'Test Server', workingDir: 'C:\\Spiele\\test' }, variables);
       for (const f of w.files ?? []) {
         const text = renderConfig(f as never, null, values);
         expect(text.length, f.path).toBeGreaterThan(0);

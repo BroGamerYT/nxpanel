@@ -19,7 +19,7 @@ import { ensureSteamCmd, installSteamApp, type SteamCmdHooks, type SteamRunner }
 
 /** Werte fuer Platzhalter: Variablen des Eggs plus Ports (`PORT_<NAME>`, `SERVER_PORT` = Spielport). */
 export function steamValues(
-  c: Pick<ServerInstanceConfig, 'ports' | 'maxMemoryMb' | 'name'>,
+  c: Pick<ServerInstanceConfig, 'ports' | 'maxMemoryMb' | 'name'> & { workingDir?: string | undefined },
   variables: Record<string, string>,
 ): Record<string, string> {
   const values: Record<string, string> = {};
@@ -33,6 +33,8 @@ export function steamValues(
   const game = c.ports.find((p) => p.name === 'game') ?? c.ports[0];
   if (game) values['SERVER_PORT'] = String(game.hostPort);
   values['MAX_MEMORY_MB'] = String(c.maxMemoryMb ?? 0);
+  // Absoluter Ordner des Servers - manche Spiele finden Dateien nur ueber vollstaendige Pfade (Arma Reforger)
+  if (c.workingDir) values['SERVER_DIR'] = path.resolve(c.workingDir);
   values['SERVER_NAME'] ??= c.name;
   return values;
 }
@@ -304,7 +306,7 @@ export async function installSteamGame(input: SteamInstallInput, hooks: SteamIns
   });
 
   hooks.onProgress?.(0.97, 'Schreibe Einstellungen');
-  const values = steamValues({ ports: input.ports, maxMemoryMb: input.ramMb, name: input.serverName }, input.variables);
+  const values = steamValues({ ports: input.ports, maxMemoryMb: input.ramMb, name: input.serverName, workingDir: input.serverDir }, input.variables);
   await writeSteamFiles(input.serverDir, launch.files ?? [], values);
   hooks.onProgress?.(1, 'Fertig');
   return { executable, args: resolveArgs(launch.args, values), buildId };
