@@ -33,6 +33,7 @@ import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
+import { registerHostRoutes } from './hosts.js';
 import { registerAdminFileRoutes } from './admin-files.js';
 import { registerIntegrationRoutes } from './integrations.js';
 import { DiscordNotifier } from '../../notifications/discord.js';
@@ -62,7 +63,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -250,6 +251,7 @@ export function registerApiV1Routes(
   registerAdminRoutes(server, { registry, driver, tester });
   registerIntegrationRoutes(server, { registry, discord });
   registerAdminFileRoutes(server, { registry });
+  registerHostRoutes(server, { registry, driver, dataDir: registry.dir });
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
@@ -1001,24 +1003,7 @@ export function registerApiV1Routes(
     };
   });
 
-  // 5. Cluster & Hosts
-  server.get('/api/v1/admin/hosts', async () => {
-    return {
-      hosts: [
-        {
-          id: 'host-local',
-          name: os.hostname(),
-          ip: '127.0.0.1',
-          cores: os.cpus().length,
-          ramTotalMb: Math.round(os.totalmem() / (1024 * 1024)),
-          diskTotalGb: 500,
-          status: 'online',
-          isLocal: true,
-          serverCount: registry.list().length,
-        },
-      ],
-    };
-  });
+  // 5. Hosts: siehe routes/hosts.ts
 
   server.get('/api/v1/steam/accounts', async () => {
     return { accounts: [] };

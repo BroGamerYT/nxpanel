@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { Button, ErrorBox, Field, Input, Spinner } from '../components/ui';
 import { t } from '../lib/i18n';
 import type { HostRow } from '../lib/types';
+import { useFeatures } from '../lib/features';
 
 /**
  * Hosts (nur Admins): der lokale Rechner und die gekoppelten NexusCores.
@@ -17,6 +18,8 @@ import type { HostRow } from '../lib/types';
  */
 export function Hosts() {
   const qc = useQueryClient();
+  // Ein Core ist selbst ein Host; andere Cores koppelt das Panel an sich
+  const { has } = useFeatures();
   const hosts = useQuery({
     queryKey: ['hosts'],
     queryFn: () => api<{ hosts: HostRow[] }>('/admin/hosts'),
@@ -69,7 +72,7 @@ export function Hosts() {
         {remove.error && <ErrorBox>{(remove.error as Error).message}</ErrorBox>}
       </section>
 
-      <AddHostForm />
+      {has('hosts-add') && <AddHostForm />}
     </div>
   );
 }
