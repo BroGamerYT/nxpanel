@@ -4,8 +4,10 @@ import type { HostDriver } from '../drivers/interface.js';
 import { resolveInstanceDir } from '../files/instance-dir.js';
 import { serverListPing, type SlpResult } from '../games/minecraft.js';
 import { logger } from '../logger.js';
+import type { EventBus } from '../protocol/events.js';
 import type { ServerRegistry } from '../store/registry.js';
 import type { ServerInstanceConfig } from '../types.js';
+import { TpsReader } from './tps.js';
 
 /**
  * Spieler (Block B4) fuer Minecraft Java: wer ist online, kicken, bannen
@@ -37,6 +39,10 @@ export interface PlayersDeps {
   /** Austauschbar fuer Tests. */
   ping?: (host: string, port: number) => Promise<SlpResult>;
   now?: () => Date;
+  /** Mit Event-Bus liest der Core TPS aus der Konsole (siehe tps.ts). */
+  bus?: EventBus;
+  tpsTimeoutMs?: number;
+  tpsTtlMs?: number;
 }
 
 interface TimedBan {
@@ -63,8 +69,12 @@ export class PlayerManager {
   private readonly now: () => Date;
   private timer: NodeJS.Timeout | null = null;
   private ticking = false;
+  private readonly tps: TpsReader | null;
 
   constructor(private readonly deps: PlayersDeps) {
+    this.tps = deps.bus
+      ? new TpsReader({ driver: deps.driver, bus: deps.bus, ...(deps.tpsTimeoutMs ? { timeoutMs: deps.tpsTimeoutMs } : {}), ...(deps.tpsTtlMs !== undefined ? { ttlMs: deps.tpsTtlMs } : {}) })
+      : null;
     this.ping = deps.ping ?? ((host, port) => serverListPing(host, port));
     this.now = deps.now ?? (() => new Date());
   }
@@ -103,7 +113,7 @@ export class PlayerManager {
       running: true,
       kind: 'minecraft',
       ping: slp ?? { error: pingError ?? 'Keine Antwort' },
-      tps: null,
+      tps: this.tps ? this.tps.get(serverId, (c.install?.variables?.['TYPE'] ?? 'PAPER').toUpperCase() === 'VANILLA' ? 'vanilla' : 'paper') : null,
       // Die Server-Liste nennt hoechstens 12 Namen - mehr kennt der Core ohne RCON nicht.
       players: slp ? sample : null,
       people: sample.map((name: string) => ({ name })),

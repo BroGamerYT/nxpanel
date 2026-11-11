@@ -1178,7 +1178,7 @@ export function Account() {
                 <div className="text-xs font-semibold text-ink">1. QR-Code scannen oder Schlüssel eingeben:</div>
                 {totpSetupData.qrDataUrl && (
                   <div className="flex justify-center p-2 bg-white rounded-lg w-fit mx-auto">
-                    <img src={totpSetupData.qrDataUrl} alt="2FA QR Code" className="size-36" />
+                    <img src={totpSetupData.qrDataUrl} alt="2FA QR Code" className="size-48" />
                   </div>
                 )}
                 <div className="p-2.5 rounded bg-rack border border-seam font-mono text-center text-xs tracking-wider text-amber select-all">

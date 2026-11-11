@@ -9,6 +9,7 @@ import {
   revokeSessionToken,
 } from '../../protocol/security.js';
 import { AccountError, type LocalAccount } from '../../store/account.js';
+import { qrDataUrl } from '../../store/qr.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { RequestActor } from '../authz.js';
 
@@ -130,7 +131,11 @@ export function registerAccountRoutes(server: FastifyInstance, deps: AccountRout
   server.post('/api/v1/auth/totp/setup', async (req, reply) => {
     const me = own(req, reply);
     if (!me) return reply;
-    return guarded(reply, () => me.account.startTotpSetup(me.id));
+    return guarded(reply, async () => {
+      const setup = await me.account.startTotpSetup(me.id);
+      // Der QR-Code entsteht im Core (kein Dienst von aussen): das Geheimnis verlaesst den Rechner nicht
+      return { ...setup, qrDataUrl: qrDataUrl(setup.otpauth) };
+    });
   });
 
   server.post<{ Body: unknown }>('/api/v1/auth/totp/enable', async (req, reply) => {

@@ -221,7 +221,7 @@ export function registerApiV1Routes(
     },
     gameName: async (c) => (await loadEggs()).find((e) => e.id === c.game)?.name ?? c.game,
   });
-  const players = new PlayerManager({ registry, driver, ...(options.ping ? { ping: options.ping } : {}) });
+  const players = new PlayerManager({ registry, driver, bus, ...(options.ping ? { ping: options.ping } : {}) });
   const scheduler = new Scheduler(registry, {
     restart: async (id) => void (await power.restart(id)),
     command: (id, line) => power.command(id, line),

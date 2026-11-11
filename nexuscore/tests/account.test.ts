@@ -61,6 +61,9 @@ afterEach(async () => {
 /** TOTP einschalten wie in der Oberfläche; liefert Geheimnis und Wiederherstellungscodes. */
 async function enableTotp(c: Ctx): Promise<{ secret: string; codes: string[]; step: number }> {
   const setup = (await c.call('POST', '/api/v1/auth/totp/setup')).json();
+  // Der QR-Code kommt aus dem Core selbst, passend zur otpauth-Adresse
+  expect(setup.qrDataUrl).toMatch(/^data:image\/svg\+xml;base64,/);
+  expect(setup.otpauth).toContain(`secret=${setup.secret}`);
   const step = currentStep();
   const res = await c.call('POST', '/api/v1/auth/totp/enable', { code: codeAt(setup.secret, step) });
   expect(res.statusCode, res.body).toBe(200);
