@@ -262,9 +262,9 @@ describe('Block A4 - Anmeldung im Standalone-Modus', () => {
   });
 
   it('speichert nur einen Hash, nie das Passwort', async () => {
-    const raw = await fs.readFile(path.join(dataDir, 'account.json'), 'utf8');
+    const raw = await fs.readFile(path.join(dataDir, 'users.json'), 'utf8');
     expect(raw).not.toContain(PASSWORD);
-    expect(JSON.parse(raw).passwordHash).toMatch(/^scrypt\$/);
+    expect(JSON.parse(raw).users[0].passwordHash).toMatch(/^scrypt\$/);
 
     const hash = await hashPassword('ein-langes-passwort');
     expect(await verifyPassword('ein-langes-passwort', hash)).toBe(true);
@@ -276,11 +276,12 @@ describe('Block A4 - Anmeldung im Standalone-Modus', () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nx-acc-'));
     try {
       const account = await LocalAccount.open(dir);
-      expect(await account.verify('admin', PASSWORD, 'a')).toBe(true);
-      await expect(account.setPassword('kurz')).rejects.toThrow(/mindestens/);
-      await account.setPassword('ein-neues-passwort-42');
-      expect(await account.verify('admin', PASSWORD, 'a')).toBe(false);
-      expect(await account.verify('ADMIN', 'ein-neues-passwort-42', 'b')).toBe(true);
+      const admin = await account.verify('admin', PASSWORD, 'a');
+      expect(admin).not.toBeNull();
+      await expect(account.setPassword(admin!.id, 'kurz')).rejects.toThrow(/mindestens/);
+      await account.setPassword(admin!.id, 'ein-neues-passwort-42');
+      expect(await account.verify('admin', PASSWORD, 'a')).toBeNull();
+      expect(await account.verify('ADMIN', 'ein-neues-passwort-42', 'b')).not.toBeNull();
     } finally {
       await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
     }

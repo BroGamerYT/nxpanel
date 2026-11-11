@@ -10,6 +10,10 @@ const PIN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export interface AuthValidationResult {
   valid: boolean;
   reason?: string;
+  /** Das Master-Token (Panel, Skripte) - kein Benutzer, volle Rechte. */
+  master?: boolean;
+  /** Der Benutzer, dem die Sitzung gehoert. */
+  userId?: string;
 }
 
 let activePin = config.pairingPin.toUpperCase();
@@ -21,6 +25,8 @@ export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Eine angemeldete Sitzung der Standalone-Oberflaeche. */
 interface SessionInfo {
+  /** Wem die Sitzung gehoert. Ohne Benutzer gibt sie keinerlei Rechte. */
+  userId: string | null;
   expires: number;
   createdAt: number;
   lastUsedAt: number;
@@ -31,10 +37,11 @@ interface SessionInfo {
 /** Aktive Sitzungs-Tokens fuer den Standalone-Modus: Token -> Angaben. Nur im Speicher: ein Neustart beendet alle. */
 const activeSessions = new Map<string, SessionInfo>();
 
-export function createSessionToken(meta: { ip?: string | undefined; userAgent?: string | undefined } = {}): string {
+export function createSessionToken(meta: { userId?: string | undefined; ip?: string | undefined; userAgent?: string | undefined } = {}): string {
   const token = `nxp_${crypto.randomBytes(24).toString('hex')}`;
   const now = Date.now();
   activeSessions.set(token, {
+    userId: meta.userId ?? null,
     expires: now + SESSION_TTL_MS,
     createdAt: now,
     lastUsedAt: now,
@@ -44,9 +51,26 @@ export function createSessionToken(meta: { ip?: string | undefined; userAgent?: 
   return token;
 }
 
-export function registerSessionToken(token: string): void {
+export function registerSessionToken(token: string, userId: string | null = null): void {
   const now = Date.now();
-  activeSessions.set(token, { expires: now + SESSION_TTL_MS, createdAt: now, lastUsedAt: now, ip: null, userAgent: null });
+  activeSessions.set(token, { userId, expires: now + SESSION_TTL_MS, createdAt: now, lastUsedAt: now, ip: null, userAgent: null });
+}
+
+/** Der Benutzer einer Sitzung (null: unbekannt oder Sitzung ungueltig). */
+export function sessionUserId(token: string): string | null {
+  return activeSessions.get(token)?.userId ?? null;
+}
+
+/** Beendet alle Sitzungen eines Benutzers (ausser `keepToken`) - Passwortwechsel, Sperre, Loeschung. @returns Anzahl */
+export function revokeUserSessions(userId: string, keepToken?: string): number {
+  let count = 0;
+  for (const [token, info] of [...activeSessions]) {
+    if (info.userId === userId && token !== keepToken) {
+      activeSessions.delete(token);
+      count++;
+    }
+  }
+  return count;
 }
 
 export function revokeSessionToken(token: string): void {
@@ -84,11 +108,12 @@ export interface SessionListEntry {
 }
 
 /** Alle gueltigen Sitzungen, die aktuelle zuerst markiert, sonst neueste zuerst. */
-export function listSessions(currentToken?: string): SessionListEntry[] {
+export function listSessions(currentToken?: string, userId?: string): SessionListEntry[] {
   const now = Date.now();
   const out: SessionListEntry[] = [];
   for (const [token, info] of activeSessions) {
     if (info.expires <= now) continue;
+    if (userId !== undefined && info.userId !== userId) continue;
     out.push({
       id: sessionId(token),
       user_agent: info.userAgent,
@@ -102,8 +127,9 @@ export function listSessions(currentToken?: string): SessionListEntry[] {
 }
 
 /** Beendet eine Sitzung nach ihrer Kennung. @returns false, wenn es sie nicht gibt */
-export function revokeSessionById(id: string): boolean {
-  for (const token of activeSessions.keys()) {
+export function revokeSessionById(id: string, userId?: string): boolean {
+  for (const [token, info] of activeSessions) {
+    if (userId !== undefined && info.userId !== userId) continue;
     if (sessionId(token) === id) {
       activeSessions.delete(token);
       return true;
@@ -113,9 +139,10 @@ export function revokeSessionById(id: string): boolean {
 }
 
 /** Beendet alle Sitzungen ausser der angegebenen. @returns Anzahl */
-export function revokeOtherSessions(keepToken?: string): number {
+export function revokeOtherSessions(keepToken?: string, userId?: string): number {
   let count = 0;
-  for (const token of [...activeSessions.keys()]) {
+  for (const [token, info] of [...activeSessions]) {
+    if (userId !== undefined && info.userId !== userId) continue;
     if (token !== keepToken) {
       activeSessions.delete(token);
       count++;
@@ -218,17 +245,18 @@ export function validateRequestToken(headerToken?: string): AuthValidationResult
 
   // 1. Pruefung gegen konfiguriertes Master-Token (NEXUSCORE_TOKEN)
   if (config.token && timingSafeEqualString(token, config.token)) {
-    return { valid: true };
+    return { valid: true, master: true };
   }
 
   // 2. Pruefung gegen aktive Sitzungs-Tokens (Standalone-Modus)
   if (isValidSessionToken(token)) {
-    return { valid: true };
+    const userId = sessionUserId(token);
+    return { valid: true, ...(userId ? { userId } : {}) };
   }
 
   // 3. Im Testmodus nur wenn NEXUSCORE_ALLOW_INSECURE_AUTH explizit aktiv
   if (!config.token && config.allowInsecureAuth) {
-    return { valid: true };
+    return { valid: true, master: true };
   }
 
   return { valid: false, reason: 'Ungültiger Authentifizierungs-Token.' };

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { HostDriver } from '../../drivers/interface.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import { recentLogLines } from '../../logger.js';
+import type { LocalAccount } from '../../store/account.js';
 import { TesterError, type GameTester } from '../../testing/game-tester.js';
 
 /**
@@ -42,8 +43,11 @@ const testBody = z
   })
   .optional();
 
-export function registerAdminRoutes(server: FastifyInstance, deps: { registry: ServerRegistry; driver: HostDriver; tester?: GameTester }): void {
-  const { registry, driver, tester } = deps;
+export function registerAdminRoutes(
+  server: FastifyInstance,
+  deps: { registry: ServerRegistry; driver: HostDriver; tester?: GameTester; account?: LocalAccount | null },
+): void {
+  const { registry, driver, tester, account } = deps;
 
   server.get('/api/v1/admin/overview', async () => {
     const list = registry.list();
@@ -57,7 +61,7 @@ export function registerAdminRoutes(server: FastifyInstance, deps: { registry: S
       build: null,
       uptimeSeconds: Math.floor(process.uptime()),
       stats: {
-        users: 1,
+        users: account?.count() ?? 1,
         serversTotal: list.length,
         serversRunning: running,
         containersTotal: 0,
@@ -150,8 +154,9 @@ export function registerAdminRoutes(server: FastifyInstance, deps: { registry: S
       id: r.id,
       created_at: r.ts,
       action: ACTION_ALIASES[r.action] ?? r.action,
-      actor_name: ACTOR_NAMES[r.actor] ?? r.actor,
-      user_id: null,
+      // Der angemeldete Benutzer, falls bekannt - sonst der Weg (Panel, Core)
+      actor_name: r.actorName ?? ACTOR_NAMES[r.actor] ?? r.actor,
+      user_id: r.userId,
       server_id: r.serverId,
       // Gelöschte Server haben keinen Namen mehr - der Name steht dann im Eintrag, falls er mitgeschrieben wurde
       server_name: r.serverId ? (names.get(r.serverId) ?? (typeof r.detail?.['name'] === 'string' ? (r.detail['name'] as string) : null)) : null,

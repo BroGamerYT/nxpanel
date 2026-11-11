@@ -6,6 +6,7 @@ import type { LoadedEgg } from '../../eggs/loader.js';
 import { resolveInstanceDir } from '../../files/instance-dir.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig } from '../../types.js';
+import { canSeeServer } from '../authz.js';
 
 /**
  * Kleinere Seiten der Oberflaeche: Konfigurationsdateien eines Servers, Server-Icon
@@ -221,12 +222,15 @@ export function registerExtraRoutes(server: FastifyInstance, deps: ExtrasDeps): 
     return { source: null, pack: null, current: null, job: null, updateAvailable: false };
   });
 
-  server.get('/api/v1/dashboard/activity', async () => {
+  server.get('/api/v1/dashboard/activity', async (req) => {
+    const actor = req.actor!;
     const names = new Map(registry.list().map((c) => [c.id, c.name]));
     const items = [];
     for (const row of registry.queryAudit({ limit: 400 })) {
       const info = describe(row.action, row.detail);
       if (!info || !row.serverId) continue;
+      // Nur Ereignisse von Servern, die der Benutzer sehen darf (gelöschte Server: nur Verwalter)
+      if (names.has(row.serverId) ? !canSeeServer(registry, row.serverId, actor) : !actor.master && actor.role === 'user') continue;
       const name = names.get(row.serverId) ?? (typeof row.detail?.['name'] === 'string' ? (row.detail['name'] as string) : row.serverId.slice(0, 8));
       items.push({
         id: row.id,

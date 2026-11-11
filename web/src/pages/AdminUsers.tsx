@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { UserServerAssignModal } from '../components/UserServerAssignModal';
+import { useFeatures } from '../lib/features';
 
 const PANEL_MODULES = [
   { id: 'server.create', label: 'Server erstellen', desc: 'Darf neue Spielserver über das Panel anlegen' },
@@ -26,6 +27,8 @@ const PANEL_MODULES = [
 export function AdminUsers() {
   const nav = useNavigate();
   const { me, impersonateUser } = useAuth();
+  // Der Core hat keine Steam-Anmeldung, keine Sichtprüfung als anderer Benutzer und misst keinen Plattenplatz je Benutzer
+  const { has } = useFeatures();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -406,7 +409,7 @@ export function AdminUsers() {
                   </td>
                   <td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {me?.user.id !== u.id && !u.suspended && (
+                      {has('impersonate') && me?.user.id !== u.id && !u.suspended && (
                         <Button
                           variant="quiet"
                           onClick={async () => {
@@ -482,7 +485,7 @@ export function AdminUsers() {
               {generatedPw.pw}
             </div>
             <div className="flex items-center justify-between gap-2 pt-2">
-              <Button
+              {has('impersonate') ? <Button
                 variant="quiet"
                 className="text-amber hover:text-black hover:bg-amber transition-colors border-amber/30 text-xs"
                 onClick={async () => {
@@ -496,7 +499,7 @@ export function AdminUsers() {
               >
                 <Eye className="size-3.5" />
                 Direkt als {generatedPw.user} einloggen
-              </Button>
+              </Button> : <span />}
               <Button variant="primary" onClick={() => setGeneratedPw(null)}>
                 Schließen
               </Button>
@@ -660,7 +663,7 @@ export function AdminUsers() {
                     onChange={(e) => setNewPassword(e.target.value)}
                   />
                 </div>
-                <div>
+                {has('steam') && <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-dim mb-1">
                     Steam-ID64 (optional)
                   </label>
@@ -669,11 +672,11 @@ export function AdminUsers() {
                     value={newSteamId}
                     onChange={(e) => setNewSteamId(e.target.value)}
                   />
-                </div>
+                </div>}
               </div>
-              <p className="text-[11px] text-dim -mt-2">
+              {has('steam') && <p className="text-[11px] text-dim -mt-2">
                 Hinterlege eine Steam-ID64, damit sich der Nutzer sofort ohne Passwort mit dem &quot;Mit Steam anmelden&quot;-Button einloggen kann.
-              </p>
+              </p>}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1044,7 +1047,7 @@ export function AdminUsers() {
                       onChange={(e) => setEditRamLimitMb(Number(e.target.value))}
                     />
                   </div>
-                  <div>
+                  {has('disklimit') && <div>
                     <span className="text-xs text-dim flex items-center gap-1 mb-1">
                       <HardDrive className="size-3" /> Max. Disk (MB)
                     </span>
@@ -1055,12 +1058,12 @@ export function AdminUsers() {
                       value={editDiskLimitMb}
                       onChange={(e) => setEditDiskLimitMb(Number(e.target.value))}
                     />
-                  </div>
+                  </div>}
                 </div>
               </div>
 
               {/* Steam-Verknüpfung */}
-              <div className="space-y-1.5 pt-3 border-t border-seam">
+              {has('steam') && <div className="space-y-1.5 pt-3 border-t border-seam">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-dim flex items-center justify-between">
                   <span>Steam-ID64 (1-Klick Login)</span>
                   {editUser.steamName && (
@@ -1075,7 +1078,7 @@ export function AdminUsers() {
                 <p className="text-[11px] text-dim">
                   Hinterlege die 17-stellige SteamID64. Damit kann sich der Nutzer passwortlos über Steam anmelden.
                 </p>
-              </div>
+              </div>}
 
               {/* Erlaubte Spiele (Egg Whitelist) */}
               <div className="space-y-2.5 pt-3 border-t border-seam">

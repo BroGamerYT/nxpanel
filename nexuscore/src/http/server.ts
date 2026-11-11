@@ -30,6 +30,9 @@ import { registerApiV1Routes } from './routes/api-v1.js';
 import type { SlpResult } from '../games/minecraft.js';
 import { registerWebRoutes } from './routes/web.js';
 import { LocalAccount } from '../store/account.js';
+import { MASTER_ACTOR, authorize, classify } from './authz.js';
+import { setIdentity } from '../store/identity.js';
+import { findInstance } from '../store/find.js';
 import { InstallManager, runtimesDirFor } from '../install/manager.js';
 import type { Fetcher } from './covers.js';
 
@@ -46,6 +49,17 @@ export async function createCoreServer(
     logger: false,
     bodyLimit: 1024 * 1024,
   });
+
+  // Die Benutzer gibt es nur im Standalone-Modus - im Knoten-Modus
+  // steuert ausschliesslich das Panel ueber /core/v1.
+  const account = config.role === 'standalone' ? await LocalAccount.open(registry.dir) : null;
+
+  // Alle Routen merken: ein Test prueft, dass jede ausdruecklich in der Rechtetabelle steht
+  const routeTable: Array<{ method: string; url: string }> = [];
+  server.addHook('onRoute', (route) => {
+    for (const method of Array.isArray(route.method) ? route.method : [route.method]) routeTable.push({ method, url: route.url });
+  });
+  server.decorate('routeTable', routeTable);
 
   server.addHook('onResponse', async (req, reply) => {
     logger.info(
@@ -189,6 +203,48 @@ export async function createCoreServer(
         message: auth.reason ?? 'Ungueltiger oder fehlender Token.',
       });
     }
+
+    // 5. Wer ist das? Das Master-Token (Panel, Skripte) ist kein Benutzer. Eine Sitzung gehoert einem
+    //    Benutzer - den gibt es noch und er ist nicht gesperrt, sonst ist die Sitzung wertlos.
+    if (auth.master) {
+      req.actor = MASTER_ACTOR;
+      setIdentity(null);
+      return;
+    }
+    const user = auth.userId && account ? account.get(auth.userId) : undefined;
+    if (!user || user.suspended) {
+      return reply.status(401).send({ error: 'Nicht autorisiert', message: 'Die Sitzung ist nicht mehr gueltig.' });
+    }
+    req.actor = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      canCreateServers: user.canCreateServers,
+      allowedEggs: user.allowedEggs,
+      globalPermissions: user.globalPermissions,
+      master: false,
+    };
+    setIdentity({ userId: user.id, username: user.username });
+  });
+
+  /**
+   * Berechtigung: wer darf diese Route? Laeuft nach dem Lesen des Inhalts, weil manche
+   * Rechte vom Inhalt abhaengen (welche Power-Aktion, welche Spieler-Aktion).
+   * Was nicht ausdruecklich in der Tabelle steht, darf nur ein Administrator.
+   */
+  server.addHook('preHandler', async (req, reply) => {
+    const actor = req.actor;
+    if (!actor) return; // oeffentliche Route
+    const pattern = req.routeOptions?.url;
+    if (!pattern) return; // unbekannte Route: es antwortet das 404
+    const { need } = classify(req.method, pattern);
+    const idParam = (req.params as { id?: unknown } | undefined)?.id;
+    const serverId =
+      pattern.includes('/servers/:id') && typeof idParam === 'string' ? findInstance(registry, idParam)?.id : undefined;
+    const verdict = authorize({ actor, need, serverId, body: req.body, registry });
+    if (!verdict.ok) {
+      return reply.status(verdict.status).send({ error: verdict.message, message: verdict.message, code: verdict.code });
+    }
   });
 
   server.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
@@ -207,9 +263,6 @@ export async function createCoreServer(
   });
 
   await registerWebRoutes(server);
-  // Das lokale Konto gibt es nur im Standalone-Modus - im Knoten-Modus
-  // steuert ausschliesslich das Panel ueber /core/v1.
-  const account = config.role === 'standalone' ? await LocalAccount.open(registry.dir) : null;
 
   registerStandaloneRoutes(server, driver, bus, registry);
   // Echte Installation gibt es fuer den nativen Treiber. Docker installiert

@@ -79,7 +79,7 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
     const json = res.json();
     expect(json.user.role).toBe('admin');
     expect(json.permissions['server.create']).toBe(true);
-    expect(json.permissions['admin.hosts']).toBe(true);
+    expect(json.permissions['admin.nodes']).toBe(true);
   });
 
   it('liefert das Dashboard mit Host-Daten und Server-Zusammenfassung', async () => {

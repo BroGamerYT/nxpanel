@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { ServerInstanceConfig } from '../types.js';
 import { backupStamp, openDatabase } from './database.js';
+import { currentIdentity } from './identity.js';
 
 interface LegacyRegistryFile {
   version: number;
@@ -33,6 +34,9 @@ export interface AuditEntry {
   action: string;
   serverId: string | null;
   actor: AuditActor;
+  /** Der angemeldete Benutzer, der es ausgeloest hat (falls bekannt). */
+  userId: string | null;
+  actorName: string | null;
   detail: Record<string, unknown> | null;
 }
 
@@ -400,9 +404,10 @@ export class ServerRegistry {
   audit(action: string, serverId: string | null, actor: AuditActor, detail?: Record<string, unknown>): void {
     if (this.closed) return;
     const clean = detail ? withoutSecrets(detail) : undefined;
+    const who = currentIdentity();
     this.db
-      .prepare('INSERT INTO audit (ts, action, server_id, actor, detail) VALUES (?, ?, ?, ?, ?)')
-      .run(new Date().toISOString(), action, serverId, actor, clean ? JSON.stringify(clean) : null);
+      .prepare('INSERT INTO audit (ts, action, server_id, actor, detail, user_id, actor_name) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(new Date().toISOString(), action, serverId, actor, clean ? JSON.stringify(clean) : null, who?.userId ?? null, who?.username ?? null);
     for (const listener of this.auditListeners) {
       try {
         listener({ action, serverId, actor, detail: clean });
@@ -439,13 +444,14 @@ export class ServerRegistry {
       params.push(options.serverId);
     }
     if (options.search) {
-      where.push("(action LIKE ? ESCAPE '!' OR actor LIKE ? ESCAPE '!' OR COALESCE(detail, '') LIKE ? ESCAPE '!')");
+      where.push("(action LIKE ? ESCAPE '!' OR actor LIKE ? ESCAPE '!' OR COALESCE(actor_name, '') LIKE ? ESCAPE '!' OR COALESCE(detail, '') LIKE ? ESCAPE '!')");
       const s = '%' + like(options.search) + '%';
-      params.push(s, s, s);
+      params.push(s, s, s, s);
     }
     const sql = `SELECT * FROM audit ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ?`;
     const rows = this.db.prepare(sql).all(...params, Math.min(Math.max(1, Math.floor(options.limit)), 2000)) as {
       id: number; ts: string; action: string; server_id: string | null; actor: AuditActor; detail: string | null;
+      user_id: string | null; actor_name: string | null;
     }[];
     return rows.map((row) => ({
       id: Number(row.id),
@@ -453,6 +459,8 @@ export class ServerRegistry {
       action: row.action,
       serverId: row.server_id,
       actor: row.actor,
+      userId: row.user_id ?? null,
+      actorName: row.actor_name ?? null,
       detail: parseJson<Record<string, unknown>>(row.detail),
     }));
   }
@@ -477,13 +485,15 @@ export class ServerRegistry {
             .prepare('SELECT * FROM audit WHERE server_id = ? ORDER BY id DESC LIMIT ?')
             .all(options.serverId, limit)
         : this.db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT ?').all(limit)
-    ) as { id: number; ts: string; action: string; server_id: string | null; actor: AuditActor; detail: string | null }[];
+    ) as { id: number; ts: string; action: string; server_id: string | null; actor: AuditActor; detail: string | null; user_id: string | null; actor_name: string | null }[];
     return rows.map((row) => ({
       id: Number(row.id),
       ts: row.ts,
       action: row.action,
       serverId: row.server_id,
       actor: row.actor,
+      userId: row.user_id ?? null,
+      actorName: row.actor_name ?? null,
       detail: parseJson<Record<string, unknown>>(row.detail),
     }));
   }

@@ -129,6 +129,15 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX file_revisions_file ON file_revisions (server_id, path, created_at);
     `,
   },
+  {
+    id: 5,
+    name: 'audit_users',
+    sql: `
+      -- Wer es war: Benutzer-ID und Name zum Zeitpunkt der Aktion (der Name aendert sich, das Protokoll nicht)
+      ALTER TABLE audit ADD COLUMN user_id    TEXT;
+      ALTER TABLE audit ADD COLUMN actor_name TEXT;
+    `,
+  },
 ];
 
 /** Die Datenbankdatei ist beschaedigt - der Core darf damit nicht weiterlaufen. */

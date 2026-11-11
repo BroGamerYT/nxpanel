@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -13,7 +13,7 @@ import {
   createSessionToken,
   isValidSessionToken,
   revokeSessionToken,
-  revokeAllSessionTokens,
+  revokeUserSessions,
   parseCookie,
   SESSION_TTL_MS,
 } from '../../protocol/security.js';
@@ -33,11 +33,15 @@ import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
+import { registerUserRoutes } from './users.js';
 import { registerHostRoutes } from './hosts.js';
 import { registerAdminFileRoutes } from './admin-files.js';
 import { registerIntegrationRoutes } from './integrations.js';
 import { DiscordNotifier } from '../../notifications/discord.js';
 import { getNetwork, publicHostOf } from '../../network.js';
+import { runAs } from '../../store/identity.js';
+import { canSeeServer, flagsFor } from '../authz.js';
+import { getAccess, removeServerAccess, setOwner } from '../../store/access.js';
 import { GameTester } from '../../testing/game-tester.js';
 import { registerAccountRoutes } from './account.js';
 import { registerExtraRoutes } from './extras.js';
@@ -63,7 +67,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -248,16 +252,17 @@ export function registerApiV1Routes(
     allocatePort: (existing) => allocatePort(existing, undefined, portRangeNow()),
     ...(options.ping ? { ping: options.ping } : {}),
   });
-  registerAdminRoutes(server, { registry, driver, tester });
+  registerAdminRoutes(server, { registry, driver, tester, account });
   registerIntegrationRoutes(server, { registry, discord });
   registerAdminFileRoutes(server, { registry });
   registerHostRoutes(server, { registry, driver, dataDir: registry.dir });
+  registerUserRoutes(server, { registry, driver, account });
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
-  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: (id) => backups.purgeServer(id) });
+  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: async (id) => { await backups.purgeServer(id); removeServerAccess(registry, id); } });
   registerLogFileRoutes(server, { registry, find: findServer, eggs: loadEggs });
 
   // 1. Authentifizierung & Sitzung
@@ -291,7 +296,8 @@ export function registerApiV1Routes(
         });
       }
 
-      if (!login || !password || password.length > 1024 || !(await account.verify(login, password, origin))) {
+      const user = !login || !password || password.length > 1024 ? null : await account.verify(login, password, origin);
+      if (!user) {
         logger.warn({ origin }, 'Fehlgeschlagene Anmeldung an der Standalone-Oberflaeche');
         registry.audit('auth.login_failed', null, 'standalone', { origin });
         return reply.status(401).send({ error: 'Benutzername oder Passwort falsch.', code: 'invalid_credentials' });
@@ -299,23 +305,28 @@ export function registerApiV1Routes(
 
       // Zwei-Faktor: das Passwort allein genuegt nicht. Ein fehlender Code ist kein Fehlversuch,
       // ein falscher schon - sonst waere der Code mit dem richtigen Passwort unbegrenzt zu erraten.
-      if (account.totpEnabled) {
+      if (user.totpEnabled) {
         const totp = typeof req.body?.totp === 'string' ? req.body.totp : undefined;
         const recoveryCode = typeof req.body?.recoveryCode === 'string' ? req.body.recoveryCode : undefined;
         if (!totp && !recoveryCode) {
           return reply.status(401).send({ error: 'Code aus der Authenticator-App erforderlich', code: 'totp_required' });
         }
-        if (!(await account.checkSecondFactor({ totp, recoveryCode }))) {
+        if (!(await account.checkSecondFactor(user.id, { totp, recoveryCode }))) {
           account.recordFailure(origin);
           registry.audit('auth.login_failed', null, 'standalone', { origin, reason: totp ? 'totp' : 'recovery_code' });
           return reply.status(401).send({ error: 'Code ungueltig oder schon benutzt', code: 'totp_invalid' });
         }
-        if (recoveryCode) registry.audit('auth.recovery_code_used', null, 'standalone', { left: account.recoveryLeft });
+        if (recoveryCode) {
+          runAs({ userId: user.id, username: user.username }, () =>
+            registry.audit('auth.recovery_code_used', null, 'standalone', { left: account.recoveryLeft(user.id) }),
+          );
+        }
       }
       account.clearFailures(origin);
+      await account.recordLogin(user.id);
 
-      const token = createSessionToken({ ip: req.ip, userAgent: req.headers['user-agent'] });
-      registry.audit('auth.login', null, 'standalone', { origin });
+      const token = createSessionToken({ userId: user.id, ip: req.ip, userAgent: req.headers['user-agent'] });
+      runAs({ userId: user.id, username: user.username }, () => registry.audit('auth.login', null, 'standalone', { origin }));
       reply.header('Set-Cookie', sessionCookie(token));
       return { accessToken: token };
     },
@@ -329,19 +340,24 @@ export function registerApiV1Routes(
       if (!account) {
         return reply.status(403).send({ error: 'Anmeldung ist in diesem Modus nicht verfuegbar.' });
       }
+      const actor = req.actor;
+      if (!actor || actor.master) {
+        return reply.status(403).send({ error: 'Das Zugriffstoken hat kein Benutzerkonto. Bitte als Benutzer anmelden.', code: 'forbidden' });
+      }
       const current = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
       const next = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
-      if (!(await account.verify(account.username, current, req.ip))) {
+      if (!(await account.checkPassword(actor.id, current, req.ip))) {
         return reply.status(401).send({ error: 'Das aktuelle Passwort stimmt nicht.', code: 'invalid_credentials' });
       }
       try {
-        await account.setPassword(next);
+        await account.setPassword(actor.id, next);
       } catch (err) {
         return reply.status(400).send({ error: (err as Error).message });
       }
-      revokeAllSessionTokens();
+      // Nur die Sitzungen DIESES Benutzers enden - die der anderen laufen weiter
+      revokeUserSessions(actor.id);
       registry.audit('auth.password_changed', null, 'standalone');
-      const token = createSessionToken({ ip: req.ip, userAgent: req.headers['user-agent'] });
+      const token = createSessionToken({ userId: actor.id, ip: req.ip, userAgent: req.headers['user-agent'] });
       reply.header('Set-Cookie', sessionCookie(token));
       return { ok: true, accessToken: token };
     },
@@ -379,9 +395,41 @@ export function registerApiV1Routes(
     };
   });
 
-  server.get('/api/v1/dashboard', async () => {
-    const configs = registry.list();
-    const states = await driver.listServers();
+  /** Rechte an einem Server, soweit der Core die Funktion hat - alles andere bleibt in der Oberflaeche verborgen. */
+  const permissionsFor = (serverId: string, actor: NonNullable<FastifyRequest['actor']>): string[] =>
+    flagsFor(registry, serverId, actor).filter((f) => SERVER_PERMISSIONS.includes(f));
+  const ownerNameOf = (serverId: string): string => {
+    const ownerId = getAccess(registry, serverId).ownerId;
+    return (ownerId ? account?.get(ownerId)?.username : undefined) ?? 'Admin';
+  };
+  /** "Eigener" Server: wer ihn loeschen darf (Besitzer oder Verwalter des Cores). */
+  const isOwnerOf = (serverId: string, actor: NonNullable<FastifyRequest['actor']>): boolean =>
+    actor.master || actor.role === 'admin' || getAccess(registry, serverId).ownerId === actor.id;
+
+  /**
+   * Gilt eine schon offene Verbindung noch? Eine WebSocket-Verbindung lebt lange: wird der Benutzer
+   * gesperrt, geloescht oder meldet er sich ab, muss sie aufhoeren Daten zu bekommen.
+   */
+  const connectionStillValid = (req: FastifyRequest): boolean => {
+    const actor = req.actor;
+    if (!actor) return false;
+    if (actor.master) return true;
+    const user = account?.get(actor.id);
+    if (!user || user.suspended) return false;
+    // Dieselbe Reihenfolge wie bei der Anmeldung: Kopfzeile, ?token= (WebSocket), Cookie
+    const query = (req.query as Record<string, unknown> | undefined)?.token;
+    const token =
+      req.headers.authorization?.replace(/^Bearer\s+/i, '').trim() ??
+      (typeof query === 'string' && query.length > 0 ? query : undefined) ??
+      parseCookie(req.headers.cookie, 'nxp_session');
+    return token !== undefined && isValidSessionToken(token);
+  };
+
+  server.get('/api/v1/dashboard', async (req) => {
+    const actor = req.actor!;
+    const configs = registry.list().filter((c) => canSeeServer(registry, c.id, actor));
+    const visible = new Set(configs.map((c) => c.id));
+    const states = (await driver.listServers()).filter((s) => visible.has(s.id));
     const runningCount = states.filter((s) => s.status === 'running').length;
 
     let totalRamMb = 0;
@@ -425,7 +473,8 @@ export function registerApiV1Routes(
       },
       perServer,
       diskUsed,
-      host: {
+      // Die Daten des Rechners sind Sache der Verwalter
+      host: actor.role === 'user' ? null : {
         hostname: os.hostname(),
         cpuModel: os.cpus()[0]?.model ?? 'Desktop Processor',
         cpuCores: hostCores,
@@ -452,8 +501,9 @@ export function registerApiV1Routes(
   });
 
   // 3. Server-Verwaltung (1:1 Typkompatibilität zu ServerListItem)
-  server.get('/api/v1/servers', async () => {
-    const configs = registry.list();
+  server.get('/api/v1/servers', async (req) => {
+    const actor = req.actor!;
+    const configs = registry.list().filter((c) => canSeeServer(registry, c.id, actor));
     const states = await driver.listServers();
     const stateMap = new Map(states.map((s) => [s.id, s]));
 
@@ -467,7 +517,7 @@ export function registerApiV1Routes(
         shortId: c.id.slice(0, 8),
         name: c.name,
         status,
-        ownerName: 'Admin',
+        ownerName: ownerNameOf(c.id),
         eggName: c.game || 'Eigener Gameserver',
         eggId: c.game || 'custom',
         ramMb: c.maxMemoryMb ?? 2048,
@@ -476,8 +526,8 @@ export function registerApiV1Routes(
         suspended: false,
         primaryPort: c.ports[0]?.hostPort ?? 25565,
         publicHost: publicHostOf(registry),
-        isOwner: true,
-        permissions: SERVER_PERMISSIONS,
+        isOwner: isOwnerOf(c.id, actor),
+        permissions: permissionsFor(c.id, actor),
         startedAt: state?.startedAt ?? null,
         tags: meta.tags ?? [c.game || 'game'],
         isFavorite: meta.isFavorite ?? false,
@@ -510,7 +560,7 @@ export function registerApiV1Routes(
         shortId: c.id.slice(0, 8),
         name: c.name,
         status: statusOf(c, state?.status),
-        ownerId: 'standalone-admin',
+        ownerId: getAccess(registry, c.id).ownerId ?? 'standalone-admin',
         startedAt: state?.startedAt ?? null,
         egg: {
           id: c.game,
@@ -545,7 +595,7 @@ export function registerApiV1Routes(
         startup: `${c.executable} ${c.args.join(' ')}`,
         variables: { ...(c.env ?? {}), ...(c.install?.variables ?? {}) },
       },
-      permissions: SERVER_PERMISSIONS,
+      permissions: permissionsFor(c.id, req.actor!),
     };
   });
 
@@ -563,6 +613,20 @@ export function registerApiV1Routes(
     const { name, eggId, ramMb, cpuPercent, variables } = req.body;
     if (!name || !eggId) {
       return reply.status(400).send({ error: 'Name und Game sind erforderlich.' });
+    }
+
+    // Grenzen des Benutzers (Anzahl Server, Arbeitsspeicher) - Verwalter sind ausgenommen
+    const creator = req.actor!;
+    if (!creator.master && creator.role !== 'admin') {
+      const limits = account?.get(creator.id);
+      const mine = registry.list().filter((c) => getAccess(registry, c.id).ownerId === creator.id);
+      if (limits && limits.serverLimit > 0 && mine.length >= limits.serverLimit) {
+        return reply.status(403).send({ error: `Server-Limit erreicht (${limits.serverLimit}).`, code: 'limit_reached' });
+      }
+      const ramUsed = mine.reduce((sum, c) => sum + (c.maxMemoryMb ?? 2048), 0);
+      if (limits && limits.ramLimitMb > 0 && ramUsed + (ramMb ?? 2048) > limits.ramLimitMb) {
+        return reply.status(403).send({ error: `Arbeitsspeicher-Limit erreicht (${limits.ramLimitMb} MB).`, code: 'limit_reached' });
+      }
     }
 
     // Generiere saubere ID
@@ -616,6 +680,7 @@ export function registerApiV1Routes(
         install: { state: 'installing', kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData },
       };
       await registry.add(installing);
+      if (!creator.master) setOwner(registry, id, creator.id);
       registry.audit('server.create', id, 'standalone', { name, game: eggId, port, install: plan.kind });
       const task = installs.start(id, { kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData });
       return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
@@ -648,6 +713,7 @@ export function registerApiV1Routes(
 
     await driver.registerServer(serverConfig);
     await registry.add(serverConfig);
+    if (!creator.master) setOwner(registry, id, creator.id);
     registry.audit('server.create', id, 'standalone', { name, game: eggId, port });
 
     bus.emit({
@@ -736,6 +802,8 @@ export function registerApiV1Routes(
       return;
     }
     const id = c.id;
+    const wsActor = req.actor!;
+    const mayCommand = (): boolean => connectionStillValid(req) && flagsFor(registry, id, wsActor).includes('control.command');
 
     void (async () => {
       const state = await stateOf(id);
@@ -744,7 +812,7 @@ export function registerApiV1Routes(
           type: 'hello',
           status: statusOf(c, state?.status),
           consoleMode: 'full',
-          canCommand: true,
+          canCommand: mayCommand(),
           name: c.name,
           startedAt: state?.startedAt ?? null,
         }),
@@ -760,6 +828,10 @@ export function registerApiV1Routes(
     // Event Bus Listener
     const unsubscribe = bus.on((event) => {
       if ('serverId' in event && event.serverId === id) {
+        if (!connectionStillValid(req) || !flagsFor(registry, id, wsActor).includes('control.console')) {
+          socket.close(1008, 'Keine Berechtigung mehr');
+          return;
+        }
         if (event.type === 'state') {
           // Wie in Liste und Detail: Installation und Fehlerzustand in Werte uebersetzen,
           // die die Oberflaeche kennt. Der Stand der Installation steht in der Registry.
@@ -801,6 +873,10 @@ export function registerApiV1Routes(
       try {
         const msg = JSON.parse(raw.toString());
         if (msg.type === 'command' && msg.data) {
+          if (!mayCommand()) {
+            socket.send(JSON.stringify({ type: 'error', code: 'forbidden', message: 'Dafür fehlt dir die Berechtigung.' }));
+            return;
+          }
           if ('sendCommand' in driver && typeof driver.sendCommand === 'function') {
             await driver.sendCommand(id, msg.data);
           }
@@ -822,11 +898,19 @@ export function registerApiV1Routes(
   });
 
   // Global Live WebSocket
-  server.get('/api/v1/live/ws', { websocket: true }, (socket) => {
+  server.get('/api/v1/live/ws', { websocket: true }, (socket, req) => {
     socket.send(JSON.stringify({ type: 'hello' }));
+    const liveActor = req.actor!;
 
     const unsubscribe = bus.on((event) => {
       const serverId = 'serverId' in event ? event.serverId : null;
+      if (!connectionStillValid(req)) {
+        socket.close(1008, 'Sitzung beendet');
+        return;
+      }
+      // Ereignisse eines Servers bekommt nur, wer ihn sehen darf
+      if (serverId && !canSeeServer(registry, serverId, liveActor)) return;
+      if (!serverId && !liveActor.master && liveActor.role === 'user') return;
       socket.send(
         JSON.stringify({
           type: 'event',
@@ -863,8 +947,11 @@ export function registerApiV1Routes(
   server.get<{ Params: { id: string } }>('/api/v1/servers/:id/activity', async () => {
     return { activity: [] };
   });
-  server.get('/api/v1/tasks/active', async () => {
-    return { tasks: [...registry.listTasks({ active: true }).map(toActiveTask), ...backups.activeTasks()] };
+  server.get('/api/v1/tasks/active', async (req) => {
+    const actor = req.actor!;
+    const all = [...registry.listTasks({ active: true }).map(toActiveTask), ...backups.activeTasks()];
+    // Aufgaben ohne Server (Core-weit) sehen nur Verwalter
+    return { tasks: all.filter((t) => (t.serverId ? canSeeServer(registry, t.serverId, actor) : actor.master || actor.role !== 'user')) };
   });
 
   server.get<{ Params: { id: string } }>('/api/v1/servers/:id/tasks/active', async (req, reply) => {

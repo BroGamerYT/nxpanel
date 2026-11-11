@@ -86,7 +86,7 @@ describe('Anmeldewege und Profil', () => {
     const after = (await c.call('GET', '/api/v1/auth/me')).json().user;
     expect(after).toMatchObject({ email: 'ich@example.org', avatar: 'https://example.org/a.png', locale: 'en' });
     // bleibt nach einem Neustart erhalten
-    expect(JSON.parse(await fs.readFile(path.join(c.dir, 'account.json'), 'utf8'))).toMatchObject({ email: 'ich@example.org' });
+    expect(JSON.parse(await fs.readFile(path.join(c.dir, 'users.json'), 'utf8')).users[0]).toMatchObject({ email: 'ich@example.org' });
     // leer = entfernen
     await c.call('PATCH', '/api/v1/auth/me', { email: null, avatar: '' });
     expect((await c.call('GET', '/api/v1/auth/me')).json().user).toMatchObject({ email: null, avatar: null });
@@ -141,7 +141,7 @@ describe('Zwei-Faktor', () => {
     // Doppelt einrichten geht nicht
     expect((await c.call('POST', '/api/v1/auth/totp/setup')).statusCode).toBe(400);
     // Die Datei enthält keine Klartext-Wiederherstellungscodes
-    const file = await fs.readFile(path.join(c.dir, 'account.json'), 'utf8');
+    const file = await fs.readFile(path.join(c.dir, 'users.json'), 'utf8');
     for (const code of ok.json().recoveryCodes) expect(file).not.toContain(code);
   });
 
