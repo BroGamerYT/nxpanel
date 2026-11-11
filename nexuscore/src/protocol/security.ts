@@ -19,17 +19,34 @@ const attempts: number[] = [];
 /** Eine Sitzung der Standalone-Oberflaeche gilt 7 Tage, danach ist eine neue Anmeldung noetig. */
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Aktive Sitzungs-Tokens fuer den Standalone-Modus: Token -> Ablaufzeitpunkt. */
-const activeSessions = new Map<string, number>();
+/** Eine angemeldete Sitzung der Standalone-Oberflaeche. */
+interface SessionInfo {
+  expires: number;
+  createdAt: number;
+  lastUsedAt: number;
+  ip: string | null;
+  userAgent: string | null;
+}
 
-export function createSessionToken(): string {
+/** Aktive Sitzungs-Tokens fuer den Standalone-Modus: Token -> Angaben. Nur im Speicher: ein Neustart beendet alle. */
+const activeSessions = new Map<string, SessionInfo>();
+
+export function createSessionToken(meta: { ip?: string | undefined; userAgent?: string | undefined } = {}): string {
   const token = `nxp_${crypto.randomBytes(24).toString('hex')}`;
-  activeSessions.set(token, Date.now() + SESSION_TTL_MS);
+  const now = Date.now();
+  activeSessions.set(token, {
+    expires: now + SESSION_TTL_MS,
+    createdAt: now,
+    lastUsedAt: now,
+    ip: meta.ip ?? null,
+    userAgent: meta.userAgent ? meta.userAgent.slice(0, 300) : null,
+  });
   return token;
 }
 
 export function registerSessionToken(token: string): void {
-  activeSessions.set(token, Date.now() + SESSION_TTL_MS);
+  const now = Date.now();
+  activeSessions.set(token, { expires: now + SESSION_TTL_MS, createdAt: now, lastUsedAt: now, ip: null, userAgent: null });
 }
 
 export function revokeSessionToken(token: string): void {
@@ -42,13 +59,69 @@ export function revokeAllSessionTokens(): void {
 }
 
 export function isValidSessionToken(token: string): boolean {
-  const expires = activeSessions.get(token);
-  if (expires === undefined) return false;
-  if (expires <= Date.now()) {
+  const info = activeSessions.get(token);
+  if (info === undefined) return false;
+  if (info.expires <= Date.now()) {
     activeSessions.delete(token);
     return false;
   }
+  info.lastUsedAt = Date.now();
   return true;
+}
+
+/** Oeffentliche Kennung einer Sitzung - nicht das Token selbst, das darf nie in einer Liste stehen. */
+function sessionId(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex').slice(0, 16);
+}
+
+export interface SessionListEntry {
+  id: string;
+  user_agent: string | null;
+  ip: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  current: boolean;
+}
+
+/** Alle gueltigen Sitzungen, die aktuelle zuerst markiert, sonst neueste zuerst. */
+export function listSessions(currentToken?: string): SessionListEntry[] {
+  const now = Date.now();
+  const out: SessionListEntry[] = [];
+  for (const [token, info] of activeSessions) {
+    if (info.expires <= now) continue;
+    out.push({
+      id: sessionId(token),
+      user_agent: info.userAgent,
+      ip: info.ip,
+      created_at: new Date(info.createdAt).toISOString(),
+      last_used_at: new Date(info.lastUsedAt).toISOString(),
+      current: token === currentToken,
+    });
+  }
+  return out.sort((a, b) => Number(b.current) - Number(a.current) || b.created_at.localeCompare(a.created_at));
+}
+
+/** Beendet eine Sitzung nach ihrer Kennung. @returns false, wenn es sie nicht gibt */
+export function revokeSessionById(id: string): boolean {
+  for (const token of activeSessions.keys()) {
+    if (sessionId(token) === id) {
+      activeSessions.delete(token);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Beendet alle Sitzungen ausser der angegebenen. @returns Anzahl */
+export function revokeOtherSessions(keepToken?: string): number {
+  let count = 0;
+  for (const token of [...activeSessions.keys()]) {
+    if (token !== keepToken) {
+      activeSessions.delete(token);
+      count++;
+    }
+  }
+  return count;
 }
 
 /**
@@ -103,6 +176,8 @@ export function isPublicRoute(method: string, normalizedPath: string): boolean {
   if (m === 'POST' && p === '/core/v1/pair') return true;
   if (m === 'POST' && p === '/api/v1/auth/login') return true;
   if (m === 'POST' && p === '/api/v1/auth/refresh') return true;
+  // Welche Anmeldewege es gibt - die Anmeldeseite fragt das vor der Anmeldung
+  if (m === 'GET' && p === '/api/v1/auth/methods') return true;
 
   // Statische Web-Assets & SPA-Frontend
   if (m === 'GET') {

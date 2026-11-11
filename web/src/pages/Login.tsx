@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../lib/auth';
-import { ApiError } from '../lib/api';
+import { ApiError, api } from '../lib/api';
 import { Button, ErrorBox } from '../components/ui';
 import { t } from '../lib/i18n';
 import { LanguagePicker } from '../components/LanguagePicker';
@@ -23,6 +24,14 @@ import {
  */
 export function Login() {
   const { login, loginWithPasskey } = useAuth();
+  // Welche Anmeldewege es gibt (der eigenstaendige Core hat nur Passwort); das Panel kennt die Route nicht - dann gilt alles.
+  const methods = useQuery({
+    queryKey: ['auth-methods'],
+    queryFn: () => api<{ passkey?: boolean; steam?: boolean }>('/auth/methods').catch(() => null),
+    staleTime: Infinity,
+  });
+  const showPasskey = methods.data?.passkey !== false;
+  const showSteam = methods.data?.steam !== false;
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -334,13 +343,16 @@ export function Login() {
             </Button>
 
             {/* Trennlinie */}
+            {(showPasskey || showSteam) && (
             <div className="relative flex py-1 items-center">
               <div className="flex-grow border-t border-seam" />
               <span className="flex-shrink mx-3 text-xs text-dim uppercase tracking-wider font-medium">Oder</span>
               <div className="flex-grow border-t border-seam" />
             </div>
+            )}
 
             {/* Passkey 1-Click Login Button */}
+            {showPasskey && (
             <Button
               type="button"
               variant="quiet"
@@ -364,8 +376,10 @@ export function Login() {
               <KeyRound className="size-4 text-amber shrink-0" />
               <span>Mit Passkey anmelden</span>
             </Button>
+            )}
 
             {/* Steam 1-Click Login Button */}
+            {showSteam && (
             <a
               href="/api/v1/auth/steam/login?action=login"
               className="w-full h-11 px-4 rounded-lg bg-[#171a21] hover:bg-[#2a475e] text-white border border-[#2a475e] shadow-md flex items-center justify-center gap-2.5 font-semibold text-sm transition-all group"
@@ -375,6 +389,7 @@ export function Login() {
               </svg>
               <span>Mit Steam anmelden</span>
             </a>
+            )}
           </form>
 
           {/* Footer mit Sicherheits-Hinweis */}

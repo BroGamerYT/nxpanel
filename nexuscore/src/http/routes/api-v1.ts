@@ -32,6 +32,7 @@ import { findInstance } from '../../store/find.js';
 import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
+import { registerAccountRoutes } from './account.js';
 import type { SlpResult } from '../../games/minecraft.js';
 import { PlayerManager } from '../../players/manager.js';
 import { registerPlayerRoutes } from './players.js';
@@ -54,7 +55,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -220,6 +221,7 @@ export function registerApiV1Routes(
   registerScheduleRoutes(server, { registry, find: findServer, scheduler });
   registerBackupRoutes(server, { find: findServer, backups });
   registerAdminRoutes(server, { registry, driver });
+  registerAccountRoutes(server, { registry, account });
   registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
   registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: (id) => backups.purgeServer(id) });
@@ -236,36 +238,8 @@ export function registerApiV1Routes(
     return { accessToken: existingCookie };
   });
 
-  server.get('/api/v1/auth/me', async () => {
-    return {
-      user: {
-        id: 'standalone-admin',
-        username: account?.username ?? 'Admin',
-        email: 'admin@localhost',
-        role: 'admin',
-        locale: 'de',
-      },
-      permissions: {
-        'server.create': true,
-        'server.view_all': true,
-        'admin.nodes': true,
-        'admin.users': true,
-        'admin.audit': true,
-        'admin.hosts': true,
-        'admin.eggs': true,
-        'admin.files': true,
-        'admin.integrations': true,
-        'admin.test_report': true,
-      },
-    };
-  });
-
-  server.patch('/api/v1/auth/me', async () => {
-    return { ok: true };
-  });
-
   // Block A4: echte Anmeldung mit dem lokalen Konto.
-  server.post<{ Body: { login?: unknown; password?: unknown } | undefined }>(
+  server.post<{ Body: { login?: unknown; password?: unknown; totp?: unknown; recoveryCode?: unknown } | undefined }>(
     '/api/v1/auth/login',
     async (req, reply) => {
       if (!account) {
@@ -290,7 +264,24 @@ export function registerApiV1Routes(
         return reply.status(401).send({ error: 'Benutzername oder Passwort falsch.', code: 'invalid_credentials' });
       }
 
-      const token = createSessionToken();
+      // Zwei-Faktor: das Passwort allein genuegt nicht. Ein fehlender Code ist kein Fehlversuch,
+      // ein falscher schon - sonst waere der Code mit dem richtigen Passwort unbegrenzt zu erraten.
+      if (account.totpEnabled) {
+        const totp = typeof req.body?.totp === 'string' ? req.body.totp : undefined;
+        const recoveryCode = typeof req.body?.recoveryCode === 'string' ? req.body.recoveryCode : undefined;
+        if (!totp && !recoveryCode) {
+          return reply.status(401).send({ error: 'Code aus der Authenticator-App erforderlich', code: 'totp_required' });
+        }
+        if (!(await account.checkSecondFactor({ totp, recoveryCode }))) {
+          account.recordFailure(origin);
+          registry.audit('auth.login_failed', null, 'standalone', { origin, reason: totp ? 'totp' : 'recovery_code' });
+          return reply.status(401).send({ error: 'Code ungueltig oder schon benutzt', code: 'totp_invalid' });
+        }
+        if (recoveryCode) registry.audit('auth.recovery_code_used', null, 'standalone', { left: account.recoveryLeft });
+      }
+      account.clearFailures(origin);
+
+      const token = createSessionToken({ ip: req.ip, userAgent: req.headers['user-agent'] });
       registry.audit('auth.login', null, 'standalone', { origin });
       reply.header('Set-Cookie', sessionCookie(token));
       return { accessToken: token };
@@ -317,7 +308,7 @@ export function registerApiV1Routes(
       }
       revokeAllSessionTokens();
       registry.audit('auth.password_changed', null, 'standalone');
-      const token = createSessionToken();
+      const token = createSessionToken({ ip: req.ip, userAgent: req.headers['user-agent'] });
       reply.header('Set-Cookie', sessionCookie(token));
       return { ok: true, accessToken: token };
     },

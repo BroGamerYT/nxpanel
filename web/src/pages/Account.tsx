@@ -29,6 +29,7 @@ import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { SftpPasswords } from '../components/SftpPasswords';
+import { useFeatures } from '../lib/features';
 import { Button, Input, Field, Spinner } from '../components/ui';
 import { UserAvatar, AVATAR_PRESETS } from '../components/UserAvatar';
 import type { SteamAccount, UserSession } from '../lib/types';
@@ -45,6 +46,7 @@ function SteamIcon({ className = 'size-4' }: { className?: string }) {
 
 export function Account() {
   const { me, refreshMe, logout } = useAuth();
+  const features = useFeatures();
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
 
@@ -403,6 +405,7 @@ export function Account() {
         </div>
 
         {/* Steam-Verknüpfung Badge / Button */}
+        {features.has('steam') && (
         <div className="flex items-center gap-3">
           {me?.user.steamId ? (
             <div className="flex items-center gap-3 p-3 rounded-xl border border-[#1b2838] bg-[#171a21]/80 text-slate-200">
@@ -435,6 +438,7 @@ export function Account() {
             </button>
           )}
         </div>
+        )}
       </div>
 
       {/* Notifications from Steam OpenID Redirects */}
@@ -462,7 +466,9 @@ export function Account() {
           { key: 'steam', label: `Steam-Konten (${steamData?.accounts.length ?? 0})`, icon: SteamIcon },
           { key: 'security', label: 'Passwort & 2FA', icon: Lock },
           { key: 'sessions', label: `Aktive Sitzungen (${sessionData?.sessions.length ?? 0})`, icon: Laptop },
-        ].map((tab) => {
+        ]
+          .filter((tab) => tab.key !== 'steam' || features.has('steam'))
+          .map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
           return (
@@ -1248,9 +1254,10 @@ export function Account() {
           </div>
 
           {/* ================= SFTP-Passwoerter ================= */}
-          <SftpPasswords />
+          {features.has('sftp') && <SftpPasswords />}
 
           {/* ================= Passkeys (WebAuthn / FIDO2) ================= */}
+          {features.has('passkeys') && (
           <div className="p-6 rounded-2xl border border-seam bg-rack space-y-5 md:col-span-2">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -1324,6 +1331,7 @@ export function Account() {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
 
