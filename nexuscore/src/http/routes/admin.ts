@@ -80,13 +80,16 @@ export function registerAdminRoutes(server: FastifyInstance, deps: { registry: S
     const q = hostLogsQuery.safeParse(req.query);
     if (!q.success) return reply.status(400).send({ error: q.error.issues[0]?.message ?? 'Ungültige Anfrage', code: 'invalid_request' });
     const raw = recentLogLines(q.data.lines);
-    const parsed = raw.map((line, idx) => {
+    // Die Seite fragt sich alle paar Sekunden selbst ab - das waere sonst fast das ganze Protokoll
+    const own = (line: string) => line.includes('"url":"/api/v1/admin/host-logs');
+    const parsed = raw.filter((line) => !own(line)).map((line, idx) => {
       let timestamp = '';
       let message = line;
       let level: 'info' | 'warn' | 'error' | 'debug' = 'info';
       try {
-        const j = JSON.parse(line) as { level?: number; time?: number; msg?: string; err?: { message?: string } };
+        const j = JSON.parse(line) as { level?: number; time?: number; msg?: string; err?: { message?: string }; method?: string; url?: string; status?: number };
         if (typeof j.msg === 'string') message = j.msg;
+        if (j.msg === 'HTTP-Anfrage' && j.method && j.url) message = `${j.method} ${j.url}${j.status !== undefined ? ` → ${j.status}` : ''}`;
         if (j.err?.message) message += ` - Fehler: ${j.err.message}`;
         if (typeof j.time === 'number') timestamp = new Date(j.time).toISOString();
         if (typeof j.level === 'number') level = j.level >= 50 ? 'error' : j.level >= 40 ? 'warn' : j.level >= 30 ? 'info' : 'debug';

@@ -21,7 +21,7 @@ export function registerHostRoutes(server: FastifyInstance, deps: { registry: Se
       id: LOCAL_ID,
       name: os.hostname(),
       type: 'local' as const,
-      address: null,
+      address: `Dieser Rechner (${driver.name})`,
       runtime: driver.name,
       status: 'online' as const,
       certFingerprint: null,
