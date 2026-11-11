@@ -267,5 +267,40 @@
   "resources": {
     "base_ram_mb": 6144,
     "min_cpu_percent": 200
+  },
+  "windows": {
+    "steam_app_id": 530870,
+    "executable": "DedicatedServer/EmpyrionDedicated.exe",
+    "args": [
+      "-batchmode",
+      "-logFile",
+      "Logs/current.log"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    },
+    "files": [
+      {
+        "path": "dedicated.yaml",
+        "format": "yaml",
+        "set": {
+          "ServerConfig.Srv_Port": {
+            "$number": "{{SERVER_PORT}}"
+          },
+          "ServerConfig.Srv_Name": "{{SRV_NAME}}",
+          "ServerConfig.Srv_Password": "{{SRV_PWD}}",
+          "ServerConfig.Srv_MaxPlayers": {
+            "$number": "{{MAX_PLAYERS}}"
+          },
+          "ServerConfig.Srv_Description": "{{SRV_DESC}}",
+          "ServerConfig.Tel_Enabled": {
+            "$boolean": "{{TELNET_ENABLED}}"
+          },
+          "ServerConfig.Tel_Port": {
+            "$number": "{{TELNET_PORT}}"
+          }
+        }
+      }
+    ]
   }
 }

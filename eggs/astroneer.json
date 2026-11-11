@@ -214,5 +214,37 @@
   "resources": {
     "base_ram_mb": 4096,
     "min_cpu_percent": 200
+  },
+  "windows": {
+    "steam_app_id": 728470,
+    "executable": "Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe",
+    "args": [
+      "-log"
+    ],
+    "stop": {
+      "timeout_seconds": 45
+    },
+    "files": [
+      {
+        "path": "Astro/Saved/Config/WindowsServer/AstroServerSettings.ini",
+        "format": "ini",
+        "section": "/Script/Astro.AstroServerSettings",
+        "set": {
+          "PublicIP": "{{PUBLIC_IP}}",
+          "ServerName": "{{SERVER_NAME}}",
+          "OwnerName": "{{OWNER_NAME}}",
+          "OwnerGuid": "{{OWNER_GUID}}",
+          "ServerPassword": "{{SERVER_PWD}}"
+        }
+      },
+      {
+        "path": "Astro/Saved/Config/WindowsServer/Engine.ini",
+        "format": "ini",
+        "section": "URL",
+        "set": {
+          "Port": "{{SERVER_PORT}}"
+        }
+      }
+    ]
   }
 }

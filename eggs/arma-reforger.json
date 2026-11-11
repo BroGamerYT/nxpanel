@@ -315,5 +315,61 @@
   "resources": {
     "base_ram_mb": 8192,
     "min_cpu_percent": 200
+  },
+  "windows": {
+    "steam_app_id": 1874900,
+    "executable": "ArmaReforgerServer.exe",
+    "args": [
+      "-gproj",
+      "addons/data/ArmaReforger.gproj",
+      "-config",
+      "config.json",
+      "-profile",
+      "profile",
+      "-backendlog",
+      "-nothrow",
+      "-maxFPS",
+      "{{MAX_FPS}}",
+      "-addonTempDir",
+      "tmp"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    },
+    "files": [
+      {
+        "path": "config.json",
+        "format": "json",
+        "set": {
+          "bindAddress": "0.0.0.0",
+          "bindPort": {
+            "$number": "{{SERVER_PORT}}"
+          },
+          "publicPort": {
+            "$number": "{{SERVER_PORT}}"
+          },
+          "a2s.address": "0.0.0.0",
+          "a2s.port": {
+            "$number": "17777"
+          },
+          "game.name": "{{SERVER_NAME}}",
+          "game.password": "{{SERVER_PASS}}",
+          "game.passwordAdmin": "{{ADMIN_PASS}}",
+          "game.scenarioId": "{{SCENARIO_ID}}",
+          "game.maxPlayers": {
+            "$number": "{{MAX_PLAYERS}}"
+          },
+          "game.visible": {
+            "$boolean": "{{VISIBLE}}"
+          },
+          "game.gameProperties.battlEye": {
+            "$boolean": "{{BATTLEYE}}"
+          },
+          "game.gameProperties.disableThirdPerson": {
+            "$boolean": "{{DISABLE_THIRD}}"
+          }
+        }
+      }
+    ]
   }
 }

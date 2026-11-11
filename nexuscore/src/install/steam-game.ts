@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isInside } from '../protocol/paths.js';
 import type { ServerInstanceConfig, SteamArg, SteamFile, SteamLaunch } from '../types.js';
+import { patchIniFile, patchXmlFile, patchYamlFile, type ConfigValue, type YamlRaw } from './config-formats.js';
 import { substitute } from './properties.js';
 import { ensureSteamCmd, installSteamApp, type SteamCmdHooks, type SteamRunner } from './steamcmd.js';
 
@@ -191,6 +192,33 @@ export function patchUnrealOptions(existing: string | null, section: string, key
   return lines.join(eol) + eol;
 }
 
+/** Der neue Inhalt einer Konfigurationsdatei: der alte Stand mit den Werten aus der Vorlage. */
+export function renderConfig(file: SteamFile, existing: string | null, values: Record<string, string>): string {
+  switch (file.format) {
+    case 'json':
+      return patchJsonFile(existing, file.set, values);
+    case 'unreal-options':
+      return patchUnrealOptions(existing, file.section ?? '', file.key ?? 'OptionSettings', file.set, values);
+    case 'ini': {
+      const set: Record<string, ConfigValue> = {};
+      for (const [k, raw] of Object.entries(file.set)) set[k] = resolveValue(raw, values);
+      return patchIniFile(existing, file.section, set);
+    }
+    case 'xml': {
+      const set: Record<string, ConfigValue> = {};
+      for (const [k, raw] of Object.entries(file.set)) set[k] = resolveValue(raw, values);
+      return patchXmlFile(existing, file.root ?? 'config', set);
+    }
+    case 'yaml': {
+      const set: Record<string, YamlRaw> = {};
+      for (const [k, raw] of Object.entries(file.set)) set[k] = { raw: typeof raw !== 'string', value: resolveValue(raw, values) };
+      return patchYamlFile(existing, set);
+    }
+    default:
+      throw new Error(`Unbekanntes Dateiformat: ${(file as { format: string }).format}`);
+  }
+}
+
 /** Schreibt die Konfigurationsdateien des Spiels in den Server-Ordner. */
 export async function writeSteamFiles(serverDir: string, files: SteamFile[], values: Record<string, string>): Promise<void> {
   for (const file of files) {
@@ -201,10 +229,7 @@ export async function writeSteamFiles(serverDir: string, files: SteamFile[], val
     const target = path.resolve(serverDir, file.path);
     if (!isInside(path.resolve(serverDir), target)) throw new Error(`Konfigurationsdatei außerhalb des Server-Ordners: ${file.path}`);
     const existing = await fs.readFile(target, 'utf8').catch(() => null);
-    const text =
-      file.format === 'json'
-        ? patchJsonFile(existing, file.set, values)
-        : patchUnrealOptions(existing, file.section ?? '', file.key ?? 'OptionSettings', file.set, values);
+    const text = renderConfig(file, existing, values);
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, text, 'utf8');
   }

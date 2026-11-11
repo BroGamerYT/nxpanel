@@ -426,5 +426,50 @@
   "resources": {
     "base_ram_mb": 4096,
     "min_cpu_percent": 200
+  },
+  "windows": {
+    "steam_app_id": 739590,
+    "executable": "EcoServer.exe",
+    "args": [
+      "-nogui",
+      {
+        "when": "SLG_USER=",
+        "args": [
+          "-offline"
+        ]
+      },
+      {
+        "when": "SLG_USER",
+        "args": [
+          "--username={{SLG_USER}}",
+          "--password={{SLG_PW}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    },
+    "files": [
+      {
+        "path": "Configs/Network.eco",
+        "format": "json",
+        "set": {
+          "Name": "{{SRV_NAME}}",
+          "Password": "{{SRV_PW}}",
+          "PublicServer": {
+            "$boolean": "{{PUB_SRV}}"
+          },
+          "GameServerPort": {
+            "$number": "{{SERVER_PORT}}"
+          },
+          "WebServerPort": {
+            "$number": "{{WEB_PORT}}"
+          },
+          "MaxConnections": {
+            "$number": "{{MAX_CON}}"
+          }
+        }
+      }
+    ]
   }
 }

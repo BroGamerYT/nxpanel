@@ -225,5 +225,37 @@
         "en": "Disk full: the host does not have enough free space for the game files. Check with \"df -h\" and free up space or enlarge the disk."
       }
     }
-  ]
+  ],
+  "windows": {
+    "steam_app_id": 380870,
+    "executable": "jre64/bin/java.exe",
+    "args": [
+      "-Djava.awt.headless=true",
+      "-Dzomboid.steam=1",
+      "-Dzomboid.znetlog=1",
+      "-Xmx{{MAX_MEMORY_MB}}m",
+      "-Djava.library.path=natives/;natives/win64/;.",
+      "-cp",
+      "java/*;java/projectzomboid.jar",
+      "zombie.network.GameServer",
+      "-statistic",
+      "0",
+      "-cachedir=Zomboid",
+      "-servername",
+      "{{SERVERNAME}}",
+      "-adminusername",
+      "{{ADMINUSERNAME}}",
+      "-adminpassword",
+      "{{ADMINPASSWORD}}",
+      "-port",
+      "{{PORT_GAME}}",
+      "-udpport",
+      "{{PORT_UDP}}",
+      "-steamvac",
+      "{{STEAMVAC}}"
+    ],
+    "stop": {
+      "timeout_seconds": 90
+    }
+  }
 }

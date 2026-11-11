@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const { resolveArgs, conditionHolds, steamValues, listPrograms } = await import('../src/install/steam-game.js');
+const { resolveArgs, conditionHolds, steamValues, listPrograms, renderConfig } = await import('../src/install/steam-game.js');
 const { installPlanFor } = await import('../src/install/manager.js');
 const { initialValue } = await import('../src/eggs/rules.js');
 
@@ -95,6 +95,23 @@ describe('windows-Blöcke der Spielvorlagen', () => {
       expect(args.filter((a) => /[=]$/.test(a)), `halb leere Argumente in ${_id}`).toEqual([]);
       // Kein Platzhalter bleibt stehen
       expect(args.filter((a) => /\{\{/.test(a))).toEqual([]);
+    });
+
+    it('erzeugt seine Konfigurationsdateien aus den Vorgaben ohne Fehler', () => {
+      const variables = Object.fromEntries((egg.variables ?? []).map((v) => [v.env_variable, initialValue(v)]));
+      const ports = [egg.ports?.primary, ...(egg.ports?.secondary ?? [])].filter(Boolean).map((p, i) => ({
+        name: (p?.ref ?? (i === 0 ? 'game' : `port${i}`)).toLowerCase(),
+        hostPort: 30000 + i,
+        protocol: 'udp' as const,
+      }));
+      const values = steamValues({ ports: ports.length ? ports : [{ name: 'game', hostPort: 30000, protocol: 'udp' }], maxMemoryMb: 4096, name: 'Test Server' }, variables);
+      for (const f of w.files ?? []) {
+        const text = renderConfig(f as never, null, values);
+        expect(text.length, f.path).toBeGreaterThan(0);
+        if (f.format === 'json') expect(() => JSON.parse(text), f.path).not.toThrow();
+        // Ein zweiter Durchlauf ueber das Ergebnis aendert nichts mehr (stabil bei jedem Start)
+        expect(renderConfig(f as never, text, values), f.path).toBe(text);
+      }
     });
 
     it('wird vom Core als Steam-Spiel erkannt', () => {

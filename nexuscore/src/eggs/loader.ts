@@ -49,10 +49,11 @@ export interface RawEggFile {
     stop?: { timeout_seconds?: number };
     files?: Array<{
       path: string;
-      format: 'json' | 'unreal-options';
+      format: 'json' | 'unreal-options' | 'ini' | 'xml' | 'yaml';
       unless?: string;
       section?: string;
       key?: string;
+      root?: string;
       set: Record<string, string | { $number?: string; $boolean?: string }>;
     }>;
   };
