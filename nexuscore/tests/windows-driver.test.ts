@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WindowsNativeDriver } from '../src/drivers/windows-native.js';
 
-describe('WindowsNativeDriver', () => {
+describe.skipIf(process.platform !== 'win32')('WindowsNativeDriver', () => {
   it('startet einen echten Prozess und liefert seine Ausgaben', async () => {
     const driver = new WindowsNativeDriver();
     await driver.initialize();

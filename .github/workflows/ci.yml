@@ -80,8 +80,12 @@ jobs:
         run: npm --prefix web run build
 
   nexuscore:
-    name: NexusCore – Typecheck & Tests
-    runs-on: ubuntu-latest
+    name: NexusCore – Typecheck & Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     defaults:
       run:
         working-directory: nexuscore
@@ -95,7 +99,16 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-          cache-dependency-path: nexuscore/package-lock.json
+          cache-dependency-path: |
+            nexuscore/package-lock.json
+            web/package-lock.json
+
+      # Die Core-Tests liefern die echte Weboberflaeche aus web/dist aus.
+      - name: Build Web Frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
 
       - name: Install Dependencies
         run: npm ci
