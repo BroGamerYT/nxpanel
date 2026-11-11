@@ -72,7 +72,7 @@ export function createPowerOps(deps: {
     }
     // Steam-Spiele: Argumente und Konfigurationsdateien aus den jetzigen Variablen und Ports neu bauen
     let current = c;
-    if (c.install?.kind === 'steamcmd') {
+    if (c.install?.kind === 'steamcmd' || c.install?.kind === 'download') {
       const args = await prepareSteamStart(c);
       current = { ...c, args };
       await registry.update(current);

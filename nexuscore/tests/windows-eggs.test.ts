@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const { resolveArgs, conditionHolds, steamValues, listPrograms, renderConfig } = await import('../src/install/steam-game.js');
 const { installPlanFor } = await import('../src/install/manager.js');
 const { initialValue } = await import('../src/eggs/rules.js');
+const { isDownloadSource } = await import('../src/install/sources.js');
 
 const EGG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../eggs');
 
@@ -14,7 +15,8 @@ interface Egg {
   variables?: Array<{ env_variable: string; default_value?: string }>;
   ports?: { primary?: { ref?: string }; secondary?: Array<{ ref?: string }> };
   windows?: {
-    steam_app_id: number;
+    steam_app_id?: number;
+    download?: { source: string; stripTop?: boolean; keep?: string[]; mkdirs?: string[] };
     executable: string;
     args?: Array<string | { when: string; args: string[] }>;
     stop?: { timeout_seconds?: number };
@@ -55,7 +57,17 @@ describe('windows-Blöcke der Spielvorlagen', () => {
     const w = egg.windows!;
 
     it('hat App-ID und ein Programm im Server-Ordner', () => {
-      expect(Number.isInteger(w.steam_app_id) && w.steam_app_id > 0).toBe(true);
+      // Entweder aus Steam (App-ID) oder aus einem Archiv einer Quelle, die der Core kennt - nie beides, nie keines
+      if (w.download) {
+        expect(w.steam_app_id).toBeUndefined();
+        expect(isDownloadSource(w.download.source), w.download.source).toBe(true);
+        for (const d of [...(w.download.mkdirs ?? []), ...(w.download.keep ?? [])]) {
+          expect(path.isAbsolute(d)).toBe(false);
+          expect(d.split(/[\\/]/)).not.toContain('..');
+        }
+      } else {
+        expect(Number.isInteger(w.steam_app_id) && w.steam_app_id! > 0).toBe(true);
+      }
       expect(w.executable).toMatch(/\.exe$/i);
       expect(path.isAbsolute(w.executable)).toBe(false);
       expect(w.executable.split(/[\\/]/)).not.toContain('..');
@@ -114,10 +126,15 @@ describe('windows-Blöcke der Spielvorlagen', () => {
       }
     });
 
-    it('wird vom Core als Steam-Spiel erkannt', () => {
+    it('wird vom Core als Steam- oder Download-Spiel erkannt', () => {
       const plan = installPlanFor(_id, egg as never, {});
-      expect(plan?.kind).toBe('steamcmd');
-      expect(plan?.steam?.appId).toBe(w.steam_app_id);
+      if (w.download) {
+        expect(plan?.kind).toBe('download');
+        expect(plan?.steam?.download?.source).toBe(w.download.source);
+      } else {
+        expect(plan?.kind).toBe('steamcmd');
+        expect(plan?.steam?.appId).toBe(w.steam_app_id);
+      }
     });
 
     it('JSON-Dateien: Zahlen aus Ports oder Variablen mit Wert', () => {

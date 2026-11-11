@@ -150,7 +150,7 @@
       },
       "env_variable": "LEVEL_NAME",
       "default_value": "Bedrock level",
-      "rules": "required|string|max:64"
+      "rules": "required|string|max:64|regex:/^[A-Za-z0-9 _-][A-Za-z0-9 _.-]*$/"
     },
     {
       "name": "Weltsaat",
@@ -248,5 +248,38 @@
         "en": "Server and client versions differ. Set VERSION to LATEST and restart, or update the players."
       }
     }
-  ]
+  ],
+  "windows": {
+    "download": {
+      "source": "bedrock",
+      "keep": [
+        "server.properties",
+        "allowlist.json",
+        "permissions.json"
+      ]
+    },
+    "executable": "bedrock_server.exe",
+    "args": [],
+    "stop": {
+      "timeout_seconds": 30
+    },
+    "files": [
+      {
+        "path": "server.properties",
+        "format": "ini",
+        "set": {
+          "server-name": "{{SERVER_NAME}}",
+          "gamemode": "{{GAMEMODE}}",
+          "difficulty": "{{DIFFICULTY}}",
+          "max-players": "{{MAX_PLAYERS}}",
+          "allow-cheats": "{{ALLOW_CHEATS}}",
+          "online-mode": "{{ONLINE_MODE}}",
+          "level-name": "{{LEVEL_NAME}}",
+          "level-seed": "{{LEVEL_SEED}}",
+          "view-distance": "{{VIEW_DISTANCE}}",
+          "server-port": "{{SERVER_PORT}}"
+        }
+      }
+    ]
+  }
 }

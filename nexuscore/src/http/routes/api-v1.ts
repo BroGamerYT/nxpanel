@@ -689,7 +689,7 @@ export function registerApiV1Routes(
     if (installs && plan) {
       // Steam-Spiele brauchen mehr als einen Port (Spiel, Abfrage ...): jeden aus dem Bereich des Cores
       let ports: ServerInstanceConfig['ports'] = [{ name: 'game', hostPort: port, protocol: 'tcp' }];
-      if (plan.kind === 'steamcmd') {
+      if (plan.kind === 'steamcmd' || plan.kind === 'download') {
         try {
           ports = await eggPorts(egg?.raw.ports, port);
         } catch (err) {

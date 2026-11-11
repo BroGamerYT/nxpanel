@@ -274,6 +274,7 @@ export async function installSteamGame(input: SteamInstallInput, hooks: SteamIns
       ...(hooks.platform ? { platform: hooks.platform } : {}),
     }));
 
+  if (launch.appId === undefined) throw new Error('Für dieses Spiel fehlt die Steam-App-ID im Egg.');
   const { buildId } = await installSteamApp({
     exe,
     installDir: input.serverDir,

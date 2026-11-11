@@ -7,7 +7,9 @@ import type { ServerInstallInfo, ServerInstanceConfig, SteamLaunch } from '../ty
 import type { RawEggFile } from '../eggs/loader.js';
 import type { FetchLike } from './download.js';
 import type { EnsureJavaOptions } from './java.js';
+import { installDownloadGame } from './download-game.js';
 import { installMinecraft } from './minecraft.js';
+import { isDownloadSource } from './sources.js';
 import { installSteamGame } from './steam-game.js';
 import type { SteamRunner } from './steamcmd.js';
 
@@ -21,10 +23,10 @@ import type { SteamRunner } from './steamcmd.js';
  */
 
 export interface InstallSpec {
-  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd';
+  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd' | 'download';
   variables: Record<string, string>;
   propertiesTemplate: Record<string, string>;
-  /** Nur bei kind = steamcmd: App-ID, Programm, Argumente, Dateien. */
+  /** Nur bei kind = steamcmd oder download: App-ID bzw. Quelle, Programm, Argumente, Dateien. */
   steam?: SteamLaunch;
 }
 
@@ -68,7 +70,22 @@ export function installPlanFor(
   const paper = installKindFor(eggId, variables);
   if (paper) return { kind: paper };
   const w = raw?.windows;
-  if (!w || !Number.isInteger(w.steam_app_id)) return null;
+  if (!w) return null;
+  // Aus einem Archiv des Herstellers statt aus Steam - nur eine Quelle, die der Core selbst kennt
+  if (w.download !== undefined) {
+    if (!isDownloadSource(w.download.source)) return null;
+    return {
+      kind: 'download',
+      steam: {
+        download: { source: w.download.source, stripTop: w.download.stripTop, keep: w.download.keep, mkdirs: w.download.mkdirs },
+        executable: w.executable,
+        args: w.args ?? [],
+        stopTimeoutSeconds: w.stop?.timeout_seconds,
+        files: w.files,
+      },
+    };
+  }
+  if (!Number.isInteger(w.steam_app_id)) return null;
   return {
     kind: 'steamcmd',
     steam: {
@@ -196,7 +213,40 @@ export class InstallManager {
       stopTimeoutSeconds: spec.steam.stopTimeoutSeconds ?? 60,
       info: { ...(result.buildId ? { version: result.buildId } : {}) },
       message: `Spiel installiert${result.buildId ? ` (Build ${result.buildId})` : ''}`,
-      result: { appId: spec.steam.appId, ...(result.buildId ? { build: result.buildId } : {}) },
+      result: { appId: spec.steam.appId ?? null, ...(result.buildId ? { build: result.buildId } : {}) },
+    };
+  }
+
+  private async installDownload(
+    config: ServerInstanceConfig,
+    spec: InstallSpec,
+    progress: (f: number, m: string) => void,
+    serverId: string,
+  ): Promise<InstallOutcome> {
+    if (!spec.steam?.download) throw new Error('Für dieses Spiel fehlen die Download-Angaben im Egg.');
+    const result = await installDownloadGame(
+      {
+        serverDir: config.workingDir,
+        runtimesDir: this.options.runtimesDir,
+        launch: spec.steam,
+        variables: spec.variables,
+        ports: config.ports,
+        ramMb: config.maxMemoryMb ?? 2048,
+        serverName: config.name,
+      },
+      {
+        onProgress: progress,
+        onLine: (line) => this.say(serverId, line),
+        ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
+      },
+    );
+    return {
+      executable: result.executable,
+      args: result.args,
+      stopTimeoutSeconds: spec.steam.stopTimeoutSeconds ?? 30,
+      info: { version: result.version },
+      message: `Spiel installiert (Version ${result.version})`,
+      result: { source: spec.steam.download.source, version: result.version, sha256: result.sha256 },
     };
   }
 
@@ -227,7 +277,9 @@ export class InstallManager {
       const outcome =
         spec.kind === 'steamcmd'
           ? await this.installSteam(config, spec, progress, serverId)
-          : await this.installPaper(config, spec, progress);
+          : spec.kind === 'download'
+            ? await this.installDownload(config, spec, progress, serverId)
+            : await this.installPaper(config, spec, progress);
 
       const installed: ServerInstanceConfig = {
         ...config,

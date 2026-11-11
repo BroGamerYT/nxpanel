@@ -78,9 +78,22 @@ export interface SteamFile {
  */
 export type SteamArg = string | { when: string; args: string[] };
 
+/** Ein Spiel, das aus einem Archiv des Herstellers kommt statt aus Steam (siehe install/sources.ts). */
+export interface DownloadSpec {
+  source: 'teamspeak3' | 'terraria' | 'bedrock';
+  /** Liegt alles in genau einem Ordner im Archiv (z. B. "1458/"), wird dieser Ordner weggelassen. */
+  stripTop?: boolean | undefined;
+  /** Dateien, die bei einer Neuinstallation nicht ueberschrieben werden (relativ, mit /). */
+  keep?: string[] | undefined;
+  /** Ordner, die das Spiel erwartet (relativ zum Server-Ordner), z. B. "worlds". */
+  mkdirs?: string[] | undefined;
+}
+
 /** Wie ein Steam-Spiel installiert und gestartet wird (Egg: windows). */
 export interface SteamLaunch {
-  appId: number;
+  /** Steam-App-ID - oder `download` fuer Spiele ausserhalb von Steam. */
+  appId?: number | undefined;
+  download?: DownloadSpec | undefined;
   branch?: string | undefined;
   /** Relativ zum Server-Ordner. */
   executable: string;
@@ -92,7 +105,7 @@ export interface SteamLaunch {
 
 export interface ServerInstallInfo {
   state: 'installing' | 'done' | 'failed';
-  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd';
+  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd' | 'download';
   /** Nur bei kind = steamcmd. */
   steam?: SteamLaunch;
   version?: string;

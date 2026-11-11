@@ -206,5 +206,55 @@
         "en": "The server cannot write to the data folder."
       }
     }
-  ]
+  ],
+  "windows": {
+    "download": {
+      "source": "terraria",
+      "stripTop": true,
+      "mkdirs": [
+        "worlds"
+      ]
+    },
+    "executable": "Windows/TerrariaServer.exe",
+    "args": [
+      "-port",
+      "{{PORT_GAME}}",
+      "-maxplayers",
+      "{{MAXPLAYERS}}",
+      "-worldpath",
+      "worlds",
+      "-world",
+      "worlds/{{WORLDNAME}}.wld",
+      "-autocreate",
+      "{{AUTOCREATE}}",
+      "-worldname",
+      "{{WORLDNAME}}",
+      "-difficulty",
+      "{{DIFFICULTY}}",
+      {
+        "when": "SEED",
+        "args": [
+          "-seed",
+          "{{SEED}}"
+        ]
+      },
+      {
+        "when": "PASSWORD",
+        "args": [
+          "-password",
+          "{{PASSWORD}}"
+        ]
+      },
+      {
+        "when": "MOTD",
+        "args": [
+          "-motd",
+          "{{MOTD}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
+  }
 }

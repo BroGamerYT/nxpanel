@@ -38,11 +38,12 @@ export interface RawEggFile {
   ports?: unknown;
   config_files?: Record<string, { parser?: string; find?: Record<string, unknown> } | undefined>;
   /**
-   * Windows-Server ueber SteamCMD: App-ID, Programm, Startargumente, Konfigurationsdateien.
-   * Fehlt der Block, kann der Core das Spiel nicht selbst installieren.
+   * Windows-Server ueber SteamCMD (`steam_app_id`) oder aus einem Archiv des Herstellers (`download`):
+   * Programm, Startargumente, Konfigurationsdateien. Fehlt der Block, kann der Core das Spiel nicht selbst installieren.
    */
   windows?: {
-    steam_app_id: number;
+    steam_app_id?: number;
+    download?: { source: string; stripTop?: boolean; keep?: string[]; mkdirs?: string[] };
     branch?: string;
     executable: string;
     args?: SteamArg[];

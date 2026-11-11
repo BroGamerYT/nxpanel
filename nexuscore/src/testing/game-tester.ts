@@ -336,7 +336,7 @@ export class GameTester {
       const serverDir = await resolveInsideRoot(serverRootFor(registry.dir), id, 'id');
       await fs.mkdir(serverDir, { recursive: true });
       const firstPort = await this.deps.allocatePort(registry.list());
-      const ports = plan.kind === 'steamcmd' ? await this.deps.portsFor(egg?.raw.ports, firstPort) : [{ name: 'game', hostPort: firstPort, protocol: 'tcp' as const }];
+      const ports = plan.kind === 'steamcmd' || plan.kind === 'download' ? await this.deps.portsFor(egg?.raw.ports, firstPort) : [{ name: 'game', hostPort: firstPort, protocol: 'tcp' as const }];
       await registry.add({
         id,
         name: `Test ${testCase.name}`,

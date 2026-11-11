@@ -72,5 +72,32 @@
       "rules": "required|string|min:6|max:64",
       "secret": true
     }
-  ]
+  ],
+  "windows": {
+    "download": {
+      "source": "teamspeak3",
+      "stripTop": true
+    },
+    "executable": "ts3server.exe",
+    "args": [
+      {
+        "when": "TS3SERVER_LICENSE=accept",
+        "args": [
+          "license_accepted=1"
+        ]
+      },
+      "default_voice_port={{PORT_VOICE}}",
+      "filetransfer_port={{PORT_FILETRANSFER}}",
+      "query_port={{PORT_QUERY}}",
+      {
+        "when": "TS3SERVER_SERVERADMIN_PASSWORD",
+        "args": [
+          "serveradmin_password={{TS3SERVER_SERVERADMIN_PASSWORD}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
+  }
 }
