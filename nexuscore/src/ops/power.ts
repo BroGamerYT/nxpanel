@@ -1,0 +1,96 @@
+import type { HostDriver } from '../drivers/interface.js';
+import { logger } from '../logger.js';
+import { writeServerProperties } from '../install/minecraft.js';
+import type { ServerRegistry } from '../store/registry.js';
+import type { ServerInstanceConfig, ServerState } from '../types.js';
+
+/**
+ * Starten, Stoppen und Neustarten eines Servers - an einer Stelle.
+ *
+ * Die Oberflaeche (Power-Route) und der Planer (Zeitplaene) brauchen dasselbe:
+ * vor dem Start muessen die Einstellungen beim Treiber ankommen und die
+ * Spieldateien (server.properties) zur Konfiguration passen.
+ */
+
+export class PowerError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: number,
+    readonly code: string,
+  ) {
+    super(message);
+    this.name = 'PowerError';
+  }
+}
+
+export interface PowerOps {
+  start(serverId: string): Promise<ServerState>;
+  stop(serverId: string): Promise<ServerState>;
+  kill(serverId: string): Promise<ServerState>;
+  restart(serverId: string): Promise<ServerState>;
+  command(serverId: string, line: string): Promise<void>;
+}
+
+export function createPowerOps(deps: { registry: ServerRegistry; driver: HostDriver }): PowerOps {
+  const { registry, driver } = deps;
+
+  const need = (id: string): ServerInstanceConfig => {
+    const c = registry.get(id);
+    if (!c) throw new PowerError('Server nicht gefunden', 404, 'not_found');
+    return c;
+  };
+
+  /** Alles, was vor einem Start stimmen muss. */
+  async function prepare(id: string): Promise<void> {
+    const c = need(id);
+    if (c.install && c.install.state !== 'done') {
+      throw new PowerError(
+        c.install.state === 'installing'
+          ? 'Der Server wird noch installiert.'
+          : `Die Installation ist fehlgeschlagen: ${c.install.error ?? 'unbekannter Fehler'}. Bitte neu installieren.`,
+        409,
+        'not_installed',
+      );
+    }
+    // Port und Einstellungen koennen sich seit der Installation geaendert haben.
+    if (c.install?.kind === 'minecraft-paper') {
+      await writeServerProperties({
+        serverDir: c.workingDir,
+        variables: c.install.variables ?? {},
+        propertiesTemplate: c.install.propertiesTemplate ?? {},
+        ramMb: c.maxMemoryMb ?? 2048,
+        port: c.ports[0]?.hostPort ?? 25565,
+        serverName: c.name,
+      }).catch((err: unknown) => logger.warn({ err, serverId: id }, 'server.properties konnte nicht geschrieben werden'));
+    }
+    // Was in den Einstellungen geaendert wurde, gilt ab hier auch beim Treiber.
+    await driver.updateServer?.(c).catch(() => {});
+  }
+
+  return {
+    async start(id) {
+      await prepare(id);
+      return driver.startServer(id);
+    },
+    async stop(id) {
+      need(id);
+      return driver.stopServer(id);
+    },
+    async kill(id) {
+      need(id);
+      return driver.killServer(id);
+    },
+    async restart(id) {
+      need(id);
+      // Ein schon gestoppter Server ist kein Fehler: dann wird nur gestartet.
+      await driver.stopServer(id).catch(() => {});
+      await prepare(id);
+      return driver.startServer(id);
+    },
+    async command(id, line) {
+      need(id);
+      if (!driver.sendCommand) throw new PowerError('Dieser Treiber nimmt keine Befehle an.', 400, 'not_supported');
+      await driver.sendCommand(id, line);
+    },
+  };
+}

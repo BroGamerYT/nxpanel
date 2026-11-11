@@ -36,6 +36,8 @@ export interface RawEggFile {
   console?: string;
   ports?: unknown;
   config_files?: Record<string, { parser?: string; find?: Record<string, unknown> } | undefined>;
+  /** Ordner mit Logdateien im Server-Ordner (Standard: logs). */
+  log_dirs?: string[];
   /** Steam-Store-ID fuer das Titelbild. */
   cover?: { steam?: number };
   resources?: {

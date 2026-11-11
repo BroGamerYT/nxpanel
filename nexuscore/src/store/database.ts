@@ -64,6 +64,30 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX tasks_status ON tasks (status, updated_at);
     `,
   },
+  {
+    id: 2,
+    name: 'schedules',
+    sql: `
+      CREATE TABLE schedules (
+        id               TEXT PRIMARY KEY,
+        server_id        TEXT NOT NULL,
+        name             TEXT NOT NULL,
+        action           TEXT NOT NULL,              -- restart | backup | command
+        payload          TEXT,                       -- Befehl bei action = command
+        cron             TEXT,                       -- "HH:MM" oder 5 Felder
+        interval_minutes INTEGER,
+        active           INTEGER NOT NULL DEFAULT 1,
+        last_run_at      TEXT,
+        next_run_at      TEXT,
+        last_status      TEXT NOT NULL DEFAULT 'pending',
+        last_error       TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+      );
+      CREATE INDEX schedules_server ON schedules (server_id);
+      CREATE INDEX schedules_due ON schedules (active, next_run_at);
+    `,
+  },
 ];
 
 /** Die Datenbankdatei ist beschaedigt - der Core darf damit nicht weiterlaufen. */

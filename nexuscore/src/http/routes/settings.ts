@@ -6,7 +6,7 @@ import type { LoadedEgg } from '../../eggs/loader.js';
 import { isSecretVariable, isUserVariable, parseRules, validateVariables } from '../../eggs/rules.js';
 import type { InstallManager } from '../../install/manager.js';
 import { heapMb } from '../../install/minecraft.js';
-import { PathOutsideRootError, isInside, resolveInsideRoot, serverRootFor } from '../../protocol/paths.js';
+import { resolveInstanceDir } from '../../files/instance-dir.js';
 import { allocatePort, isPortFree } from '../../protocol/ports.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig, ServerPort } from '../../types.js';
@@ -138,17 +138,7 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
     await driver.updateServer?.(next).catch(() => {});
   }
 
-  /** Der Ordner des Servers - nur, wenn er echt UNTER dem Server-Verzeichnis liegt, sonst null. */
-  async function instanceDir(c: ServerInstanceConfig): Promise<string | null> {
-    const serverRoot = serverRootFor(registry.dir);
-    try {
-      const dir = await resolveInsideRoot(serverRoot, c.workingDir, 'workingDir');
-      return dir !== serverRoot && isInside(serverRoot, dir) ? dir : null;
-    } catch (err) {
-      if (err instanceof PathOutsideRootError) return null;
-      throw err;
-    }
-  }
+  const instanceDir = (c: ServerInstanceConfig): Promise<string | null> => resolveInstanceDir(registry, c);
 
   /** Liefert den Server oder antwortet mit 404. */
   function need(id: string, reply: FastifyReply): ServerInstanceConfig | null {

@@ -15,7 +15,7 @@ import {
   resolveUploadTarget,
   writeFileContent,
 } from '../../files/files.js';
-import { PathOutsideRootError, isInside, resolveInsideRoot, serverRootFor } from '../../protocol/paths.js';
+import { resolveInstanceDir } from '../../files/instance-dir.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig } from '../../types.js';
 
@@ -84,21 +84,15 @@ export function registerFileRoutes(server: FastifyInstance, deps: FileRouteDeps)
    * erreichbar (Konzept Abschnitt 3.3).
    */
   async function rootOf(instance: ServerInstanceConfig): Promise<string> {
-    const serverRoot = serverRootFor(registry.dir);
-    try {
-      const dir = await resolveInsideRoot(serverRoot, instance.workingDir, 'workingDir');
-      if (dir === serverRoot || !isInside(serverRoot, dir)) throw new PathOutsideRootError('workingDir');
-      return dir;
-    } catch (err) {
-      if (err instanceof PathOutsideRootError) {
-        throw new FileAccessError(
-          'Dieser Server liegt nicht in einem eigenen Ordner unter dem Server-Verzeichnis - Dateizugriff gesperrt.',
-          'forbidden',
-          403,
-        );
-      }
-      throw err;
+    const dir = await resolveInstanceDir(registry, instance);
+    if (!dir) {
+      throw new FileAccessError(
+        'Dieser Server liegt nicht in einem eigenen Ordner unter dem Server-Verzeichnis - Dateizugriff gesperrt.',
+        'forbidden',
+        403,
+      );
     }
+    return dir;
   }
 
   /** Server und Ordner zu einer Anfrage; bei Fehler ist die Antwort schon gesendet (null). */

@@ -221,8 +221,46 @@ export class ServerRegistry {
   async remove(id: string): Promise<boolean> {
     if (!this.servers.has(id)) return false;
     this.db.prepare('DELETE FROM instances WHERE id = ?').run(id);
+    this.db.prepare('DELETE FROM schedules WHERE server_id = ?').run(id);
     this.servers.delete(id);
     return true;
+  }
+
+  // ------------------------------------------------------------------ Zeitplaene
+
+  listSchedules(serverId: string): ScheduleRow[] {
+    return (this.db.prepare('SELECT * FROM schedules WHERE server_id = ? ORDER BY created_at, id').all(serverId) as unknown as RawSchedule[]).map(toSchedule);
+  }
+
+  getSchedule(id: string): ScheduleRow | undefined {
+    const row = this.db.prepare('SELECT * FROM schedules WHERE id = ?').get(id) as RawSchedule | undefined;
+    return row ? toSchedule(row) : undefined;
+  }
+
+  /** Legt an oder ueberschreibt (nach ID). */
+  saveSchedule(s: ScheduleRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO schedules (id, server_id, name, action, payload, cron, interval_minutes, active, last_run_at, next_run_at, last_status, last_error, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, action = excluded.action, payload = excluded.payload, cron = excluded.cron,
+           interval_minutes = excluded.interval_minutes, active = excluded.active, last_run_at = excluded.last_run_at,
+           next_run_at = excluded.next_run_at, last_status = excluded.last_status, last_error = excluded.last_error, updated_at = excluded.updated_at`,
+      )
+      .run(s.id, s.server_id, s.name, s.action, s.payload, s.cron, s.interval_minutes, s.active ? 1 : 0, s.last_run_at, s.next_run_at, s.last_status, s.last_error, s.created_at, s.updated_at);
+  }
+
+  deleteSchedule(id: string): void {
+    this.db.prepare('DELETE FROM schedules WHERE id = ?').run(id);
+  }
+
+  /** Aktive Plaene, deren Termin erreicht ist (aelteste zuerst). */
+  dueSchedules(nowIso: string, limit = 20): ScheduleRow[] {
+    return (
+      this.db
+        .prepare('SELECT * FROM schedules WHERE active = 1 AND next_run_at IS NOT NULL AND next_run_at <= ? ORDER BY next_run_at LIMIT ?')
+        .all(nowIso, limit) as unknown as RawSchedule[]
+    ).map(toSchedule);
   }
 
   /**
@@ -375,6 +413,29 @@ export class ServerRegistry {
       .run(new Date().toISOString());
     return Number(result.changes);
   }
+}
+
+export interface ScheduleRow {
+  id: string;
+  server_id: string;
+  name: string;
+  action: 'restart' | 'backup' | 'command';
+  payload: string | null;
+  cron: string | null;
+  interval_minutes: number | null;
+  active: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  last_status: string;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+type RawSchedule = Omit<ScheduleRow, 'active' | 'interval_minutes'> & { active: number; interval_minutes: number | null };
+
+function toSchedule(row: RawSchedule): ScheduleRow {
+  return { ...row, active: Number(row.active) === 1, interval_minutes: row.interval_minutes === null ? null : Number(row.interval_minutes) };
 }
 
 interface TaskRow {

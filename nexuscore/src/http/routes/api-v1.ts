@@ -24,6 +24,11 @@ import { installKindFor, type InstallManager } from '../../install/manager.js';
 import { writeServerProperties } from '../../install/minecraft.js';
 import { registerFileRoutes } from './files.js';
 import { getServerMeta, registerSettingsRoutes } from './settings.js';
+import { registerLogFileRoutes } from './log-files.js';
+import { registerScheduleRoutes } from './schedules.js';
+import { Scheduler } from '../../schedules/scheduler.js';
+import { PowerError, createPowerOps } from '../../ops/power.js';
+import { findInstance } from '../../store/find.js';
 import { loadEggs, type LoadedEgg } from '../../eggs/loader.js';
 import {
   coverDirFor,
@@ -43,7 +48,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -61,6 +66,9 @@ export const SERVER_PERMISSIONS = [
   'startup.update',
   'allocation.read',
   'allocation.assign',
+  'schedule.read',
+  'schedule.update',
+  'schedule.run',
 ];
 
 export function registerApiV1Routes(
@@ -70,7 +78,7 @@ export function registerApiV1Routes(
   registry: ServerRegistry,
   account: LocalAccount | null = null,
   installs: InstallManager | null = null,
-  options: { fetchImpl?: Fetcher } = {},
+  options: { fetchImpl?: Fetcher; scheduler?: boolean } = {},
 ): void {
   const coverDir = coverDirFor(registry.dir);
   const storedCover = (eggId: string) => registry.getSetting<CoverChoice>(`cover.${eggId}`);
@@ -139,19 +147,23 @@ export function registerApiV1Routes(
   const sessionCookie = (token: string): string =>
     `nxp_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`;
 
-  function findServer(idOrShortId: string): ServerInstanceConfig | undefined {
-    const list = registry.list();
-    const exact = list.find((s) => s.id === idOrShortId);
-    if (exact) return exact;
-    if (idOrShortId.length === 8) {
-      const byShort = list.filter((s) => s.id.slice(0, 8) === idOrShortId);
-      if (byShort.length === 1) return byShort[0];
-    }
-    return undefined;
+  const findServer = (idOrShortId: string): ServerInstanceConfig | undefined => findInstance(registry, idOrShortId);
+
+  const power = createPowerOps({ registry, driver });
+  // Backups gibt es im Core noch nicht: dann lehnt der Planer solche Zeitplaene ab.
+  const scheduler = new Scheduler(registry, {
+    restart: async (id) => void (await power.restart(id)),
+    command: (id, line) => power.command(id, line),
+  });
+  if (options.scheduler !== false) {
+    scheduler.start();
+    server.addHook('onClose', async () => scheduler.stop());
   }
 
+  registerScheduleRoutes(server, { registry, find: findServer, scheduler });
   registerFileRoutes(server, { registry, find: findServer });
   registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs });
+  registerLogFileRoutes(server, { registry, find: findServer, eggs: loadEggs });
 
   // 1. Authentifizierung & Sitzung
   // Block A4: refresh gibt nur dann ein Token heraus, wenn es schon eine
@@ -570,6 +582,9 @@ export function registerApiV1Routes(
       const id = c.id;
       const { action } = req.body;
 
+      if (action !== 'start' && action !== 'stop' && action !== 'kill' && action !== 'restart') {
+        return reply.status(400).send({ error: 'Unbekannte Aktion', code: 'invalid_action' });
+      }
       if (c.install && c.install.state !== 'done') {
         return reply.status(409).send({
           error:
@@ -579,42 +594,13 @@ export function registerApiV1Routes(
           code: 'not_installed',
         });
       }
-      // Port und Einstellungen koennen sich seit der Installation geaendert haben.
-      if ((action === 'start' || action === 'restart') && c.install?.kind === 'minecraft-paper') {
-        await writeServerProperties({
-          serverDir: c.workingDir,
-          variables: c.install.variables ?? {},
-          propertiesTemplate: c.install.propertiesTemplate ?? {},
-          ramMb: c.maxMemoryMb ?? 2048,
-          port: c.ports[0]?.hostPort ?? 25565,
-          serverName: c.name,
-        }).catch((err: unknown) => logger.warn({ err, serverId: id }, 'server.properties konnte nicht geschrieben werden'));
-      }
-
-      // Was in den Einstellungen geaendert wurde, gilt ab hier auch beim Treiber.
-      const syncConfig = async (): Promise<void> => {
-        const fresh = registry.get(id);
-        if (fresh) await driver.updateServer?.(fresh).catch(() => {});
-      };
 
       try {
-        if (action === 'start') {
-          await syncConfig();
-          await driver.startServer(id);
-        } else if (action === 'stop') {
-          await driver.stopServer(id);
-        } else if (action === 'kill') {
-          await driver.killServer(id);
-        } else if (action === 'restart') {
-          await driver.stopServer(id).catch(() => {});
-          await syncConfig();
-          await driver.startServer(id);
-        } else {
-          return reply.status(400).send({ error: 'Unbekannte Aktion', code: 'invalid_action' });
-        }
+        await power[action](id);
         registry.audit(`server.${action}`, id, 'standalone');
         return { ok: true, status: action };
       } catch (err) {
+        if (err instanceof PowerError) return reply.status(err.statusCode).send({ error: err.message, code: err.code });
         return reply.status(400).send({ error: (err as Error).message });
       }
     },
