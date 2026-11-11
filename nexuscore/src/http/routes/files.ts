@@ -33,35 +33,35 @@ export interface FileRouteDeps {
 }
 
 /** Pflichtangabe mit lesbarer Meldung - sonst sagt zod bei einem fehlenden Feld nur "Required". */
-const required = (message: string) => z.string({ required_error: message, invalid_type_error: message }).min(1, message);
+export const required = (message: string) => z.string({ required_error: message, invalid_type_error: message }).min(1, message);
 
-const pathQuery = z.object({ path: z.string().optional().default('') });
-const requiredPathQuery = z.object({ path: required('Pfad darf nicht leer sein') });
-const contentBody = z.object({
+export const pathQuery = z.object({ path: z.string().optional().default('') });
+export const requiredPathQuery = z.object({ path: required('Pfad darf nicht leer sein') });
+export const contentBody = z.object({
   path: required('Pfad darf nicht leer sein'),
   content: z.string({ required_error: 'Inhalt fehlt', invalid_type_error: 'Inhalt muss Text sein' }),
 });
-const compressBody = z.object({
+export const compressBody = z.object({
   paths: z.array(required('Pfad darf nicht leer sein')).min(1, 'Mindestens eine Datei erforderlich').max(1000),
   destination: required('Zielarchivname erforderlich'),
 });
-const decompressBody = z.object({
+export const decompressBody = z.object({
   path: required('Archivpfad erforderlich'),
   destination: z.string().optional().default(''),
 });
-const pathBody = z.object({ path: required('Pfad darf nicht leer sein') });
-const renameBody = z.object({
+export const pathBody = z.object({ path: required('Pfad darf nicht leer sein') });
+export const renameBody = z.object({
   from: required('Ursprungspfad darf nicht leer sein'),
   to: required('Zielpfad darf nicht leer sein'),
 });
 
 /** Antwort mit "error" (Oberflaeche) und "message" (Upload-Dialog) - beides liest die Oberflaeche. */
-function fail(reply: FastifyReply, status: number, message: string, code: string): FastifyReply {
+export function fail(reply: FastifyReply, status: number, message: string, code: string): FastifyReply {
   return reply.status(status).send({ error: message, message, code });
 }
 
 /** Uebersetzt Fehler des Dateisystems in lesbare Antworten. */
-function sendFileError(reply: FastifyReply, err: unknown): FastifyReply {
+export function sendFileError(reply: FastifyReply, err: unknown): FastifyReply {
   if (err instanceof FileAccessError) return fail(reply, err.statusCode, err.message, err.code);
 
   const code = (err as NodeJS.ErrnoException | undefined)?.code;

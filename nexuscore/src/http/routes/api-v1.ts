@@ -33,6 +33,7 @@ import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
+import { registerAdminFileRoutes } from './admin-files.js';
 import { registerIntegrationRoutes } from './integrations.js';
 import { DiscordNotifier } from '../../notifications/discord.js';
 import { getNetwork, publicHostOf } from '../../network.js';
@@ -61,7 +62,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -248,6 +249,7 @@ export function registerApiV1Routes(
   });
   registerAdminRoutes(server, { registry, driver, tester });
   registerIntegrationRoutes(server, { registry, discord });
+  registerAdminFileRoutes(server, { registry });
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
