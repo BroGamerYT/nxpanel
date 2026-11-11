@@ -162,3 +162,16 @@ describe('Vorlagen mit den neuen Formaten', () => {
     expect(() => renderConfig({ path: 'a.ini', format: 'ini', set: { P: { $number: '{{PW}}' } } }, null, values)).toThrow(/keine Zahl/);
   });
 });
+
+describe('Textdateien aus einer Vorlage', () => {
+  it('schreibt die ganze Datei und macht Werte einzeilig', () => {
+    const values = { SERVER_NAME: 'Mein\nServer\r\nserverPasswordAdmin geheim', PORT: '27015' };
+    const text = renderConfig({ path: 'c.cfg', format: 'text', set: {}, content: 'serverName {{SERVER_NAME}}\nserverGamePort {{PORT}}' }, 'alter Inhalt', values);
+    expect(text).toBe('serverName Mein Server serverPasswordAdmin geheim\nserverGamePort 27015\n');
+    expect(text.split('\n').filter((l) => l.startsWith('serverPasswordAdmin'))).toEqual([]);
+  });
+
+  it('eine leere Vorlage ergibt eine leere Zeile, nicht den alten Inhalt', () => {
+    expect(renderConfig({ path: 'token.txt', format: 'text', set: {}, content: '{{LEER}}' }, 'alt', { LEER: '' })).toBe('\n');
+  });
+});

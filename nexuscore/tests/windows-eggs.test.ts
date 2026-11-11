@@ -20,7 +20,7 @@ interface Egg {
     executable: string;
     args?: Array<string | { when: string; args: string[] }>;
     stop?: { timeout_seconds?: number };
-    files?: Array<{ path: string; format: string; set: Record<string, string | { $number?: string; $boolean?: string }> }>;
+    files?: Array<{ path: string; format: string; content?: string; set?: Record<string, string | { $number?: string; $boolean?: string }> }>;
   };
 }
 
@@ -86,7 +86,8 @@ describe('windows-Blöcke der Spielvorlagen', () => {
       };
       (w.args ?? []).forEach(take);
       for (const f of w.files ?? []) {
-        for (const v of Object.values(f.set)) used.push(...names(typeof v === 'string' ? v : (v.$number ?? v.$boolean ?? '')));
+        used.push(...names(f.content ?? ''));
+        for (const v of Object.values(f.set ?? {})) used.push(...names(typeof v === 'string' ? v : (v.$number ?? v.$boolean ?? '')));
       }
       const unknown = [...new Set(used)].filter((n) => !ok.has(n));
       expect(unknown, `unbekannte Platzhalter in ${_id}`).toEqual([]);
@@ -139,7 +140,7 @@ describe('windows-Blöcke der Spielvorlagen', () => {
 
     it('JSON-Dateien: Zahlen aus Ports oder Variablen mit Wert', () => {
       for (const f of w.files ?? []) {
-        for (const [key, v] of Object.entries(f.set)) {
+        for (const [key, v] of Object.entries(f.set ?? {})) {
           if (typeof v === 'string' || v.$number === undefined) continue;
           for (const n of names(v.$number)) {
             const def = (egg.variables ?? []).find((x) => x.env_variable.toUpperCase() === n);

@@ -214,6 +214,12 @@ export function renderConfig(file: SteamFile, existing: string | null, values: R
       for (const [k, raw] of Object.entries(file.set)) set[k] = { raw: typeof raw !== 'string', value: resolveValue(raw, values) };
       return patchYamlFile(existing, set);
     }
+    case 'text': {
+      // Ganze Datei aus einer Vorlage. Werte werden einzeilig: ein Servername darf keine neue Zeile (Einstellung) einschleusen.
+      const oneLine: Record<string, string> = {};
+      for (const [k, v] of Object.entries(values)) oneLine[k] = v.replace(/[\r\n]+/g, ' ');
+      return substitute(file.content ?? '', oneLine).replace(/\r?\n/g, '\n').replace(/\n*$/, '\n');
+    }
     default:
       throw new Error(`Unbekanntes Dateiformat: ${(file as { format: string }).format}`);
   }

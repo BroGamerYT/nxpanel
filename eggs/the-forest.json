@@ -323,5 +323,32 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 556450,
+    "executable": "TheForestDedicatedServer.exe",
+    "args": [
+      "-batchmode",
+      "-nographics",
+      "-nosteamclient",
+      "-serverPasswordAdmin",
+      "{{ADMIN_PASS}}",
+      "-inittype",
+      "{{INIT_TYPE}}",
+      "-savefolderpath",
+      "saves",
+      "-configfilepath",
+      "config.cfg"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    },
+    "files": [
+      {
+        "path": "config.cfg",
+        "format": "text",
+        "content": "serverIP 0.0.0.0\nserverSteamPort {{STEAM_PORT}}\nserverGamePort {{SERVER_PORT}}\nserverQueryPort {{QUERY_PORT}}\nserverName {{SERVER_NAME}}\nserverPlayers {{MAX_PLAYERS}}\nenableVAC {{VAC}}\nserverPassword {{SERVER_PASS}}\nserverPasswordAdmin {{ADMIN_PASS}}\nserverAutoSaveInterval 15\ndifficulty {{SERVER_DIFFICULTY}}\ninitType {{INIT_TYPE}}\nslot 3\nshowLogs off\nserverContact email@email.com\nveganMode off\nvegetarianMode off\nresetHolesMode off\ntreeRegrowMode off\nallowBuildingDestruction on\nallowEnemiesCreativeMode off\nallowCheats off\nrealisticPlayerDamage off\nsaveFolderPath saves\ntargetFpsIdle 5\ntargetFpsActive 60"
+      }
+    ]
   }
 }

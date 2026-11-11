@@ -60,7 +60,7 @@ export interface ServerInstanceConfig {
 export interface SteamFile {
   /** Relativ zum Server-Ordner. */
   path: string;
-  format: 'json' | 'unreal-options' | 'ini' | 'xml' | 'yaml';
+  format: 'json' | 'unreal-options' | 'ini' | 'xml' | 'yaml' | 'text';
   /** "VARIABLE=Wert": hat die Variable diesen Wert, wird die Datei nicht angefasst (z. B. eigene Konfiguration). */
   unless?: string;
   /** "unreal-options" und "ini": [Abschnitt]; bei "unreal-options" auch der Schluessel (z. B. OptionSettings). */
@@ -68,6 +68,8 @@ export interface SteamFile {
   key?: string;
   /** Nur "xml": Name des Wurzelelements (auch fuer eine neu angelegte Datei). */
   root?: string;
+  /** Nur "text": der ganze Inhalt der Datei als Vorlage (Zeilen mit Platzhaltern). Wird bei jedem Start neu geschrieben. */
+  content?: string;
   /** Schluessel (bei json auch "a.b.c") -> Vorlage. Zahlen und Wahrheitswerte ueber $number / $boolean. */
   set: Record<string, string | { $number?: string; $boolean?: string }>;
 }

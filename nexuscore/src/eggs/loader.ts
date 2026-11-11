@@ -50,11 +50,12 @@ export interface RawEggFile {
     stop?: { timeout_seconds?: number };
     files?: Array<{
       path: string;
-      format: 'json' | 'unreal-options' | 'ini' | 'xml' | 'yaml';
+      format: 'json' | 'unreal-options' | 'ini' | 'xml' | 'yaml' | 'text';
       unless?: string;
       section?: string;
       key?: string;
       root?: string;
+      content?: string;
       set: Record<string, string | { $number?: string; $boolean?: string }>;
     }>;
   };
