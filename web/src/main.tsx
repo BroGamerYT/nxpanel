@@ -52,7 +52,7 @@ function App() {
         <Route path="community" element={<Community />} />
         <Route path="account" element={<FeatureGate feature="account"><Account /></FeatureGate>} />
         <Route path="server/:id" element={<ServerPage />} />
-        {me.user.role === 'admin' && <Route path="admin" element={<FeatureGate feature="admin"><AdminHub /></FeatureGate>} />}
+        {(me.user.role === 'admin' || Object.entries(me.permissions).some(([k, v]) => k.startsWith('admin.') && v)) && <Route path="admin" element={<FeatureGate feature="admin"><AdminHub /></FeatureGate>} />}
         {me.permissions['admin.nodes'] && <Route path="netzwerk" element={<FeatureGate feature="admin"><Network /></FeatureGate>} />}
         {me.permissions['admin.nodes'] && <Route path="admin/hosts" element={<FeatureGate feature="admin"><Hosts /></FeatureGate>} />}
         {me.permissions['admin.users'] && <Route path="admin/users" element={<FeatureGate feature="admin"><AdminUsers /></FeatureGate>} />}

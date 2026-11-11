@@ -40,8 +40,9 @@ import { registerIntegrationRoutes } from './integrations.js';
 import { DiscordNotifier } from '../../notifications/discord.js';
 import { getNetwork, publicHostOf } from '../../network.js';
 import { runAs } from '../../store/identity.js';
-import { canSeeServer, flagsFor } from '../authz.js';
+import { accessPolicyFor, canSeeServer, flagsFor, type AccessPolicy } from '../authz.js';
 import { getAccess, removeServerAccess, setOwner } from '../../store/access.js';
+import { isUserVariable, validateVariables } from '../../eggs/rules.js';
 import { GameTester } from '../../testing/game-tester.js';
 import { registerAccountRoutes } from './account.js';
 import { registerExtraRoutes } from './extras.js';
@@ -107,8 +108,10 @@ export function registerApiV1Routes(
   registry: ServerRegistry,
   account: LocalAccount | null = null,
   installs: InstallManager | null = null,
-  options: { fetchImpl?: Fetcher; scheduler?: boolean; ping?: (host: string, port: number) => Promise<SlpResult> } = {},
+  options: { fetchImpl?: Fetcher; scheduler?: boolean; ping?: (host: string, port: number) => Promise<SlpResult>; policy?: AccessPolicy } = {},
 ): void {
+  // Ohne Angabe die vorsichtige Regel des Treibers
+  const policy = options.policy ?? accessPolicyFor(driver.name);
   const coverDir = coverDirFor(registry.dir);
   const storedCover = (eggId: string) => registry.getSetting<CoverChoice>(`cover.${eggId}`);
   const coverOf = (egg: LoadedEgg) => coverFor(egg, storedCover(egg.id));
@@ -397,7 +400,7 @@ export function registerApiV1Routes(
 
   /** Rechte an einem Server, soweit der Core die Funktion hat - alles andere bleibt in der Oberflaeche verborgen. */
   const permissionsFor = (serverId: string, actor: NonNullable<FastifyRequest['actor']>): string[] =>
-    flagsFor(registry, serverId, actor).filter((f) => SERVER_PERMISSIONS.includes(f));
+    flagsFor(registry, serverId, actor, policy).filter((f) => SERVER_PERMISSIONS.includes(f));
   const ownerNameOf = (serverId: string): string => {
     const ownerId = getAccess(registry, serverId).ownerId;
     return (ownerId ? account?.get(ownerId)?.username : undefined) ?? 'Admin';
@@ -653,10 +656,36 @@ export function registerApiV1Routes(
       return reply.status(409).send({ error: (err as Error).message });
     }
 
+    // Benutzer ohne Verwalterrolle: nur bekannte Spiele, nur die Variablen, die das Spiel vorsieht - und gueltig.
+    // Sonst liesse sich ueber frei gewaehlte Werte (Umgebung, Startoptionen) Einfluss auf den Rechner nehmen.
+    const adminLike = creator.master || creator.role === 'admin';
+    const knownEgg = (await loadEggs()).find((e) => e.id === eggId);
+    let givenVariables: Record<string, unknown> | undefined = variables;
+    if (!adminLike) {
+      if (!knownEgg) return reply.status(403).send({ error: 'Dieses Spiel gibt es nicht.', code: 'forbidden' });
+      const defs = knownEgg.raw.variables ?? [];
+      const allowed = new Set(defs.filter(isUserVariable).map((d) => d.env_variable));
+      const picked = Object.fromEntries(
+        Object.entries(variables ?? {})
+          .filter(([key, value]) => allowed.has(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
+          .map(([key, value]) => [key, String(value)]),
+      );
+      const start = Object.fromEntries(defs.map((d) => [d.env_variable, d.default_value ?? '']));
+      const checked = validateVariables(defs, { ...start, ...picked });
+      if (checked.errors.length > 0) {
+        return reply.status(400).send({ error: 'Ungültige Werte', message: 'Ungültige Werte', code: 'invalid_variables', issues: checked.errors });
+      }
+      givenVariables = checked.values;
+    }
+
     // Block B2: echte Installation statt Attrappe, wenn der Core dieses Egg kann.
-    const installData = await eggInstallData(eggId, variables);
-    const egg = (await loadEggs()).find((e) => e.id === eggId);
+    const installData = await eggInstallData(eggId, givenVariables);
+    const egg = knownEgg;
     const plan = installs ? installPlanFor(eggId, egg?.raw, installData.variables) : null;
+    if (!adminLike && !plan && !policy.userFileWrite) {
+      // Ohne Installation bliebe nur eine Platzhalter-Startdatei - die legt auf diesem Rechner nur ein Verwalter an
+      return reply.status(403).send({ error: 'Dieses Spiel kann der Core für Benutzer noch nicht installieren.', code: 'forbidden' });
+    }
     if (installs && plan) {
       // Steam-Spiele brauchen mehr als einen Port (Spiel, Abfrage ...): jeden aus dem Bereich des Cores
       let ports: ServerInstanceConfig['ports'] = [{ name: 'game', hostPort: port, protocol: 'tcp' }];
@@ -708,7 +737,8 @@ export function registerApiV1Routes(
       maxMemoryMb: ramMb ?? 2048,
       maxCpuPercent: cpuPercent ?? 100,
       ports: [{ name: 'game', hostPort: port, protocol: 'tcp' }],
-      env: variables || {},
+      // Frei gewaehlte Umgebungsvariablen (PATH, JAVA_TOOL_OPTIONS ...) nur vom Verwalter
+      env: adminLike ? ((variables as Record<string, string> | undefined) ?? {}) : {},
     };
 
     await driver.registerServer(serverConfig);
@@ -803,7 +833,7 @@ export function registerApiV1Routes(
     }
     const id = c.id;
     const wsActor = req.actor!;
-    const mayCommand = (): boolean => connectionStillValid(req) && flagsFor(registry, id, wsActor).includes('control.command');
+    const mayCommand = (): boolean => connectionStillValid(req) && flagsFor(registry, id, wsActor, policy).includes('control.command');
 
     void (async () => {
       const state = await stateOf(id);
@@ -828,7 +858,7 @@ export function registerApiV1Routes(
     // Event Bus Listener
     const unsubscribe = bus.on((event) => {
       if ('serverId' in event && event.serverId === id) {
-        if (!connectionStillValid(req) || !flagsFor(registry, id, wsActor).includes('control.console')) {
+        if (!connectionStillValid(req) || !flagsFor(registry, id, wsActor, policy).includes('control.console')) {
           socket.close(1008, 'Keine Berechtigung mehr');
           return;
         }

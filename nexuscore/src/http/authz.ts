@@ -12,6 +12,7 @@ import {
   type ServerFlag,
 } from '../auth/permissions.js';
 import { getAccess } from '../store/access.js';
+import { config } from '../config/index.js';
 
 /**
  * Wer darf welche Route? Eine Stelle, ein Standard: was hier nicht steht, darf
@@ -24,6 +25,23 @@ export interface RequestActor extends Actor {
   username: string;
   /** Das Master-Token (Panel, Skripte): kein Benutzer, volle Rechte. */
   master: boolean;
+}
+
+/**
+ * Dateien aendern fuehrt auf einem Rechner ohne Schutz Programme aus (Startdatei, Plugin ueberschreiben,
+ * entpacken). Solche Rechte gehen ohne ausdrueckliche Freigabe nur an Administratoren - auch ein
+ * Besitzer bekommt sie dann nicht.
+ */
+export const HOST_CODE_FLAGS: readonly ServerFlag[] = ['file.write', 'file.archive'];
+
+export interface AccessPolicy {
+  /** Duerfen Nicht-Administratoren Dateien schreiben und entpacken? */
+  userFileWrite: boolean;
+}
+
+/** Docker kapselt Server, der Mock startet nichts; der native Treiber nicht. */
+export function accessPolicyFor(driverName: string): AccessPolicy {
+  return { userFileWrite: driverName === 'docker' || driverName === 'mock' || config.allowUserFileWrite };
 }
 
 export const MASTER_ACTOR: RequestActor = {
@@ -199,10 +217,15 @@ export function accessFor(registry: ServerRegistry, serverId: string, actor: Act
   return { ownerId: access.ownerId ?? '', subuserFlags: access.subusers[actor.id] ?? null };
 }
 
+function applyPolicy(actor: RequestActor, flags: ServerFlag[], policy: AccessPolicy): ServerFlag[] {
+  if (actor.master || actor.role === 'admin' || policy.userFileWrite) return flags;
+  return flags.filter((f) => !HOST_CODE_FLAGS.includes(f));
+}
+
 /** Alle Flags des Benutzers an einem Server; leer = unsichtbar. */
-export function flagsFor(registry: ServerRegistry, serverId: string, actor: RequestActor): ServerFlag[] {
+export function flagsFor(registry: ServerRegistry, serverId: string, actor: RequestActor, policy: AccessPolicy): ServerFlag[] {
   if (actor.master) return [...SERVER_FLAGS];
-  return effectiveFlags(actor, accessFor(registry, serverId, actor));
+  return applyPolicy(actor, effectiveFlags(actor, accessFor(registry, serverId, actor)), policy);
 }
 
 export function canSeeServer(registry: ServerRegistry, serverId: string, actor: RequestActor): boolean {
@@ -216,8 +239,9 @@ export function authorize(input: {
   serverId: string | undefined;
   body: unknown;
   registry: ServerRegistry;
+  policy: AccessPolicy;
 }): Verdict {
-  const { actor, need, registry } = input;
+  const { actor, need, registry, policy } = input;
   if (actor.master) return OK;
 
   switch (need.kind) {
@@ -242,9 +266,14 @@ export function authorize(input: {
 
   if (need.kind === 'server-delete') return canDeleteServer(actor, access) ? OK : forbidden();
 
-  const have = new Set(effectiveFlags(actor, access));
+  const have = new Set(applyPolicy(actor, effectiveFlags(actor, access), policy));
   const wanted = need.kind === 'body-server' ? need.pick(input.body) : need.any;
   if (wanted === 'see') return OK;
   if (wanted === 'all') return SERVER_FLAGS.every((f) => have.has(f)) ? OK : forbidden();
-  return wanted.some((f) => have.has(f)) ? OK : forbidden();
+  if (wanted.some((f) => have.has(f))) return OK;
+  // Waere das Recht ohne die Schutzregel da gewesen, sagt die Antwort warum es fehlt
+  if (wanted.every((f) => HOST_CODE_FLAGS.includes(f)) && wanted.some((f) => effectiveFlags(actor, access).includes(f))) {
+    return forbidden('Dateien ändern, hochladen und entpacken darf auf diesem Rechner nur ein Administrator: sonst ließen sich damit Programme auf dem PC ausführen.');
+  }
+  return forbidden();
 }

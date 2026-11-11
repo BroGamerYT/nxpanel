@@ -155,7 +155,7 @@ export function registerAdminRoutes(
       created_at: r.ts,
       action: ACTION_ALIASES[r.action] ?? r.action,
       // Der angemeldete Benutzer, falls bekannt - sonst der Weg (Panel, Core)
-      actor_name: r.actorName ?? ACTOR_NAMES[r.actor] ?? r.actor,
+      actor_name: r.actorName ?? (r.action === 'auth.login_failed' ? 'Unbekannt' : (ACTOR_NAMES[r.actor] ?? r.actor)),
       user_id: r.userId,
       server_id: r.serverId,
       // Gelöschte Server haben keinen Namen mehr - der Name steht dann im Eintrag, falls er mitgeschrieben wurde

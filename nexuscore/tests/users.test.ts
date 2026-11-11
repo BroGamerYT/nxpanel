@@ -194,13 +194,13 @@ describe('Server und Sichtbarkeit', () => {
 
     const maker = await makeUser('ersteller', { canCreateServers: true });
     expect((await call('PATCH', `/api/v1/admin/users/${maker.id}`, admin, { serverLimit: 1 })).statusCode).toBe(200);
-    const first = await call('POST', '/api/v1/servers', maker.h, { name: 'Mein Server', eggId: 'custom-egg' });
+    const first = await call('POST', '/api/v1/servers', maker.h, { name: 'Mein Server', eggId: 'minecraft-paper' });
     expect(first.statusCode, first.body).toBe(201);
     const mine = (await call('GET', '/api/v1/servers', maker.h)).json().servers as Array<{ name: string; isOwner: boolean }>;
     expect(mine).toHaveLength(1);
     expect(mine[0]).toMatchObject({ name: 'Mein Server', isOwner: true });
     // Zweiter Server: Limit erreicht
-    const second = await call('POST', '/api/v1/servers', maker.h, { name: 'Noch einer', eggId: 'custom-egg' });
+    const second = await call('POST', '/api/v1/servers', maker.h, { name: 'Noch einer', eggId: 'minecraft-paper' });
     expect(second.statusCode).toBe(403);
     expect(second.json().code).toBe('limit_reached');
     // Andere sehen ihn nicht
@@ -317,7 +317,7 @@ describe('Benutzerverwaltung', () => {
 
   it('das Protokoll nennt, wer es war', async () => {
     const u = await makeUser('protokolliert', { canCreateServers: true });
-    await call('POST', '/api/v1/servers', u.h, { name: 'Von Mir', eggId: 'custom-egg' });
+    await call('POST', '/api/v1/servers', u.h, { name: 'Von Mir', eggId: 'minecraft-paper' });
     const entries = (await call('GET', '/api/v1/admin/audit?limit=200', admin)).json().entries as Array<{ action: string; actor_name: string; user_id: string | null }>;
     const create = entries.find((e) => e.action === 'server.create' && e.actor_name === 'protokolliert');
     expect(create, 'Eintrag vom Benutzer').toBeTruthy();
@@ -357,6 +357,137 @@ describe('Übernahme des bisherigen Kontos', () => {
       expect(await again.verify('chefin', 'altes-passwort-123', 'y')).not.toBeNull();
     } finally {
       (await import('../src/config/index.js')).config.adminPassword = saved ?? '';
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Schutz des Rechners (nativer Treiber ohne Sandbox)', () => {
+  let nativeDir: string;
+  let nativeRegistry: InstanceType<typeof ServerRegistry>;
+  let nativeServer: Awaited<ReturnType<typeof createCoreServer>>;
+  let nativeAdmin: Headers;
+
+  const nativeCall = (method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, headers: Headers, payload?: unknown) =>
+    nativeServer.inject({ method, url, headers: payload === undefined ? headers : { ...headers, ...json }, ...(payload === undefined ? {} : { payload: payload as object }) });
+  const nativeLogin = async (name: string, password = PW): Promise<Headers> => {
+    const res = await nativeServer.inject({ method: 'POST', url: '/api/v1/auth/login', headers: json, payload: { login: name, password } });
+    return { authorization: `Bearer ${res.json().accessToken}` };
+  };
+
+  beforeAll(async () => {
+    nativeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nx-native-'));
+    nativeRegistry = await ServerRegistry.open(nativeDir);
+    const driver = new MockDriver();
+    // So tun, als waere es der native Treiber: Server laufen ohne Schutz als Benutzer des Cores
+    Object.defineProperty(driver, 'name', { value: 'windows-native' });
+    await driver.initialize();
+    nativeServer = await createCoreServer(driver, new EventBus(), nativeRegistry, { installs: null, scheduler: false });
+    nativeAdmin = await nativeLogin('admin', 'nur-fuer-tests-0815');
+    const dir = path.join(nativeDir, 'servers', 'nat-server-1');
+    await fs.mkdir(dir, { recursive: true });
+    await nativeRegistry.add({ id: 'nat-server-1', name: 'nativ', game: 'minecraft-paper', executable: 'x', args: [], workingDir: dir, ports: [] });
+  });
+
+  afterAll(async () => {
+    await nativeServer.close();
+    nativeRegistry.close();
+    await fs.rm(nativeDir, { recursive: true, force: true });
+  });
+
+  async function user(name: string, extra: object = {}): Promise<{ id: string; h: Headers }> {
+    const res = await nativeCall('POST', '/api/v1/admin/users', nativeAdmin, { username: name, password: PW, ...extra });
+    expect(res.statusCode, res.body).toBe(201);
+    return { id: res.json().user.id as string, h: await nativeLogin(name) };
+  }
+
+  it('auch der Besitzer darf keine Dateien ändern oder entpacken - sonst wäre er ein Administrator des PCs', async () => {
+    const owner = await user('nat-besitzer');
+    await nativeCall('PUT', `/api/v1/admin/users/${owner.id}/servers/nat-server-1`, nativeAdmin, { isOwner: true });
+    const s = '/api/v1/servers/nat-server-1';
+    // Lesen geht
+    expect((await nativeCall('GET', `${s}/files`, owner.h)).statusCode).toBe(200);
+    // Schreiben, Anlegen, Umbenennen, Hochladen, Packen, Entpacken, Zurückrollen nicht
+    const attempts: Array<['PUT' | 'POST' | 'DELETE', string, unknown]> = [
+      ['PUT', `${s}/files/content`, { path: 'start.bat', content: 'calc.exe' }],
+      ['POST', `${s}/files/directory`, { path: 'neu' }],
+      ['POST', `${s}/files/rename`, { from: 'a', to: 'b' }],
+      ['POST', `${s}/files/compress`, { paths: ['a'], destination: 'a.zip' }],
+      ['POST', `${s}/files/decompress`, { path: 'a.zip', destination: '' }],
+      ['POST', `${s}/files/upload`, {}],
+      ['POST', `${s}/files/revisions/x/rollback`, {}],
+      ['PUT', `${s}/mc/icon`, {}],
+    ];
+    for (const [m, u, p] of attempts) {
+      const res = await nativeCall(m, u, owner.h, p);
+      expect(res.statusCode, `${m} ${u}`).toBe(403);
+      expect(res.json().message).toContain('Administrator');
+    }
+    // Die Oberfläche bekommt die Rechte gar nicht erst angeboten
+    const perms = (await nativeCall('GET', '/api/v1/servers', owner.h)).json().servers[0].permissions as string[];
+    expect(perms).toContain('file.read');
+    expect(perms).not.toContain('file.write');
+    expect(perms).not.toContain('file.archive');
+    // Der Administrator darf
+    expect((await nativeCall('PUT', `${s}/files/content`, nativeAdmin, { path: 'ok.txt', content: 'x' })).statusCode).toBe(200);
+  });
+
+  it('auch ein Moderator (alle Server-Rechte) bekommt Dateischreiben nicht', async () => {
+    const mod = await user('nat-moderator', { role: 'moderator' });
+    expect((await nativeCall('GET', '/api/v1/servers/nat-server-1/files', mod.h)).statusCode).toBe(200);
+    expect((await nativeCall('PUT', '/api/v1/servers/nat-server-1/files/content', mod.h, { path: 'a', content: 'b' })).statusCode).toBe(403);
+  });
+
+  it('Benutzer legen nur bekannte Spiele an, mit gültigen Werten - und ohne freie Umgebungsvariablen', async () => {
+    const maker = await user('nat-ersteller', { canCreateServers: true });
+    expect((await nativeCall('POST', '/api/v1/servers', maker.h, { name: 'x', eggId: 'gibt-es-nicht' })).statusCode).toBe(403);
+    const bad = await nativeCall('POST', '/api/v1/servers', maker.h, { name: 'x', eggId: 'minecraft-paper', variables: { MAX_PLAYERS: 'viele' } });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().code).toBe('invalid_variables');
+    // Ohne Installation (hier: kein Installer) gäbe es nur eine Platzhalter-Startdatei: Sache der Verwalter
+    const noInstall = await nativeCall('POST', '/api/v1/servers', maker.h, { name: 'x', eggId: 'minecraft-paper' });
+    expect(noInstall.statusCode).toBe(403);
+    // Der Verwalter darf; frei gewählte Umgebungsvariablen bleiben seine Sache
+    const ok = await nativeCall('POST', '/api/v1/servers', nativeAdmin, { name: 'Admin-Server', eggId: 'minecraft-paper', variables: { FOO: 'bar' } });
+    expect(ok.statusCode, ok.body).toBe(201);
+  });
+});
+
+describe('Protokoll und Dateien', () => {
+  it('eine Anmeldung ohne Benutzer erbt nicht den Namen der vorigen Anfrage', async () => {
+    await call('GET', '/api/v1/auth/me', admin); // setzt den Benutzer "admin" fuer diese Kette
+    await server.inject({ method: 'POST', url: '/api/v1/auth/login', headers: json, payload: { login: 'gibtsnicht', password: 'falsch-falsch-1' } });
+    const failed = registry.queryAudit({ limit: 20, actionPrefix: 'auth.login_failed' });
+    expect(failed.length).toBeGreaterThan(0);
+    expect(failed[0]!.actorName).toBeNull();
+    expect(failed[0]!.userId).toBeNull();
+    // In der Oberfläche steht dann nicht der Administrator, sondern "Unbekannt"
+    const shown = (await call('GET', '/api/v1/admin/audit?action=auth.login_failed', admin)).json().entries[0];
+    expect(shown.actor_name).toBe('Unbekannt');
+  });
+
+  it('eine kaputte users.json wird nicht überschrieben, sondern beiseite gelegt', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nx-kaputt-'));
+    const { config } = await import('../src/config/index.js');
+    const saved = config.adminPassword;
+    try {
+      (config as { adminPassword: string }).adminPassword = '';
+      const kaputt = '{ "version": 2, "users": [ {"id": "a", "username": "wichtig"';
+      await fs.writeFile(path.join(dir, 'users.json'), kaputt);
+      const account = await LocalAccount.open(dir);
+      expect(account.count()).toBe(1); // neuer Administrator
+      const files = await fs.readdir(dir);
+      const aside = files.find((f) => f.startsWith('users.json.kaputt-'));
+      expect(aside, files.join(', ')).toBeTruthy();
+      expect(await fs.readFile(path.join(dir, aside!), 'utf8')).toBe(kaputt);
+      // Auch ein unbekanntes Format zaehlt als nicht lesbar
+      const dir2 = await fs.mkdtemp(path.join(os.tmpdir(), 'nx-kaputt2-'));
+      await fs.writeFile(path.join(dir2, 'users.json'), JSON.stringify({ version: 99, users: [{ id: 'z' }] }));
+      await LocalAccount.open(dir2);
+      expect((await fs.readdir(dir2)).some((f) => f.startsWith('users.json.kaputt-'))).toBe(true);
+      await fs.rm(dir2, { recursive: true, force: true });
+    } finally {
+      (config as { adminPassword: string }).adminPassword = saved;
       await fs.rm(dir, { recursive: true, force: true });
     }
   });

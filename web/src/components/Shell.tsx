@@ -188,7 +188,8 @@ export function Shell() {
   const canCreate = me?.permissions['server.create'];
   const features = useFeatures();
   const hasAdminAccess = Boolean(
-    me?.user.role === 'admin' || Object.keys(me?.permissions ?? {}).some((k) => k.startsWith('admin.'))
+    // Die Liste nennt jedes Recht, mit ja oder nein - zaehlen darf nur ein "ja"
+    me?.user.role === 'admin' || Object.entries(me?.permissions ?? {}).some(([k, v]) => k.startsWith('admin.') && v)
   );
   const isAdminActive =
     loc.pathname === '/admin' ||

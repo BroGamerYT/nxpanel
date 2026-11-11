@@ -225,8 +225,14 @@ export class LocalAccount {
     try {
       const parsed = JSON.parse(await fs.readFile(file, 'utf8')) as Partial<UsersFile>;
       if (parsed.version === 2 && Array.isArray(parsed.users)) users = parsed.users.map(normalize).filter((u): u is UserRecord => u !== null);
+      else throw new Error('Unbekanntes Format der Benutzerdatei');
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') logger.warn({ file }, 'Benutzerdatei nicht lesbar - lege den Administrator neu an');
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        // Nie ueberschreiben: eine kaputte Datei kann noch alle Konten enthalten. Beiseite legen, dann neu anfangen.
+        const aside = `${file}.kaputt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+        await fs.rename(file, aside).catch(() => {});
+        logger.error({ file, aside }, 'Benutzerdatei nicht lesbar - beiseite gelegt, der Administrator wird neu angelegt');
+      }
     }
 
     let created = false;

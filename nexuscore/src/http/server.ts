@@ -30,7 +30,7 @@ import { registerApiV1Routes } from './routes/api-v1.js';
 import type { SlpResult } from '../games/minecraft.js';
 import { registerWebRoutes } from './routes/web.js';
 import { LocalAccount } from '../store/account.js';
-import { MASTER_ACTOR, authorize, classify } from './authz.js';
+import { MASTER_ACTOR, accessPolicyFor, authorize, classify } from './authz.js';
 import { setIdentity } from '../store/identity.js';
 import { findInstance } from '../store/find.js';
 import { InstallManager, runtimesDirFor } from '../install/manager.js';
@@ -53,6 +53,8 @@ export async function createCoreServer(
   // Die Benutzer gibt es nur im Standalone-Modus - im Knoten-Modus
   // steuert ausschliesslich das Panel ueber /core/v1.
   const account = config.role === 'standalone' ? await LocalAccount.open(registry.dir) : null;
+
+  const policy = accessPolicyFor(driver.name);
 
   // Alle Routen merken: ein Test prueft, dass jede ausdruecklich in der Rechtetabelle steht
   const routeTable: Array<{ method: string; url: string }> = [];
@@ -133,6 +135,8 @@ export async function createCoreServer(
    * kommen, weil der Browser beim WebSocket keine Header setzen kann.
    */
   server.addHook('onRequest', async (req, reply) => {
+    // Nichts von der vorigen Anfrage uebernehmen (Audit-Name): erst setzt die Anmeldung wieder einen Benutzer
+    setIdentity(null);
     const normPath = normalizeRequestPath(req.url);
 
     // 0. DNS-Rebinding: nur bekannte Hostnamen (Block A2). Gilt auch fuer
@@ -241,7 +245,7 @@ export async function createCoreServer(
     const idParam = (req.params as { id?: unknown } | undefined)?.id;
     const serverId =
       pattern.includes('/servers/:id') && typeof idParam === 'string' ? findInstance(registry, idParam)?.id : undefined;
-    const verdict = authorize({ actor, need, serverId, body: req.body, registry });
+    const verdict = authorize({ actor, need, serverId, body: req.body, registry, policy });
     if (!verdict.ok) {
       return reply.status(verdict.status).send({ error: verdict.message, message: verdict.message, code: verdict.code });
     }
@@ -275,6 +279,7 @@ export async function createCoreServer(
         : null;
 
   registerApiV1Routes(server, driver, bus, registry, account, installs, {
+    policy,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.ping ? { ping: options.ping } : {}),
   });

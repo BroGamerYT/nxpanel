@@ -46,6 +46,7 @@ const schema = z
     NEXUSCORE_ADMIN_PASSWORD: z.string().default(''),
     NEXUSCORE_LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
     NEXUSCORE_ALLOW_INSECURE_AUTH: envBool(false),
+    NEXUSCORE_ALLOW_USER_FILE_WRITE: envBool(false),
   })
   .superRefine((env, ctx) => {
     const [rangeFrom, rangeTo] = env.NEXUSCORE_PORT_RANGE.split('-').map(Number);
@@ -128,6 +129,12 @@ export const config = {
   logLevel: env.NEXUSCORE_LOG_LEVEL,
   /** Nur fuer den lokalen Einstiegstest: erlaubt Zugriff ohne Token. */
   allowInsecureAuth: env.NEXUSCORE_ALLOW_INSECURE_AUTH,
+  /**
+   * Duerfen Benutzer ohne Administratorrolle Dateien ihrer Server aendern, hochladen und entpacken?
+   * Auf dem nativen Treiber laufen Server ohne Schutz als Benutzer des Cores: wer eine Startdatei oder
+   * ein Plugin ueberschreiben kann, fuehrt damit Programme auf diesem Rechner aus. Deshalb standardmaessig nein.
+   */
+  allowUserFileWrite: env.NEXUSCORE_ALLOW_USER_FILE_WRITE,
 };
 
 export const dataDir = config.dataDir;
