@@ -51,3 +51,6 @@ build-info.json
 # Persoenliche Steam-/Spielserver-Dateien (enthalten Kontodaten)
 deploy/loginusers.vdf
 deploy/dedicatedServer.xml
+
+# NexusCore: gebautes Hilfsprogramm (cargo build --release in nexuscore/helper/nxjob)
+nexuscore/helper/nxjob/target/

@@ -179,7 +179,7 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/admin\/test-(report|games)(\/|$)/, need: perm('admin.test_report') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/files(\/|$)/, need: perm('admin.files') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/integrations(\/|$)/, need: perm('admin.integrations') },
-  { methods: '*', pattern: /^\/api\/v1\/admin\/(nodes|allocations|network\/check|hosts)(\/|$)/, need: perm('admin.nodes') },
+  { methods: '*', pattern: /^\/api\/v1\/admin\/(nodes|allocations|network\/check|hosts|gaming-mode|limits)(\/|$)/, need: perm('admin.nodes') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/eggs\/:id\/cover$/, need: perm('admin.eggs') },
   { methods: GET, pattern: /^\/api\/v1\/admin\/(overview|host-logs)$/, need: { kind: 'admin' } },
 

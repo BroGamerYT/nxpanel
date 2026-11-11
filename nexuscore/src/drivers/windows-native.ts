@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import os from 'node:os';
 import type { HostDriver, LogSink } from './interface.js';
 import type { ServerInstanceConfig, ServerState, ServerStats } from '../types.js';
+import { findJobHelper, wrapLaunch } from './job-helper.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -15,6 +16,8 @@ interface ProcessEntry {
   lastCpuSample?: { totalSeconds: number; at: number };
   /** Der Start ist gescheitert - dann bleibt der Zustand "error", auch wenn der Prozess danach endet. */
   failed: boolean;
+  /** nxjob hat gemeldet, dass es das Programm nicht starten oder begrenzen konnte. */
+  helperFailed?: boolean;
 }
 
 /**
@@ -56,6 +59,25 @@ export class WindowsNativeDriver implements HostDriver {
   readonly name = 'windows-native';
   private readonly instances = new Map<string, ProcessEntry>();
   private logSink: LogSink = () => {};
+  private readonly helper: string | null;
+  private limitsEnforced: () => boolean = () => false;
+
+  /**
+   * @param options.helper Pfad zu nxjob.exe; ohne Angabe wird gesucht, `null` = bewusst ohne.
+   */
+  constructor(options: { helper?: string | null } = {}) {
+    this.helper = options.helper === undefined ? findJobHelper() : options.helper;
+  }
+
+  /** Ob Speicher- und CPU-Grenzen durchgesetzt werden sollen - wird bei jedem Start gefragt. */
+  setLimitsPolicy(enforced: () => boolean): void {
+    this.limitsEnforced = enforced;
+  }
+
+  /** Gibt es das Hilfsprogramm? Dann endet ein Spiel immer mit dem Core. */
+  get hasJobHelper(): boolean {
+    return this.helper !== null;
+  }
 
   async initialize(): Promise<void> {
     if (process.platform !== 'win32') {
@@ -123,9 +145,27 @@ export class WindowsNativeDriver implements HostDriver {
       `[WindowsNative] Starte ${entry.config.executable} ${entry.config.args.join(' ')}`,
     );
 
+    // Mit dem Hilfsprogramm laeuft das Spiel in einem Job Object: Es endet mit dem Core, und auf Wunsch
+    // gelten harte Grenzen fuer Speicher und CPU.
+    const limits = {
+      enforce: this.limitsEnforced(),
+      memoryMb: entry.config.maxMemoryMb,
+      cpuPercent: entry.config.maxCpuPercent,
+      cores: Math.max(1, os.cpus().length),
+    };
+    const launch = this.helper
+      ? wrapLaunch(this.helper, entry.config.executable, entry.config.args, limits)
+      : { command: entry.config.executable, args: entry.config.args };
+    if (this.helper && limits.enforce) {
+      this.emit(
+        serverId,
+        `[WindowsNative] Grenzen aktiv: ${limits.memoryMb ? `RAM ${limits.memoryMb} MB` : 'RAM unbegrenzt'}, ${limits.cpuPercent ? `CPU ${limits.cpuPercent} %` : 'CPU unbegrenzt'}`,
+      );
+    }
+
     let child: ChildProcess;
     try {
-      child = spawn(entry.config.executable, entry.config.args, {
+      child = spawn(launch.command, launch.args, {
         cwd: entry.config.workingDir || process.cwd(),
         env: { ...process.env, ...(entry.config.env ?? {}) },
         // Kein shell: sonst wuerde die Kommandozeile zerlegt und ein Argument
@@ -144,6 +184,7 @@ export class WindowsNativeDriver implements HostDriver {
     entry.stdoutRest = '';
     entry.stderrRest = '';
     entry.failed = false;
+    entry.helperFailed = false;
     entry.state.status = 'running';
     entry.state.startedAt = new Date().toISOString();
     if (child.pid !== undefined) entry.state.pid = child.pid;
@@ -158,6 +199,7 @@ export class WindowsNativeDriver implements HostDriver {
     });
     child.stderr?.on('data', (data: Buffer) => {
       for (const line of stderrBuffer.push(data.toString())) {
+        if (this.helper && line.startsWith('[nxjob]')) entry.helperFailed = true;
         this.emit(serverId, `[STDERR] ${line}`, 'stderr');
       }
     });
@@ -168,6 +210,11 @@ export class WindowsNativeDriver implements HostDriver {
       const restErr = stderrBuffer.flush();
       if (restErr) this.emit(serverId, `[STDERR] ${restErr}`, 'stderr');
 
+      // Das Hilfsprogramm kann das Programm nicht starten oder die Grenze nicht setzen (Code 3/4): ein Startfehler,
+      // genau wie wenn der Prozess direkt nicht startet.
+      if (entry.helperFailed && (code === 3 || code === 4)) entry.failed = true;
+      entry.helperFailed = false;
+      if (entry.failed) entry.state.status = 'error';
       // Ein gescheiterter Start bleibt "error" - das close-EVENT darf den
       // Fehlerzustand nicht wieder ueberschreiben.
       if (!entry.failed) {
@@ -349,6 +396,39 @@ export class WindowsNativeDriver implements HostDriver {
     }
   }
 
+  /** Alle Prozesse unter `pid` (einschliesslich) - fuer Prioritaet und Statistik. */
+  private async processTree(pid: number): Promise<number[]> {
+    const script =
+      `$all = Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId; ` +
+      `$ids = New-Object System.Collections.Generic.List[int]; $ids.Add(${pid}); ` +
+      `for ($i = 0; $i -lt $ids.Count; $i++) { foreach ($c in $all) { if ($c.ParentProcessId -eq $ids[$i] -and -not $ids.Contains([int]$c.ProcessId)) { $ids.Add([int]$c.ProcessId) } } }; ` +
+      `$ids -join ','`;
+    try {
+      const { stdout } = await execFileAsync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 8000 });
+      return stdout.trim().split(',').map((s) => Number(s)).filter((n) => Number.isInteger(n) && n > 0);
+    } catch {
+      return [pid];
+    }
+  }
+
+  /** Niedrige oder normale Prioritaet fuer den ganzen Prozessbaum der Instanz. @returns Anzahl umgestellter Prozesse */
+  async setPriority(serverId: string, level: 'normal' | 'low'): Promise<number> {
+    const entry = this.require(serverId);
+    const pid = entry.state.pid;
+    if (pid === undefined || entry.state.status !== 'running') return 0;
+    const value = level === 'low' ? os.constants.priority.PRIORITY_BELOW_NORMAL : os.constants.priority.PRIORITY_NORMAL;
+    let changed = 0;
+    for (const id of await this.processTree(pid)) {
+      try {
+        os.setPriority(id, value);
+        changed++;
+      } catch {
+        // Prozess schon weg oder nicht aenderbar - kein Fehler
+      }
+    }
+    return changed;
+  }
+
   async sendCommand(serverId: string, command: string): Promise<void> {
     const entry = this.require(serverId);
     if (!entry.process || entry.state.status !== 'running') {
@@ -369,9 +449,13 @@ export class WindowsNativeDriver implements HostDriver {
   private async readProcessSample(
     pid: number,
   ): Promise<{ workingSetBytes: number; totalSeconds: number } | null> {
+    // Der ganze Prozessbaum: das Hilfsprogramm und viele Spiele starten das eigentliche Programm als Kind
     const script =
-      `$p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; ` +
-      `if ($p) { [pscustomobject]@{ ws = $p.WorkingSet64; cpu = $p.TotalProcessorTime.TotalSeconds } | ConvertTo-Json -Compress }`;
+      `$all = Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId; ` +
+      `$ids = New-Object System.Collections.Generic.List[int]; $ids.Add(${pid}); ` +
+      `for ($i = 0; $i -lt $ids.Count; $i++) { foreach ($c in $all) { if ($c.ParentProcessId -eq $ids[$i] -and -not $ids.Contains([int]$c.ProcessId)) { $ids.Add([int]$c.ProcessId) } } }; ` +
+      `$ps = Get-Process -Id $ids -ErrorAction SilentlyContinue; ` +
+      `if ($ps) { [pscustomobject]@{ ws = ($ps | Measure-Object WorkingSet64 -Sum).Sum; cpu = ($ps | ForEach-Object { $_.TotalProcessorTime.TotalSeconds } | Measure-Object -Sum).Sum } | ConvertTo-Json -Compress }`;
     try {
       const { stdout } = await execFileAsync(
         'powershell',

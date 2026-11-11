@@ -33,6 +33,8 @@ import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
+import { registerSystemRoutes } from './system.js';
+import { GamingMode } from '../../gaming/manager.js';
 import { registerUserRoutes } from './users.js';
 import { registerHostRoutes } from './hosts.js';
 import { registerAdminFileRoutes } from './admin-files.js';
@@ -68,7 +70,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -209,6 +211,7 @@ export function registerApiV1Routes(
 
   const discord = new DiscordNotifier({ registry, bus });
   const power = createPowerOps({ registry, driver, onStopRequested: (id) => discord.expectStop(id) });
+  const gaming = new GamingMode({ registry, driver, power, bus });
   // Backups gibt es im Core noch nicht: dann lehnt der Planer solche Zeitplaene ab.
   const backups = new BackupManager({
     registry,
@@ -233,7 +236,9 @@ export function registerApiV1Routes(
     backups.start();
     players.start();
     discord.start();
+    gaming.start();
     server.addHook('onClose', async () => {
+      gaming.stop();
       discord.stop();
       scheduler.stop();
       backups.stop();
@@ -260,6 +265,7 @@ export function registerApiV1Routes(
   registerAdminFileRoutes(server, { registry });
   registerHostRoutes(server, { registry, driver, dataDir: registry.dir });
   registerUserRoutes(server, { registry, driver, account });
+  registerSystemRoutes(server, { registry, driver, gaming });
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });

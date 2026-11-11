@@ -222,7 +222,9 @@ Endlosschleife läuft. Nichts wird installiert.
 * Mindestens Minecraft Paper, Palworld und Enshrouded müssen auf Dominiks Windows-PC
   tatsächlich installierbar und startbar sein. Das ist das Abnahmekriterium, nicht „der Code läuft durch“.
 
-### B3 – Harte Ressourcengrenzen unter Windows (Konzept Abschnitt 6)
+### B3 – Harte Ressourcengrenzen unter Windows (Konzept Abschnitt 6) – Job Objects erledigt 11.11.2026
+
+**Stand:** `helper/nxjob` (Rust, ohne Fremdpakete) startet Spiele in einem Job Object (`KILL_ON_JOB_CLOSE`, Speicher-/CPU-Grenze); der Treiber nutzt es, Grenzen schaltet der Administrator ein (Admin → Hosts). **Offen:** eigener Dienstbenutzer `nxp-<id>` und NTFS-Rechte.
 
 * Job Objects: `JOB_OBJECT_LIMIT_PROCESS_MEMORY` für RAM, CPU-Rate-Limit, und
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, damit kein verwaister Kindprozess übrig bleibt.
@@ -287,7 +289,9 @@ Endlosschleife läuft. Nichts wird installiert.
 * Das MSI-Paket gibt es schon (`deploy/windows/NexusCore.wxs`, `scripts/build-windows-package.ps1`) –
   Dienst und Systray dort einhängen.
 
-### B6 – Gaming-Modus (Konzept Abschnitt 3.3)
+### B6 – Gaming-Modus (Konzept Abschnitt 3.3) – erledigt 11.11.2026
+
+**Stand:** Drosseln (Priorität) oder Stoppen mit Vorwarnung in der Spielkonsole, beides in Admin → Hosts. CPU-Rate-Drosselung zusätzlich über `nxjob` ist möglich, aber noch nicht an den Modus gehängt.
 
 * Schalter, der laufende Instanzen drosselt (Priorität, CPU-Rate) oder mit Vorwarnung pausiert.
 * Vorwarnung an die Spieler über die Serverkonsole, nicht nur im Panel.

@@ -1,0 +1,15 @@
+[package]
+name = "nxjob"
+version = "0.1.0"
+edition = "2021"
+description = "Startet ein Programm in einem Windows-Job-Object (Speicher- und CPU-Grenze, Aufräumen beim Beenden) für NexusCore"
+publish = false
+
+# Bewusst keine Abhängigkeiten: nichts aus dem Netz, nichts, was geprüft werden müsste.
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

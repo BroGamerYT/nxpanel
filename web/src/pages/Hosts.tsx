@@ -72,6 +72,8 @@ export function Hosts() {
         {remove.error && <ErrorBox>{(remove.error as Error).message}</ErrorBox>}
       </section>
 
+      {has('gaming') && <GamingModeCard />}
+      {has('limits') && <LimitsCard />}
       {has('hosts-add') && <AddHostForm />}
     </div>
   );
@@ -227,6 +229,155 @@ function AddHostForm() {
           {t('hosts.add')}
         </Button>
       </div>
+    </section>
+  );
+}
+
+interface GamingState {
+  active: boolean;
+  mode: 'throttle' | 'stop';
+  phase: 'off' | 'warning' | 'on';
+  since: string | null;
+  stopsAt: string | null;
+  warnSeconds: number;
+  affected: string[];
+  canThrottle: boolean;
+  maxWarnSeconds: number;
+}
+
+/**
+ * Gaming-Modus: der Rechner gehoert fuer eine Weile dem Spiel am Rechner. Entweder werden die Server gedrosselt
+ * (niedrige Prioritaet, die Spieler merken nichts) oder nach einer Vorwarnung in der Konsole gestoppt und danach
+ * wieder gestartet.
+ */
+function GamingModeCard() {
+  const qc = useQueryClient();
+  const state = useQuery<GamingState>({ queryKey: ['gaming-mode'], queryFn: () => api('/admin/gaming-mode'), refetchInterval: 3000 });
+  const [mode, setMode] = useState<'throttle' | 'stop'>('throttle');
+  const [warn, setWarn] = useState(60);
+  const [message, setMessage] = useState('');
+
+  const toggle = useMutation({
+    mutationFn: (active: boolean) =>
+      api<{ restarted?: string[]; failed?: string[] }>('/admin/gaming-mode', {
+        method: 'POST',
+        body: { active, mode, warnSeconds: mode === 'stop' ? warn : 0, ...(message.trim() ? { message: message.trim() } : {}) },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['gaming-mode'] }),
+  });
+
+  const s = state.data;
+  const stopsIn = s?.stopsAt ? Math.max(0, Math.round((Date.parse(s.stopsAt) - Date.now()) / 1000)) : null;
+  const canThrottle = s?.canThrottle ?? true;
+
+  return (
+    <section className="space-y-4 rounded-lg border border-seam bg-rack p-5">
+      <div>
+        <h2 className="font-medium">Gaming-Modus</h2>
+        <p className="text-sm text-dim mt-0.5">
+          Du willst am Rechner spielen? Die Server werden entweder gedrosselt, oder nach einer Warnung an die Spieler gestoppt und danach wieder gestartet.
+        </p>
+      </div>
+
+      {state.isLoading && <Spinner />}
+      {state.error && <ErrorBox>{(state.error as Error).message}</ErrorBox>}
+
+      {s?.active ? (
+        <div className="rounded-md border border-amber/40 bg-amber/10 px-3 py-2 text-sm">
+          <strong>Gaming-Modus ist an</strong> ({s.mode === 'throttle' ? 'Server gedrosselt' : 'Server gestoppt'})
+          {s.phase === 'warning' && stopsIn !== null && <> – Vorwarnung läuft, Stopp in {stopsIn} s</>}
+          {s.affected.length > 0 && <> · betrifft {s.affected.length} Server</>}
+          {s.since && <span className="text-dim"> · seit {new Date(s.since).toLocaleTimeString()}</span>}
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className={`rounded-md border px-3 py-2 text-sm cursor-pointer ${mode === 'throttle' ? 'border-amber bg-amber/10' : 'border-seam'} ${canThrottle ? '' : 'opacity-50 cursor-not-allowed'}`}>
+            <input type="radio" className="mr-2 accent-amber" checked={mode === 'throttle'} disabled={!canThrottle} onChange={() => setMode('throttle')} />
+            <strong>Drosseln</strong>
+            <span className="block text-dim text-xs mt-0.5">Niedrige Priorität. Die Server laufen weiter, das Spiel am Rechner bekommt Vorrang.</span>
+          </label>
+          <label className={`rounded-md border px-3 py-2 text-sm cursor-pointer ${mode === 'stop' ? 'border-amber bg-amber/10' : 'border-seam'}`}>
+            <input type="radio" className="mr-2 accent-amber" checked={mode === 'stop'} onChange={() => setMode('stop')} />
+            <strong>Stoppen mit Vorwarnung</strong>
+            <span className="block text-dim text-xs mt-0.5">Die Spieler bekommen eine Meldung in der Konsole, danach werden die Server gestoppt und beim Beenden wieder gestartet.</span>
+          </label>
+        </div>
+      )}
+
+      {!s?.active && mode === 'stop' && (
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Vorwarnung in Sekunden" htmlFor="gm-warn" hint={`0 = sofort stoppen, höchstens ${s?.maxWarnSeconds ?? 300}`}>
+            <Input id="gm-warn" type="number" min={0} max={s?.maxWarnSeconds ?? 300} value={warn} onChange={(e) => setWarn(Number(e.target.value))} />
+          </Field>
+          <Field label="Eigene Meldung (optional)" htmlFor="gm-msg" hint="Erscheint als „say …“ in der Konsole. Leer = Standardtext mit Zeitangabe.">
+            <Input id="gm-msg" value={message} maxLength={200} onChange={(e) => setMessage(e.target.value)} placeholder="Der Server macht kurz Pause." />
+          </Field>
+        </div>
+      )}
+
+      {toggle.error && <ErrorBox>{(toggle.error as Error).message}</ErrorBox>}
+      {toggle.data && (toggle.data.restarted?.length || toggle.data.failed?.length) ? (
+        <p className="text-sm text-dim">
+          {toggle.data.restarted?.length ?? 0} Server wieder gestartet{toggle.data.failed?.length ? `, ${toggle.data.failed.length} ließen sich nicht starten` : ''}.
+        </p>
+      ) : null}
+
+      <div className="flex justify-end">
+        {s?.active ? (
+          <Button variant="primary" busy={toggle.isPending} onClick={() => toggle.mutate(false)}>Gaming-Modus beenden</Button>
+        ) : (
+          <Button variant="primary" busy={toggle.isPending} disabled={mode === 'throttle' && !canThrottle} onClick={() => toggle.mutate(true)}>Gaming-Modus einschalten</Button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+interface LimitsState {
+  enforce: boolean;
+  supported: boolean;
+  driver: string;
+}
+
+/**
+ * Harte Grenzen fuer Arbeitsspeicher und CPU (Windows-Job-Objects ueber das Hilfsprogramm nxjob.exe).
+ * Aus der Voreinstellung: ein Spiel, das mehr braucht als eingetragen, wuerde sonst abstuerzen.
+ */
+function LimitsCard() {
+  const qc = useQueryClient();
+  const limits = useQuery<LimitsState>({ queryKey: ['limits'], queryFn: () => api('/admin/limits') });
+  const save = useMutation({
+    mutationFn: (enforce: boolean) => api('/admin/limits', { method: 'POST', body: { enforce } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['limits'] }),
+  });
+  const s = limits.data;
+  return (
+    <section className="space-y-3 rounded-lg border border-seam bg-rack p-5">
+      <div>
+        <h2 className="font-medium">Ressourcen-Grenzen</h2>
+        <p className="text-sm text-dim mt-0.5">
+          Setzt den eingetragenen Arbeitsspeicher und die CPU-Zuteilung jedes Servers als harte Grenze durch. Ohne Schalter laufen die Server wie bisher ohne Grenze – sie werden aber immer mit dem Core beendet.
+        </p>
+      </div>
+      {limits.isLoading && <Spinner />}
+      {limits.error && <ErrorBox>{(limits.error as Error).message}</ErrorBox>}
+      {s && !s.supported && (
+        <p className="text-sm text-dim">
+          Auf diesem Rechner nicht verfügbar: Dafür braucht es den Windows-Treiber und das gebaute Hilfsprogramm <code className="font-mono">nxjob.exe</code> (Treiber: {s.driver}).
+        </p>
+      )}
+      {s && (
+        <label className={`flex items-start gap-2 text-sm ${s.supported ? 'cursor-pointer' : 'opacity-50'}`}>
+          <input type="checkbox" className="mt-0.5 size-4 accent-amber" checked={s.enforce} disabled={!s.supported || save.isPending} onChange={(e) => save.mutate(e.target.checked)} />
+          <span>
+            Grenzen durchsetzen
+            <span className="block text-dim text-xs mt-0.5">
+              Wirkt ab dem nächsten Start eines Servers. Ein Server, der mehr Speicher braucht als eingetragen, wird dann beendet – Grenzen also erst hoch genug einstellen.
+            </span>
+          </span>
+        </label>
+      )}
+      {save.error && <ErrorBox>{(save.error as Error).message}</ErrorBox>}
     </section>
   );
 }

@@ -76,6 +76,8 @@ async function main(): Promise<void> {
 
   // Registry oeffnen und gespeicherte Instanzen uebernehmen.
   const registry = await ServerRegistry.open(config.dataDir);
+  // Grenzen fuer Speicher und CPU: nur auf Wunsch des Administrators (Admin -> Hosts), gilt ab dem naechsten Start
+  if (driver instanceof WindowsNativeDriver) driver.setLimitsPolicy(() => registry.getSetting<boolean>('limits.enforce') === true);
   const interrupted = registry.failInterruptedTasks();
   if (interrupted > 0) {
     logger.warn({ interrupted }, 'Aufgaben vom letzten Lauf als unterbrochen markiert');
