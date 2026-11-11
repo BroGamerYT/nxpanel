@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Button, ErrorBox, Field, Input, Spinner } from '../components/ui';
+import { useFeatures } from '../lib/features';
 
 interface IntegrationsData {
   discord: {
@@ -32,6 +33,8 @@ interface IntegrationsData {
 
 export function Integrations() {
   const queryClient = useQueryClient();
+  // Der Core hat keinen Playit-Tunnel und keine API-Dokumentation (Scalar)
+  const { has } = useFeatures();
   const [discordUrl, setDiscordUrl] = useState('');
   const [playitKey, setPlayitKey] = useState('');
   const [testSuccess, setTestSuccess] = useState<string | null>(null);
@@ -189,7 +192,7 @@ export function Integrations() {
       </section>
 
       {/* Sektion 2: Integriertes Tunneling (Playit.gg) */}
-      <section className="rounded-xl border border-seam bg-rack p-5 sm:p-6 space-y-4">
+      {has('playit') && <section className="rounded-xl border border-seam bg-rack p-5 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-seam pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
@@ -261,10 +264,10 @@ export function Integrations() {
             </div>
           </Field>
         </div>
-      </section>
+      </section>}
 
       {/* Sektion 3: Scalar API-Browser */}
-      <section className="rounded-xl border border-seam bg-rack p-5 sm:p-6 space-y-4">
+      {has('apidocs') && <section className="rounded-xl border border-seam bg-rack p-5 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-seam pb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -296,7 +299,7 @@ export function Integrations() {
             <ExternalLink className="size-4 text-amber" />
           </a>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

@@ -399,9 +399,25 @@ export class ServerRegistry {
    */
   audit(action: string, serverId: string | null, actor: AuditActor, detail?: Record<string, unknown>): void {
     if (this.closed) return;
+    const clean = detail ? withoutSecrets(detail) : undefined;
     this.db
       .prepare('INSERT INTO audit (ts, action, server_id, actor, detail) VALUES (?, ?, ?, ?, ?)')
-      .run(new Date().toISOString(), action, serverId, actor, detail ? JSON.stringify(withoutSecrets(detail)) : null);
+      .run(new Date().toISOString(), action, serverId, actor, clean ? JSON.stringify(clean) : null);
+    for (const listener of this.auditListeners) {
+      try {
+        listener({ action, serverId, actor, detail: clean });
+      } catch {
+        // Ein Zuhoerer darf das Protokollieren nie stoeren
+      }
+    }
+  }
+
+  private readonly auditListeners = new Set<(e: { action: string; serverId: string | null; actor: AuditActor; detail: Record<string, unknown> | undefined }) => void>();
+
+  /** Meldet jeden neuen Audit-Eintrag (z. B. fuer Benachrichtigungen). Die Rueckgabe meldet wieder ab. */
+  onAudit(listener: (e: { action: string; serverId: string | null; actor: AuditActor; detail: Record<string, unknown> | undefined }) => void): () => void {
+    this.auditListeners.add(listener);
+    return () => this.auditListeners.delete(listener);
   }
 
   /** Gefiltert und seitenweise (`before` = Eintrag, ab dem es weitergeht), neueste zuerst. */

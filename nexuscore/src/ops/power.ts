@@ -32,7 +32,12 @@ export interface PowerOps {
   command(serverId: string, line: string): Promise<void>;
 }
 
-export function createPowerOps(deps: { registry: ServerRegistry; driver: HostDriver }): PowerOps {
+export function createPowerOps(deps: {
+  registry: ServerRegistry;
+  driver: HostDriver;
+  /** Wird gerufen, bevor ein Stopp/Neustart/Kill ausgeloest wird (Benachrichtigungen unterscheiden so Stopp von Absturz). */
+  onStopRequested?: (serverId: string) => void;
+}): PowerOps {
   const { registry, driver } = deps;
 
   const need = (id: string): ServerInstanceConfig => {
@@ -83,14 +88,17 @@ export function createPowerOps(deps: { registry: ServerRegistry; driver: HostDri
     },
     async stop(id) {
       need(id);
+      deps.onStopRequested?.(id);
       return driver.stopServer(id);
     },
     async kill(id) {
       need(id);
+      deps.onStopRequested?.(id);
       return driver.killServer(id);
     },
     async restart(id) {
       need(id);
+      deps.onStopRequested?.(id);
       // Ein schon gestoppter Server ist kein Fehler: dann wird nur gestartet.
       await driver.stopServer(id).catch(() => {});
       await prepare(id);

@@ -33,6 +33,8 @@ import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
+import { registerIntegrationRoutes } from './integrations.js';
+import { DiscordNotifier } from '../../notifications/discord.js';
 import { getNetwork, publicHostOf } from '../../network.js';
 import { GameTester } from '../../testing/game-tester.js';
 import { registerAccountRoutes } from './account.js';
@@ -59,7 +61,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -196,7 +198,8 @@ export function registerApiV1Routes(
 
   const findServer = (idOrShortId: string): ServerInstanceConfig | undefined => findInstance(registry, idOrShortId);
 
-  const power = createPowerOps({ registry, driver });
+  const discord = new DiscordNotifier({ registry, bus });
+  const power = createPowerOps({ registry, driver, onStopRequested: (id) => discord.expectStop(id) });
   // Backups gibt es im Core noch nicht: dann lehnt der Planer solche Zeitplaene ab.
   const backups = new BackupManager({
     registry,
@@ -220,7 +223,9 @@ export function registerApiV1Routes(
     scheduler.start();
     backups.start();
     players.start();
+    discord.start();
     server.addHook('onClose', async () => {
+      discord.stop();
       scheduler.stop();
       backups.stop();
       players.stop();
@@ -242,6 +247,7 @@ export function registerApiV1Routes(
     ...(options.ping ? { ping: options.ping } : {}),
   });
   registerAdminRoutes(server, { registry, driver, tester });
+  registerIntegrationRoutes(server, { registry, discord });
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
