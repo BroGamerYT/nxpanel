@@ -560,7 +560,7 @@ export function BackupManager({
             <h3 className="text-base font-semibold text-ink">{t('backups.createTitle')}</h3>
             <div>
               <label className="block text-xs font-medium text-dim mb-1">
-                {t('backups.nameOptional')}
+                {t('backups.customNameLabel')}
               </label>
               <input
                 type="text"
@@ -576,7 +576,7 @@ export function BackupManager({
 
             <div>
               <label className="block text-xs font-medium text-dim mb-1">
-                {t('backups.ignoredFiles')}
+                {t('backups.ignoreLabel')}
               </label>
               <textarea
                 value={ignorePatterns}
