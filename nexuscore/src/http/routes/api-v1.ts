@@ -32,6 +32,7 @@ import { findInstance } from '../../store/find.js';
 import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
+import { GameTester } from '../../testing/game-tester.js';
 import { registerAccountRoutes } from './account.js';
 import { registerExtraRoutes } from './extras.js';
 import type { SlpResult } from '../../games/minecraft.js';
@@ -56,7 +57,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -221,7 +222,19 @@ export function registerApiV1Routes(
 
   registerScheduleRoutes(server, { registry, find: findServer, scheduler });
   registerBackupRoutes(server, { find: findServer, backups });
-  registerAdminRoutes(server, { registry, driver });
+  const tester = new GameTester({
+    registry,
+    driver,
+    bus,
+    installs,
+    power,
+    eggs: loadEggs,
+    variablesFor: (eggId, given) => eggInstallData(eggId, given),
+    portsFor: eggPorts,
+    allocatePort: (existing) => allocatePort(existing),
+    ...(options.ping ? { ping: options.ping } : {}),
+  });
+  registerAdminRoutes(server, { registry, driver, tester });
   registerAccountRoutes(server, { registry, account });
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });

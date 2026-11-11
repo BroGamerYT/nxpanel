@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { HostDriver } from '../../drivers/interface.js';
 import type { ServerRegistry } from '../../store/registry.js';
+import { TesterError, type GameTester } from '../../testing/game-tester.js';
 
 /**
  * Admin-Uebersicht und Audit-Log - dieselben Routen und Antworten wie im Panel
@@ -30,8 +31,18 @@ const ACTION_ALIASES: Record<string, string> = {
 
 const ACTOR_NAMES: Record<string, string> = { standalone: 'admin', core: 'NexusCore', panel: 'Panel' };
 
-export function registerAdminRoutes(server: FastifyInstance, deps: { registry: ServerRegistry; driver: HostDriver }): void {
-  const { registry, driver } = deps;
+const testBody = z
+  .object({
+    mode: z.enum(['resume', 'fresh', 'retry-failed']).default('resume'),
+    only: z.string().max(60).optional(),
+    timeout: z.number().int().min(1).max(120).optional(),
+    cpuPercent: z.number().int().min(0).max(3200).optional(),
+    ramMb: z.number().int().min(2048).max(65536).optional(),
+  })
+  .optional();
+
+export function registerAdminRoutes(server: FastifyInstance, deps: { registry: ServerRegistry; driver: HostDriver; tester?: GameTester }): void {
+  const { registry, driver, tester } = deps;
 
   server.get('/api/v1/admin/overview', async () => {
     const list = registry.list();
@@ -54,6 +65,32 @@ export function registerAdminRoutes(server: FastifyInstance, deps: { registry: S
       },
     };
   });
+
+  // ---------------------------------------------------------- Spiele-Testlauf
+
+  if (tester) {
+    server.get('/api/v1/admin/test-report', async () => tester.report());
+
+    server.post<{ Body: unknown }>('/api/v1/admin/test-games', async (req, reply) => {
+      const body = testBody.safeParse(req.body ?? undefined);
+      if (!body.success) return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'Ungültige Anfrage', code: 'invalid_request' });
+      const options = body.data ?? { mode: 'resume' as const };
+      try {
+        const res = await tester.start(options);
+        registry.audit('games.test_started', null, 'standalone', { mode: res.mode, ...(options.only ? { only: options.only } : {}) });
+        return { ok: true, ...res };
+      } catch (err) {
+        if (err instanceof TesterError) return reply.status(err.statusCode).send({ error: err.message, message: err.message, code: err.code });
+        throw err;
+      }
+    });
+
+    server.post('/api/v1/admin/test-games/stop', async () => {
+      await tester.stop();
+      registry.audit('games.test_stopped', null, 'standalone');
+      return { ok: true };
+    });
+  }
 
   server.get('/api/v1/admin/audit', async (req, reply) => {
     const q = auditQuery.safeParse(req.query);
