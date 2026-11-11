@@ -47,3 +47,7 @@ desktop.ini
 
 # Vom Updater erzeugt
 build-info.json
+
+# Persoenliche Steam-/Spielserver-Dateien (enthalten Kontodaten)
+deploy/loginusers.vdf
+deploy/dedicatedServer.xml

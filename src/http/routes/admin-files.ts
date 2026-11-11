@@ -16,7 +16,7 @@ import {
   safePath,
 } from '../../servers/files.js';
 import { adminFileRoots, findAdminRoot, folderUsage, volumeLabels, applyVolumeLabels } from '../../admin/file-roots.js';
-import { HttpError, requireAdmin, requireGlobalPermission } from '../auth.js';
+import { HttpError, requireGlobalPermission } from '../auth.js';
 import { writeAudit } from '../../audit.js';
 import {
   listFilesQuery,

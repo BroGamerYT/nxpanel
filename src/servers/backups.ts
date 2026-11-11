@@ -1,5 +1,5 @@
 import { existsSync, createReadStream, createWriteStream, statSync } from 'node:fs';
-import { mkdir, stat, rm, copyFile, readdir } from 'node:fs/promises';
+import { mkdir, stat, rm, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';

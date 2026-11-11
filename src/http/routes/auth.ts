@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../../config.js';
 import { verifyPassword, getDummyHash, needsRehash, hashPassword } from '../../auth/password.js';
-import { signAccessToken, verifyAccessToken, ACCESS_TOKEN_TTL_S, REFRESH_TOKEN_TTL_S } from '../../auth/tokens.js';
+import { signAccessToken, ACCESS_TOKEN_TTL_S, REFRESH_TOKEN_TTL_S } from '../../auth/tokens.js';
 import { createSession, rotateSession, revokeSessionFamily, revokeAllUserSessions, listActiveSessions } from '../../auth/sessions.js';
 import { findUserForLogin, publicUser, setPassword, UserInputError, type UserRow } from '../../auth/users.js';
 import { globalPermissions, SERVER_FLAGS, FLAG_LABELS, PRESETS } from '../../auth/permissions.js';

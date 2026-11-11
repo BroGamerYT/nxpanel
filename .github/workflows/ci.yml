@@ -7,9 +7,44 @@ on:
     branches: [ main, master ]
 
 jobs:
-  test:
-    name: Typecheck & Build
+  panel:
+    name: Panel – Lint, Typecheck, Tests, Build
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: panel
+          POSTGRES_USER: panel
+          POSTGRES_PASSWORD: ci_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U panel -d panel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Nur fuer den CI-Lauf. Die Tests haengen selbst "_test" an den
+      # Datenbanknamen und nutzen Redis-DB 15 (tests/setup/test-db.ts).
+      NODE_ENV: test
+      DATABASE_URL: postgres://panel:ci_only_password@127.0.0.1:5432/panel?sslmode=disable
+      REDIS_URL: redis://127.0.0.1:6379/0
+      JWT_SECRET: ci_only_jwt_secret_0123456789abcdef0123456789abcdef
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      VOLUME_ROOT: ${{ github.workspace }}/data/volumes
+      BACKUP_ROOT: ${{ github.workspace }}/data/backups
 
     steps:
       - name: Checkout Code
@@ -20,17 +55,53 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
 
       - name: Install Dependencies
         run: |
           npm ci
           npm --prefix web ci
 
+      - name: Lint Backend
+        run: npm run lint
+
       - name: Typecheck Backend
         run: npm run typecheck
+
+      - name: Tests Backend
+        run: npm test
 
       - name: Build Backend
         run: npm run build
 
       - name: Build Web Frontend
         run: npm --prefix web run build
+
+  nexuscore:
+    name: NexusCore – Typecheck & Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nexuscore
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: nexuscore/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test

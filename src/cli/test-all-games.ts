@@ -20,7 +20,6 @@ import { prepareServer, provisionServer, deleteServer } from '../servers/create.
 import { startServer } from '../servers/lifecycle.js';
 import { seedBundledEggs } from '../servers/nodes.js';
 import { engine } from '../docker/client.js';
-import { log } from '../log.js';
 import { readFile, writeFile, mkdir, rm, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';

@@ -15,7 +15,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Dateimanager und Backups (Phase 5) (0.12.0)
 - [x] Speicher-Limit wird durchgesetzt (0.14.0)
 - [x] Mitnutzer und Admin-Bereich in der Oberfläche (0.16.2)
-- [ ] Panel von außen über HTTPS erreichbar (Caddy), 2FA für Admins Pflicht
+- [x] Panel von außen über HTTPS erreichbar (Caddy), 2FA für Admins Pflicht
 - [x] 1-Klick-Update-Button für Panel und Gameserver (mit automatischem Backup vor dem Update) (0.18.0) (Gameserver- & Modpack-Updates umgesetzt)
 - [x] Globale Panel-Suche (Strg+K) für Server, Einstellungen, Menüs und Direktaktionen (0.12.0)
 

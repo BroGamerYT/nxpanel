@@ -322,7 +322,7 @@ function setupSftpHandlers(sftp: any, state: SftpSessionState) {
     sftp.name(reqid, chunk);
   });
 
-  sftp.on('OPEN', async (reqid: number, filename: string, flags: number, attrs: any) => {
+  sftp.on('OPEN', async (reqid: number, filename: string, flags: number, _attrs: unknown) => {
     const target = resolveTarget(filename);
     if (!target || target === 'root') {
       return sftp.status(reqid, STATUS_CODE.NO_SUCH_FILE);
@@ -437,7 +437,7 @@ function setupSftpHandlers(sftp: any, state: SftpSessionState) {
     }
   });
 
-  sftp.on('MKDIR', async (reqid: number, path: string, attrs: any) => {
+  sftp.on('MKDIR', async (reqid: number, path: string, _attrs: unknown) => {
     const target = resolveTarget(path);
     if (!target || target === 'root') return sftp.status(reqid, STATUS_CODE.PERMISSION_DENIED);
     if (!hasPerm(target.server, 'file.write')) {

@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/brogameryt/nxpanel/releases"><img src="https://img.shields.io/badge/version-v0.22.0--alpha-F2A93B?style=for-the-badge&logo=git&logoColor=black" alt="Version"></a>
+  <a href="https://github.com/brogameryt/nxpanel/releases"><img src="https://img.shields.io/badge/version-v0.26.1--alpha-F2A93B?style=for-the-badge&logo=git&logoColor=black" alt="Version"></a>
   <img src="https://img.shields.io/badge/status-In%20Entwicklung%20(Alpha)-E5484D?style=for-the-badge" alt="Status">
   <a href="https://ko-fi.com/brogameryt" target="_blank"><img src="https://img.shields.io/badge/Ko--fi-Unterst%C3%BCtzen-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/lizenz-AGPL--3.0-3CCB8C?style=for-the-badge" alt="Lizenz"></a>
