@@ -1027,6 +1027,8 @@ export function registerApiV1Routes(
         cover: coverOf(e),
         coverChoice: storedCover(e.id)?.choice ?? 'auto',
         hasSteamCover: steamAppId(e.name, e.raw) !== null,
+        // Ohne Installer (Docker, Mock) bleibt alles wie im Panel; sonst nur, was der Core selbst installieren kann
+        installable: !installs || installPlanFor(e.id, e.raw, {}) !== null,
       })),
     };
   });

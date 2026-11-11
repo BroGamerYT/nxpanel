@@ -348,6 +348,32 @@ describe('Block B2 - Installation als Aufgabe', () => {
     return { registry, driver, bus, installs, server, headers, close };
   }
 
+  it('die Spieleliste sagt, was der Core selbst installieren kann (und ohne Installer: alles)', async () => {
+    const ctx = await setup();
+    try {
+      const eggs = (await ctx.server.inject({ method: 'GET', url: '/api/v1/eggs', headers: ctx.headers })).json().eggs as Array<{ id: string; installable: boolean }>;
+      const byId = new Map(eggs.map((e) => [e.id, e.installable]));
+      for (const id of ['minecraft-paper', 'palworld', 'valheim', 'terraria', 'teamspeak3', 'cs2']) expect(byId.get(id), id).toBe(true);
+      for (const id of ['factorio', 'mumble', 'velocity']) expect(byId.get(id), id).toBe(false);
+    } finally {
+      await ctx.close();
+    }
+    // Ohne Installer (Docker, Mock) bleibt es wie im Panel: alles waehlbar
+    const registry = await ServerRegistry.open(path.join(tmp, 'ohne-installer'));
+    const driver = new MockDriver();
+    await driver.initialize();
+    const server = await createCoreServer(driver, new EventBus(), registry, { installs: null });
+    try {
+      const login = await server.inject({ method: 'POST', url: '/api/v1/auth/login', headers: { 'content-type': 'application/json' }, payload: { login: 'admin', password: 'nur-fuer-tests-0815' } });
+      const eggs = (await server.inject({ method: 'GET', url: '/api/v1/eggs', headers: { authorization: `Bearer ${login.json().accessToken}` } })).json().eggs as Array<{ installable: boolean }>;
+      expect(eggs.length).toBeGreaterThan(40);
+      expect(eggs.every((e) => e.installable)).toBe(true);
+    } finally {
+      await server.close();
+      registry.close();
+    }
+  });
+
   it('erkennt, was der Core installieren kann', () => {
     expect(installKindFor('minecraft-paper', {})).toBe('minecraft-paper');
     expect(installKindFor('minecraft-paper', { TYPE: 'paper' })).toBe('minecraft-paper');
