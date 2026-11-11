@@ -35,6 +35,7 @@ const schema = z
     NEXUSCORE_TOKEN: z.string().default(''),
     NEXUSCORE_PAIRING_PIN: z.string().default(''),
     NEXUSCORE_CORS_ORIGINS: z.string().default(''),
+    NEXUSCORE_ALLOWED_HOSTS: z.string().default(''),
     NEXUSCORE_LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
     NEXUSCORE_ALLOW_INSECURE_AUTH: envBool(false),
   })
@@ -83,6 +84,10 @@ export const config = {
   pairingPin: env.NEXUSCORE_PAIRING_PIN,
   corsOrigins: env.NEXUSCORE_CORS_ORIGINS.split(',')
     .map((o) => o.trim())
+    .filter(Boolean),
+  /** Zusaetzliche Hostnamen, unter denen der Core angesprochen werden darf (Schutz gegen DNS-Rebinding). */
+  allowedHosts: env.NEXUSCORE_ALLOWED_HOSTS.split(',')
+    .map((h) => h.trim().toLowerCase())
     .filter(Boolean),
   logLevel: env.NEXUSCORE_LOG_LEVEL,
   /** Nur fuer den lokalen Einstiegstest: erlaubt Zugriff ohne Token. */

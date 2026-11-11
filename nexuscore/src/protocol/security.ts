@@ -199,3 +199,127 @@ export function validatePairingPin(pin: string): boolean {
 export function pairingAttemptsRemaining(): number {
   return Math.max(0, MAX_PAIR_ATTEMPTS - attempts.length);
 }
+
+// ---------------------------------------------------------------------------
+// Block A2 - Schutz gegen Zugriffe aus fremden Webseiten (CSRF, DNS-Rebinding)
+// ---------------------------------------------------------------------------
+
+/** Methoden, die etwas veraendern - nur fuer sie wird die Herkunft geprueft. */
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+export function isWriteMethod(method: string): boolean {
+  return WRITE_METHODS.has(method.toUpperCase());
+}
+
+/** Hostname ohne Port aus einem Host-Header ("[::1]:8443" -> "::1"). */
+function hostnameOf(hostHeader: string): string {
+  const value = hostHeader.trim().toLowerCase();
+  if (value.startsWith('[')) {
+    const end = value.indexOf(']');
+    return end > 0 ? value.slice(1, end) : value;
+  }
+  const colon = value.lastIndexOf(':');
+  // Mehr als ein Doppelpunkt ohne Klammern: nackte IPv6-Adresse ohne Port.
+  if (colon > 0 && value.indexOf(':') === colon) return value.slice(0, colon);
+  return value;
+}
+
+function isIpLiteral(hostname: string): boolean {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return true;
+  return hostname.includes(':') && /^[0-9a-f:.]+$/.test(hostname);
+}
+
+/**
+ * Schutz gegen DNS-Rebinding.
+ *
+ * Beim Rebinding zeigt ein fremder Domainname ploetzlich auf 127.0.0.1 oder
+ * eine LAN-Adresse; der Browser schickt dann den fremden Namen im Host-Header.
+ * Erlaubt sind deshalb nur IP-Adressen (eine IP laesst sich nicht umbiegen),
+ * localhost, die konfigurierte Adresse und die Namen aus
+ * NEXUSCORE_ALLOWED_HOSTS und NEXUSCORE_CORS_ORIGINS.
+ *
+ * Ein fehlender Host-Header kommt nur von Nicht-Browsern und bleibt erlaubt.
+ */
+export function isAllowedHost(hostHeader: string | undefined): boolean {
+  if (!hostHeader) return true;
+  const hostname = hostnameOf(hostHeader);
+  if (!hostname) return false;
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return true;
+  if (isIpLiteral(hostname)) return true;
+  if (hostname === config.host.toLowerCase()) return true;
+  if (config.allowedHosts.includes(hostname)) return true;
+  return config.corsOrigins.some((origin) => {
+    try {
+      return new URL(origin).hostname.toLowerCase() === hostname;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Prueft die Herkunft einer schreibenden Anfrage.
+ *
+ * - Herkunft gesetzt: sie muss dieselbe sein wie der angesprochene Host
+ *   (die eigene Oberflaeche) oder in NEXUSCORE_CORS_ORIGINS stehen.
+ * - Herkunft fehlt: das ist kein Browser (Panel, PowerShell, curl). Erlaubt,
+ *   solange die Anmeldung nicht aus einem Cookie stammt - ein Cookie schickt
+ *   nur ein Browser mit, und der nennt bei schreibenden Anfragen immer eine
+ *   Herkunft.
+ */
+export function isAllowedOrigin(
+  origin: string | undefined,
+  hostHeader: string | undefined,
+  authFromCookie: boolean,
+): boolean {
+  if (origin === undefined || origin === '') return !authFromCookie;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    // "null" (sandboxed iframe, file://) und kaputte Werte
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+
+  if (hostHeader && parsed.host.toLowerCase() === hostHeader.trim().toLowerCase()) return true;
+
+  const normalized = parsed.origin.toLowerCase();
+  return config.corsOrigins.some((allowed) => {
+    try {
+      return new URL(allowed).origin.toLowerCase() === normalized;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** Sicherheits-Header fuer jede Antwort. */
+export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+  'x-frame-options': 'DENY',
+  'cross-origin-resource-policy': 'same-origin',
+};
+
+/**
+ * Content-Security-Policy fuer die ausgelieferte Oberflaeche.
+ *
+ * Skripte nur aus der eigenen Quelle - die gebaute Oberflaeche hat keine
+ * Inline-Skripte. Stile brauchen 'unsafe-inline' (React setzt style-Attribute,
+ * xterm ebenso). Bilder duerfen von aussen kommen (Steam-Avatare, Titelbilder).
+ */
+export const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' ws: wss:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');

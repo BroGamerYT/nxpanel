@@ -8,6 +8,11 @@ import {
   normalizeRequestPath,
   isPublicRoute,
   parseCookie,
+  isAllowedHost,
+  isAllowedOrigin,
+  isWriteMethod,
+  SECURITY_HEADERS,
+  CONTENT_SECURITY_POLICY,
 } from '../protocol/security.js';
 import type { EventBus } from '../protocol/events.js';
 import type { HostDriver } from '../drivers/interface.js';
@@ -55,28 +60,47 @@ export async function createCoreServer(
   await server.register(websocket);
 
   /**
-   * Sammel-Parser fuer unbekannte Content-Types.
+   * Nur JSON wird als Body angenommen (Block A2).
    *
-   * Windows PowerShell schickt bei POST ohne Body einen
-   * 'application/x-www-form-urlencoded'-Header mit. Ohne diesen Parser
-   * antwortet Fastify mit 415, obwohl die Route gar keinen Body braucht.
-   * Leerer oder unparsbarer Inhalt wird deshalb als "kein Body" behandelt.
+   * JSON parst Fastify selbst. Jeder andere Content-Type wird nur mit leerem
+   * Body akzeptiert: Windows PowerShell schickt bei POST ohne Body einen
+   * 'application/x-www-form-urlencoded'-Header mit, und solche Routen
+   * brauchen gar keinen Body.
+   *
+   * Ein gefuellter Body mit fremdem Typ wird mit 415 abgelehnt. Frueher wurde
+   * er als JSON gelesen - damit konnte jede Webseite per "simple request"
+   * ('text/plain', kein Preflight) Befehle an den Core schicken.
    */
-  server.addContentTypeParser(
-    '*',
-    { parseAs: 'string' },
-    (_req, body, done) => {
-      if (typeof body !== 'string' || body.trim().length === 0) {
-        done(null, undefined);
-        return;
-      }
-      try {
-        done(null, JSON.parse(body));
-      } catch {
-        done(null, undefined);
-      }
-    },
-  );
+  const emptyBodyOnly = (
+    _req: unknown,
+    body: string | Buffer,
+    done: (err: (Error & { statusCode?: number }) | null, body?: unknown) => void,
+  ): void => {
+    if (body.toString().trim().length === 0) {
+      done(null, undefined);
+      return;
+    }
+    const err: Error & { statusCode?: number } = new Error(
+      'Nur application/json wird als Inhalt angenommen.',
+    );
+    err.statusCode = 415;
+    done(err);
+  };
+  // text/plain hat in Fastify einen eingebauten Parser - der muss ersetzt werden.
+  server.removeContentTypeParser('text/plain');
+  server.addContentTypeParser('text/plain', { parseAs: 'string' }, emptyBodyOnly);
+  server.addContentTypeParser('*', { parseAs: 'string' }, emptyBodyOnly);
+
+  /** Sicherheits-Header auf jeder Antwort, CSP auf der ausgelieferten Oberflaeche. */
+  server.addHook('onSend', async (_req, reply) => {
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+      if (!reply.hasHeader(name)) reply.header(name, value);
+    }
+    const type = String(reply.getHeader('content-type') ?? '');
+    if (type.includes('text/html') && !reply.hasHeader('content-security-policy')) {
+      reply.header('content-security-policy', CONTENT_SECURITY_POLICY);
+    }
+  });
 
   /**
    * Authentifizierung fuer alles ausser den oeffentlichen Endpunkten.
@@ -87,8 +111,29 @@ export async function createCoreServer(
   server.addHook('onRequest', async (req, reply) => {
     const normPath = normalizeRequestPath(req.url);
 
-    // 1. Oeffentliche Routen duerfen ohne Authentifizierung durch
+    // 0. DNS-Rebinding: nur bekannte Hostnamen (Block A2). Gilt auch fuer
+    //    oeffentliche Routen, sonst liesse sich die Oberflaeche unter einem
+    //    fremden Namen laden.
+    if (!isAllowedHost(req.headers.host)) {
+      return reply.status(403).send({
+        error: 'Verboten',
+        message: 'Unbekannter Hostname. Zusaetzliche Namen in NEXUSCORE_ALLOWED_HOSTS eintragen.',
+      });
+    }
+
+    const write = isWriteMethod(req.method);
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+    const cookieToken = parseCookie(req.headers.cookie, 'nxp_session');
+
+    // 1. Oeffentliche Routen duerfen ohne Authentifizierung durch - schreibende
+    //    aber nur mit eigener oder fehlender Herkunft (Block A2).
     if (isPublicRoute(req.method, normPath)) {
+      if (write && !isAllowedOrigin(origin, req.headers.host, cookieToken !== undefined)) {
+        return reply.status(403).send({
+          error: 'Verboten',
+          message: 'Anfrage von fremder Herkunft abgelehnt.',
+        });
+      }
       return;
     }
 
@@ -105,8 +150,6 @@ export async function createCoreServer(
 
     // 3. Token ermitteln: Header > Query (WebSockets) > Cookie (Standalone UI)
     const queryToken = (req.query as Record<string, unknown> | undefined)?.token;
-    const cookieHeader = req.headers.cookie;
-    const cookieToken = parseCookie(cookieHeader, 'nxp_session');
 
     const header =
       req.headers.authorization ??
@@ -115,6 +158,19 @@ export async function createCoreServer(
         : cookieToken
           ? `Bearer ${cookieToken}`
           : undefined);
+
+    // 4. Schreibende Anfragen: Herkunft pruefen (CSRF, Block A2). Kommt die
+    //    Anmeldung nur aus dem Cookie, ist eine fehlende Herkunft nicht erlaubt.
+    const authFromCookie =
+      req.headers.authorization === undefined &&
+      !(typeof queryToken === 'string' && queryToken.length > 0) &&
+      cookieToken !== undefined;
+    if (write && !isAllowedOrigin(origin, req.headers.host, authFromCookie)) {
+      return reply.status(403).send({
+        error: 'Verboten',
+        message: 'Anfrage von fremder Herkunft abgelehnt.',
+      });
+    }
 
     const auth = validateRequestToken(header);
     if (!auth.valid) {

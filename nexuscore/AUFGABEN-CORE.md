@@ -75,7 +75,15 @@ im Knoten-Modus) ist der Rechner offen im Netz.
   Groß-/Kleinschreibung, URL-Kodierung) – sonst ist sie mit `/core/v1/../api/panel/servers` umgehbar.
 * Test je offener Route: ohne Token `401`, mit Token `2xx`.
 
-### A2 – Browser-Zugriff absichern (CSRF)
+### A2 – Browser-Zugriff absichern (CSRF) – erledigt 11.11.2026
+
+> **Umgesetzt** in `src/http/server.ts` und `src/protocol/security.ts`, Tests in
+> `tests/browser-protection.test.ts`. Eine bewusste Abweichung von der Vorgabe unten:
+> Eine **fehlende** Herkunft wird nicht pauschal abgelehnt, sonst kämen Panel, PowerShell und
+> das Selbsttest-Skript nicht mehr durch (sie schicken keinen `Origin`-Header). Abgelehnt wird
+> eine fehlende Herkunft nur, wenn die Anmeldung aus dem Cookie stammt – das Cookie schickt nur
+> ein Browser, und der nennt bei schreibenden Anfragen immer eine Herkunft. Beim Hostnamen sind
+> IP-Adressen, `localhost` und die Namen aus `NEXUSCORE_ALLOWED_HOSTS` (neu) erlaubt.
 
 * Sammel-Content-Type-Parser einengen: nur `application/json` (und was die Oberfläche wirklich
   braucht) parsen, alles andere mit `415` ablehnen. Das Problem mit PowerShell-POSTs ohne Body
