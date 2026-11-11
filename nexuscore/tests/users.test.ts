@@ -67,7 +67,7 @@ afterAll(async () => {
 
 describe('Rechtetabelle', () => {
   const routes = () => (server as unknown as { routeTable: Array<{ method: string; url: string }> }).routeTable.filter((r) => r.method !== 'HEAD');
-  const PUBLIC = new Set(['/core/v1/info', '/core/v1/pair', '/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/methods', '*', '/*']);
+  const PUBLIC = new Set(['/core/v1/info', '/core/v1/pair', '/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/methods', '/api/v1/auth/passkeys/login-options', '/api/v1/auth/passkeys/login-verify', '*', '/*']);
 
   it('hat für jede Route eine ausdrückliche Regel (neue Routen sind nie zufällig offen)', () => {
     const open = routes().filter((r) => !PUBLIC.has(r.url) && !classify(r.method, r.url).explicit).map((r) => `${r.method} ${r.url}`);

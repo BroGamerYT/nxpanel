@@ -29,6 +29,7 @@
     "@fastify/multipart": "^10.1.8",
     "@fastify/static": "^10.1.10",
     "@fastify/websocket": "^11.0.2",
+    "@simplewebauthn/server": "^14.1.0",
     "dockerode": "^4.0.2",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",

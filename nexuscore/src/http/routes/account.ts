@@ -91,7 +91,7 @@ export function registerAccountRoutes(server: FastifyInstance, deps: AccountRout
   };
 
   // Vor der Anmeldung: welche Wege gibt es? Die Anmeldeseite blendet sonst nicht Vorhandenes aus.
-  server.get('/api/v1/auth/methods', async () => ({ password: true, passkey: false, steam: false }));
+  server.get('/api/v1/auth/methods', async () => ({ password: true, passkey: Boolean(account), steam: false }));
 
   server.get('/api/v1/auth/me', async (req, reply) => {
     const actor = req.actor;

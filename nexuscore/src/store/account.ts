@@ -31,6 +31,21 @@ const FAILED_WINDOW_MS = 10 * 60 * 1000;
 export type Role = 'admin' | 'moderator' | 'user';
 export const ROLES: readonly Role[] = ['admin', 'moderator', 'user'];
 
+/** Ein Passkey (WebAuthn): nur der oeffentliche Schluessel liegt hier, das Geheimnis bleibt im Geraet. */
+export interface PasskeyRecord {
+  id: string;
+  /** Kennung des Schluessels beim Geraet (base64url). */
+  credentialId: string;
+  /** Oeffentlicher Schluessel (base64url, COSE). */
+  publicKey: string;
+  /** Zaehler des Geraets gegen kopierte Schluessel. */
+  counter: number;
+  deviceName: string;
+  transports: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 /** Alles, was zu einem Benutzer gehoert - inklusive Geheimnisse. Verlaesst nie dieses Modul. */
 interface UserRecord {
   id: string;
@@ -56,6 +71,7 @@ interface UserRecord {
   totpPending?: string;
   /** SHA-256 der noch unbenutzten Wiederherstellungscodes. */
   recovery?: string[];
+  passkeys?: PasskeyRecord[];
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -316,6 +332,12 @@ export class LocalAccount {
     const u = this.users.find((x) => x.id === id);
     if (!u) throw new AccountError('Benutzer nicht gefunden', 'not_found', 404);
     return u;
+  }
+
+  /** Benutzer zu Name oder E-Mail (ohne Beachtung der Schreibweise). */
+  findByLogin(login: string): AccountUser | undefined {
+    const u = this.byLogin(login);
+    return u ? view(u) : undefined;
   }
 
   private byLogin(login: string): UserRecord | undefined {
@@ -613,6 +635,70 @@ export class LocalAccount {
     await fs.rm(path.join(this.dir, INITIAL_PASSWORD_FILE), { force: true }).catch(() => {});
   }
 
+  // ---------------------------------------------------------------- Passkeys
+
+  passkeys(userId: string): PasskeyRecord[] {
+    return (this.rec(userId).passkeys ?? []).map((p) => ({ ...p, transports: [...p.transports] }));
+  }
+
+  /** Wem gehoert dieser Schluessel? (Anmeldung ohne Benutzernamen.) */
+  findPasskey(credentialId: string): { userId: string; passkey: PasskeyRecord } | null {
+    for (const u of this.users) {
+      const p = u.passkeys?.find((x) => x.credentialId === credentialId);
+      if (p) return { userId: u.id, passkey: { ...p, transports: [...p.transports] } };
+    }
+    return null;
+  }
+
+  async addPasskey(userId: string, input: { credentialId: string; publicKey: string; counter: number; deviceName: string; transports: string[] }): Promise<PasskeyRecord> {
+    const u = this.rec(userId);
+    if (this.findPasskey(input.credentialId)) throw new AccountError('Dieser Passkey ist schon registriert', 'passkey_exists', 409);
+    if ((u.passkeys?.length ?? 0) >= 20) throw new AccountError('Es sind höchstens 20 Passkeys je Konto möglich', 'too_many_passkeys');
+    const rec: PasskeyRecord = {
+      id: crypto.randomUUID(),
+      credentialId: input.credentialId,
+      publicKey: input.publicKey,
+      counter: input.counter,
+      deviceName: input.deviceName.replace(/[\r\n]+/g, ' ').trim().slice(0, 100) || 'Passkey',
+      transports: input.transports.slice(0, 8),
+      createdAt: new Date().toISOString(),
+      lastUsedAt: null,
+    };
+    u.passkeys = [...(u.passkeys ?? []), rec];
+    await this.save();
+    return { ...rec };
+  }
+
+  async removePasskey(userId: string, passkeyId: string): Promise<boolean> {
+    const u = this.rec(userId);
+    const before = u.passkeys?.length ?? 0;
+    u.passkeys = (u.passkeys ?? []).filter((p) => p.id !== passkeyId);
+    if (u.passkeys.length === before) return false;
+    await this.save();
+    return true;
+  }
+
+  async renamePasskey(userId: string, passkeyId: string, deviceName: string): Promise<PasskeyRecord | null> {
+    const p = this.rec(userId).passkeys?.find((x) => x.id === passkeyId);
+    if (!p) return null;
+    p.deviceName = deviceName.replace(/[\r\n]+/g, ' ').trim().slice(0, 100) || p.deviceName;
+    await this.save();
+    return { ...p, transports: [...p.transports] };
+  }
+
+  async touchPasskey(userId: string, passkeyId: string, counter: number): Promise<void> {
+    const p = this.rec(userId).passkeys?.find((x) => x.id === passkeyId);
+    if (!p) return;
+    p.counter = counter;
+    p.lastUsedAt = new Date().toISOString();
+    await this.save();
+  }
+
+  /** Ob ueberhaupt jemand einen Passkey hat - die Anmeldeseite zeigt den Knopf nur dann sinnvoll. */
+  hasAnyPasskey(): boolean {
+    return this.users.some((u) => (u.passkeys?.length ?? 0) > 0);
+  }
+
   // --------------------------------------------------------------- Speichern
 
   private save(): Promise<void> {
@@ -683,6 +769,22 @@ function normalize(raw: Partial<UserRecord>): UserRecord | null {
     ...(raw.totp && typeof raw.totp.secret === 'string' ? { totp: { secret: raw.totp.secret, lastStep: Number(raw.totp.lastStep) || 0 } } : {}),
     ...(typeof raw.totpPending === 'string' ? { totpPending: raw.totpPending } : {}),
     ...(Array.isArray(raw.recovery) ? { recovery: raw.recovery.filter((h) => typeof h === 'string') } : {}),
+    ...(Array.isArray(raw.passkeys)
+      ? {
+          passkeys: raw.passkeys
+            .filter((p): p is PasskeyRecord => Boolean(p) && typeof p.id === 'string' && typeof p.credentialId === 'string' && typeof p.publicKey === 'string')
+            .map((p) => ({
+              id: p.id,
+              credentialId: p.credentialId,
+              publicKey: p.publicKey,
+              counter: Number.isFinite(p.counter) ? Number(p.counter) : 0,
+              deviceName: typeof p.deviceName === 'string' ? p.deviceName.slice(0, 100) : 'Passkey',
+              transports: Array.isArray(p.transports) ? p.transports.filter((x) => typeof x === 'string') : [],
+              createdAt: typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString(),
+              lastUsedAt: typeof p.lastUsedAt === 'string' ? p.lastUsedAt : null,
+            })),
+        }
+      : {}),
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
     lastLoginAt: typeof raw.lastLoginAt === 'string' ? raw.lastLoginAt : null,
   };

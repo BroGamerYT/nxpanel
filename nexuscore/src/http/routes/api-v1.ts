@@ -33,6 +33,8 @@ import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
+import { registerPasskeyRoutes } from './passkeys.js';
+import { PasskeyService } from '../../auth/passkeys.js';
 import { registerSystemRoutes } from './system.js';
 import { GamingMode } from '../../gaming/manager.js';
 import { registerUserRoutes } from './users.js';
@@ -70,7 +72,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -268,6 +270,18 @@ export function registerApiV1Routes(
   registerSystemRoutes(server, { registry, driver, gaming });
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
+  if (account) {
+    registerPasskeyRoutes(server, {
+      registry,
+      account,
+      service: new PasskeyService(account),
+      issueSession: async (req, reply, user) => {
+        const token = createSessionToken({ userId: user.id, ip: req.ip, userAgent: req.headers['user-agent'] });
+        reply.header('Set-Cookie', sessionCookie(token));
+        return { accessToken: token };
+      },
+    });
+  }
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
