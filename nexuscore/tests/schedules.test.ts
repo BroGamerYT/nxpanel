@@ -229,7 +229,7 @@ describe('Zeitplan-Routen', () => {
     expect((await call('POST', url, { name: 'x', action: 'restart', cron: 'kaputt' })).statusCode).toBe(400);
     expect((await call('POST', url, { name: 'x', action: 'restart' })).statusCode).toBe(400);
     expect((await call('POST', url, { name: 'x', action: 'reboot', interval_minutes: 5 })).statusCode).toBe(400);
-    expect((await call('POST', url, { name: 'x', action: 'backup', interval_minutes: 5 })).statusCode).toBe(400);
+    expect((await call('POST', url, { name: 'x', action: 'command', interval_minutes: 5 })).statusCode).toBe(400);
     expect((await call('POST', url, { name: '', action: 'restart', interval_minutes: 5 })).statusCode).toBe(400);
   });
 

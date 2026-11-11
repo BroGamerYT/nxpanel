@@ -20,6 +20,7 @@ import {
   Cloud,
 } from 'lucide-react';
 import { api, currentToken, refreshSession } from '../lib/api';
+import { useFeatures } from '../lib/features';
 import { t } from '../lib/i18n';
 import type { BackupItem, ServerStatus, BackupSchedule, BackupVerificationDetails, ActiveTask } from '../lib/types';
 import { Button, ErrorBox, Spinner } from './ui';
@@ -58,6 +59,7 @@ export function BackupManager({
   permissions: string[];
 }) {
   const qc = useQueryClient();
+  const features = useFeatures();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedVerifyBackup, setSelectedVerifyBackup] = useState<BackupItem | null>(null);
@@ -481,7 +483,7 @@ export function BackupManager({
                         )}
 
                         {/* Auf UGREEN NAS synchronisieren */}
-                        {canCreate && b.status === 'completed' && !b.nas_stored && (
+                        {canCreate && features.has('nas') && b.status === 'completed' && !b.nas_stored && (
                           <button
                             onClick={() => syncNasMut.mutate(b.id)}
                             disabled={syncNasMut.isPending && syncNasMut.variables === b.id}

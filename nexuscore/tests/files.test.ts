@@ -471,9 +471,9 @@ describe('Funktionsliste des Cores', () => {
     const res = await call('GET', '/api/v1/about');
     expect(res.status).toBe(200);
     expect(res.json.standalone).toBe(true);
-    expect(res.json.features).toEqual(expect.arrayContaining(['files', 'settings', 'logfiles', 'schedules']));
+    expect(res.json.features).toEqual(expect.arrayContaining(['files', 'settings', 'logfiles', 'schedules', 'backups']));
     // Nichts davon, was es im Core noch nicht gibt
-    for (const missing of ['backups', 'subusers', 'players', 'admin', 'help', 'timeline', 'configs', 'domain']) {
+    for (const missing of ['subusers', 'players', 'admin', 'help', 'timeline', 'configs', 'domain']) {
       expect(res.json.features, missing).not.toContain(missing);
     }
     // Seiten, die diese Listen lesen, duerfen nicht abstuerzen
@@ -487,7 +487,7 @@ describe('Funktionsliste des Cores', () => {
       expect(permissions, wanted).toContain(wanted);
     }
     // Ohne diese Rechte blendet die Oberflaeche Tabs und Schaltflaechen aus
-    for (const missing of ['file.archive', 'file.sftp', 'backup.read', 'subuser.read', 'player.kick', 'startup.image']) {
+    for (const missing of ['file.archive', 'file.sftp', 'subuser.read', 'player.kick', 'startup.image']) {
       expect(permissions, missing).not.toContain(missing);
     }
   });

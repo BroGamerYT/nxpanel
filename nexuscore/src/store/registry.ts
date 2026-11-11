@@ -222,8 +222,58 @@ export class ServerRegistry {
     if (!this.servers.has(id)) return false;
     this.db.prepare('DELETE FROM instances WHERE id = ?').run(id);
     this.db.prepare('DELETE FROM schedules WHERE server_id = ?').run(id);
+    this.db.prepare('DELETE FROM backups WHERE server_id = ?').run(id);
     this.servers.delete(id);
     return true;
+  }
+
+  // ------------------------------------------------------------------ Backups
+
+  listBackups(serverId: string): BackupRow[] {
+    return (this.db.prepare('SELECT * FROM backups WHERE server_id = ? ORDER BY created_at DESC, id').all(serverId) as unknown as RawBackup[]).map(toBackup);
+  }
+
+  getBackup(id: string): BackupRow | undefined {
+    const row = this.db.prepare('SELECT * FROM backups WHERE id = ?').get(id) as RawBackup | undefined;
+    return row ? toBackup(row) : undefined;
+  }
+
+  /** Alle Backups mit diesem Zustand (nach einem Neustart: unterbrochene). */
+  backupsWithStatus(status: BackupRow['status']): BackupRow[] {
+    return (this.db.prepare('SELECT * FROM backups WHERE status = ?').all(status) as unknown as RawBackup[]).map(toBackup);
+  }
+
+  saveBackup(b: BackupRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO backups (id, server_id, name, filename, bytes, checksum, locked, status, error, ignored_files, verification_status, verified_at, verification_details, created_at, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, filename = excluded.filename, bytes = excluded.bytes, checksum = excluded.checksum,
+           locked = excluded.locked, status = excluded.status, error = excluded.error, ignored_files = excluded.ignored_files,
+           verification_status = excluded.verification_status, verified_at = excluded.verified_at,
+           verification_details = excluded.verification_details, completed_at = excluded.completed_at`,
+      )
+      .run(
+        b.id,
+        b.server_id,
+        b.name,
+        b.filename,
+        b.bytes,
+        b.checksum,
+        b.locked ? 1 : 0,
+        b.status,
+        b.error,
+        b.ignored_files ? JSON.stringify(b.ignored_files) : null,
+        b.verification_status,
+        b.verified_at,
+        b.verification_details ? JSON.stringify(b.verification_details) : null,
+        b.created_at,
+        b.completed_at,
+      );
+  }
+
+  deleteBackup(id: string): void {
+    this.db.prepare('DELETE FROM backups WHERE id = ?').run(id);
   }
 
   // ------------------------------------------------------------------ Zeitplaene
@@ -436,6 +486,52 @@ type RawSchedule = Omit<ScheduleRow, 'active' | 'interval_minutes'> & { active: 
 
 function toSchedule(row: RawSchedule): ScheduleRow {
   return { ...row, active: Number(row.active) === 1, interval_minutes: row.interval_minutes === null ? null : Number(row.interval_minutes) };
+}
+
+export interface BackupVerification {
+  status: 'valid' | 'corrupted';
+  sha256Match: boolean;
+  archiveIntact: boolean;
+  filesCount: number;
+  criticalFilesFound: string[];
+  missingCriticalFiles?: string[];
+  error?: string;
+  verifiedAt: string;
+}
+
+export interface BackupRow {
+  id: string;
+  server_id: string;
+  name: string;
+  filename: string;
+  bytes: number;
+  checksum: string | null;
+  locked: boolean;
+  status: 'running' | 'completed' | 'failed' | 'restoring';
+  error: string | null;
+  ignored_files: string[] | null;
+  verification_status: 'unverified' | 'valid' | 'corrupted';
+  verified_at: string | null;
+  verification_details: BackupVerification | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+type RawBackup = Omit<BackupRow, 'locked' | 'ignored_files' | 'verification_details' | 'bytes'> & {
+  locked: number;
+  bytes: number;
+  ignored_files: string | null;
+  verification_details: string | null;
+};
+
+function toBackup(row: RawBackup): BackupRow {
+  return {
+    ...row,
+    bytes: Number(row.bytes),
+    locked: Number(row.locked) === 1,
+    ignored_files: parseJson<string[]>(row.ignored_files),
+    verification_details: parseJson<BackupVerification>(row.verification_details),
+  };
 }
 
 interface TaskRow {

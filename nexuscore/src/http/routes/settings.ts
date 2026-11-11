@@ -30,6 +30,8 @@ export interface SettingsDeps {
   eggs: () => Promise<LoadedEgg[]>;
   /** Pruefung, ob ein Port auf dem Rechner frei ist - in Tests austauschbar. */
   isPortFree?: (port: number) => Promise<boolean>;
+  /** Nach dem Loeschen eines Servers (z. B. seine Backups entfernen). */
+  onServerDeleted?: (id: string) => Promise<void>;
 }
 
 /** Was zu einem Server gehoert, aber nicht in seine Startkonfiguration. */
@@ -231,6 +233,8 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
     await unregisterable.unregisterServer?.(c.id);
     await registry.remove(c.id);
     registry.deleteSetting(metaKey(c.id));
+    registry.deleteSetting(`server.${c.id}.backup_schedule`);
+    await deps.onServerDeleted?.(c.id).catch(() => {});
     return { ok: true, filesDeleted: dir !== null };
   });
 

@@ -29,6 +29,8 @@ import { registerScheduleRoutes } from './schedules.js';
 import { Scheduler } from '../../schedules/scheduler.js';
 import { PowerError, createPowerOps } from '../../ops/power.js';
 import { findInstance } from '../../store/find.js';
+import { BackupManager } from '../../backups/manager.js';
+import { registerBackupRoutes } from './backups.js';
 import { loadEggs, type LoadedEgg } from '../../eggs/loader.js';
 import {
   coverDirFor,
@@ -48,7 +50,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -69,6 +71,11 @@ export const SERVER_PERMISSIONS = [
   'schedule.read',
   'schedule.update',
   'schedule.run',
+  'backup.read',
+  'backup.create',
+  'backup.restore',
+  'backup.delete',
+  'backup.download',
 ];
 
 export function registerApiV1Routes(
@@ -151,18 +158,36 @@ export function registerApiV1Routes(
 
   const power = createPowerOps({ registry, driver });
   // Backups gibt es im Core noch nicht: dann lehnt der Planer solche Zeitplaene ab.
+  const backups = new BackupManager({
+    registry,
+    isStopped: async (id) => {
+      const state = await stateOf(id);
+      return !state || state.status === 'offline' || state.status === 'error';
+    },
+    gameName: async (c) => (await loadEggs()).find((e) => e.id === c.game)?.name ?? c.game,
+  });
   const scheduler = new Scheduler(registry, {
     restart: async (id) => void (await power.restart(id)),
     command: (id, line) => power.command(id, line),
+    backup: async (id, name) => {
+      const { done } = await backups.create(id, { name, actor: 'core' });
+      const result = await done;
+      if (result.status === 'failed') throw new Error(result.error ?? 'Backup fehlgeschlagen');
+    },
   });
   if (options.scheduler !== false) {
     scheduler.start();
-    server.addHook('onClose', async () => scheduler.stop());
+    backups.start();
+    server.addHook('onClose', async () => {
+      scheduler.stop();
+      backups.stop();
+    });
   }
 
   registerScheduleRoutes(server, { registry, find: findServer, scheduler });
+  registerBackupRoutes(server, { find: findServer, backups });
   registerFileRoutes(server, { registry, find: findServer });
-  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs });
+  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: (id) => backups.purgeServer(id) });
   registerLogFileRoutes(server, { registry, find: findServer, eggs: loadEggs });
 
   // 1. Authentifizierung & Sitzung
@@ -770,13 +795,13 @@ export function registerApiV1Routes(
     return { activity: [] };
   });
   server.get('/api/v1/tasks/active', async () => {
-    return { tasks: registry.listTasks({ active: true }).map(toActiveTask) };
+    return { tasks: [...registry.listTasks({ active: true }).map(toActiveTask), ...backups.activeTasks()] };
   });
 
   server.get<{ Params: { id: string } }>('/api/v1/servers/:id/tasks/active', async (req, reply) => {
     const c = findServer(req.params.id);
     if (!c) return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
-    return { tasks: registry.listTasks({ active: true, serverId: c.id }).map(toActiveTask) };
+    return { tasks: [...registry.listTasks({ active: true, serverId: c.id }).map(toActiveTask), ...backups.activeTasks(c.id)] };
   });
 
   // Neuinstallation: laedt Spiel und Java erneut, Welt und Einstellungen bleiben liegen.

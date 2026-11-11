@@ -88,6 +88,30 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX schedules_due ON schedules (active, next_run_at);
     `,
   },
+  {
+    id: 3,
+    name: 'backups',
+    sql: `
+      CREATE TABLE backups (
+        id                   TEXT PRIMARY KEY,
+        server_id            TEXT NOT NULL,
+        name                 TEXT NOT NULL,
+        filename             TEXT NOT NULL,          -- Name beim Herunterladen
+        bytes                INTEGER NOT NULL DEFAULT 0,
+        checksum             TEXT,                   -- SHA-256 des Archivs
+        locked               INTEGER NOT NULL DEFAULT 0,
+        status               TEXT NOT NULL,          -- running | completed | failed | restoring
+        error                TEXT,
+        ignored_files        TEXT,                   -- JSON-Liste
+        verification_status  TEXT NOT NULL DEFAULT 'unverified',
+        verified_at          TEXT,
+        verification_details TEXT,                   -- JSON
+        created_at           TEXT NOT NULL,
+        completed_at         TEXT
+      );
+      CREATE INDEX backups_server ON backups (server_id, created_at);
+    `,
+  },
 ];
 
 /** Die Datenbankdatei ist beschaedigt - der Core darf damit nicht weiterlaufen. */

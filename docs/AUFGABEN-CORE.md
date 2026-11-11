@@ -242,10 +242,10 @@ Endlosschleife läuft. Nichts wird installiert.
 > eine Temp-Datei, haben eine Obergrenze (`NEXUSCORE_MAX_UPLOAD_MB`) und nehmen aus dem Dateinamen nur den Namen.
 > **Weg für die Dateilogik:** bewusst nachgebaut statt geteilt (der Core darf `src/` des Panels nicht importieren).
 > **Noch offen in B4:** Packen und Entpacken (das Recht `file.archive` wird deshalb nicht gemeldet, die Knöpfe fehlen),
-> Versionsverlauf der Dateien (die Liste ist leer), Backups, Aufbewahrungsregel.
+> Versionsverlauf der Dateien (die Liste ist leer).
 >
 > **Funktionsliste und Oberfläche:** `GET /api/v1/about` meldet `standalone: true` und `features`
-> (heute `files`, `settings`, `logfiles` und `schedules`). Die Oberfläche (`web/src/lib/features.ts`) blendet Menüpunkte, Server-Tabs, Einträge der
+> (heute `files`, `settings`, `logfiles`, `schedules` und `backups`). Die Oberfläche (`web/src/lib/features.ts`) blendet Menüpunkte, Server-Tabs, Einträge der
 > Befehlspalette und ganze Seiten aus, die der Core nicht kann, und zeigt bei einer direkt aufgerufenen Adresse
 > „Hier nicht verfügbar“. Fehlt die Angabe (Panel), bleibt alles wie bisher. Die Rechte je Server (`SERVER_PERMISSIONS`)
 > enthalten nur noch, wofür es Routen gibt. **Wer eine Funktion baut, trägt sie in `CORE_FEATURES` ein** und nimmt die
@@ -267,6 +267,7 @@ Endlosschleife läuft. Nichts wird installiert.
 > Die Oberfläche blendet in „Einstellungen“ Konfigurationsdateien, Subdomain, Import, Modpacks, MOTD, Auto-Neustart und
 > Auto-Sleep aus (Bereiche `configs`, `domain`, `import`, `modpacks`, `motd`, `autorestart`, `autosleep`).
 > **Logdateien und Zeitpläne (11.11.2026, erledigt):** Logs je Server lesen/herunterladen (`log_dirs` im Egg, Pfadgrenze, `.gz` bis 20 MB). Zeitpläne in `core.db` (Migration 2), Takt alle 30 s; Aktionen Neustart und Befehl, Zeitangabe als Intervall, `HH:MM` oder Cron (ungültig = 400); verpasste Läufe werden übersprungen, nicht nachgeholt. Backup-Zeitpläne folgen mit den Backups (bis dahin 400). `src/ops/power.ts` ist der gemeinsame Weg für Start/Stopp/Neustart.
+> **Backups (11.11.2026, erledigt):** `src/backups/manager.ts`, Routen wie im Panel, `.tar.gz` über das System-`tar` nach `<Datenverzeichnis>/backups`, SHA-256 und Prüfung, Wiederherstellen nur bei gestopptem Server und mit Prüfung auf unsichere Pfade/Verknüpfungen, Automatik-Zeitplan mit Aufbewahrung, Backup-Zeitpläne. Kein NAS. Deltas bleiben offen.
 
 * Dateiendpunkte: auflisten, lesen, schreiben, umbenennen, löschen, hochladen, Archiv entpacken –
   alles unter der Pfadbeschränkung aus A3, ohne Ausnahme.
