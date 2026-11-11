@@ -72,6 +72,15 @@ export async function resolveInsideRoot(
 ): Promise<string> {
   if (input.includes('\0')) throw new PathOutsideRootError(label);
 
+  // Unter Linux und macOS ist der Rueckstrich ein gewoehnliches Zeichen im
+  // Dateinamen: "..\..\x.exe" waere dort EIN Name im Server-Verzeichnis und
+  // "C:\Windows\cmd.exe" ebenso. Das Panel und die Eggs schicken aber auch
+  // Windows-Schreibweisen - sie sollen auf jedem System dasselbe bedeuten.
+  if (path.sep === '/') {
+    if (/^[a-zA-Z]:[\\/]/.test(input) || input.startsWith('\\\\')) throw new PathOutsideRootError(label);
+    input = input.replace(/\\/g, '/');
+  }
+
   const resolved = path.resolve(base, input);
   if (!isInside(root, resolved)) throw new PathOutsideRootError(label);
 
