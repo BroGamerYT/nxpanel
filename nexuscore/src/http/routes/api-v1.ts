@@ -31,6 +31,9 @@ import { PowerError, createPowerOps } from '../../ops/power.js';
 import { findInstance } from '../../store/find.js';
 import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
+import type { SlpResult } from '../../games/minecraft.js';
+import { PlayerManager } from '../../players/manager.js';
+import { registerPlayerRoutes } from './players.js';
 import { loadEggs, type LoadedEgg } from '../../eggs/loader.js';
 import {
   coverDirFor,
@@ -50,7 +53,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -76,6 +79,10 @@ export const SERVER_PERMISSIONS = [
   'backup.restore',
   'backup.delete',
   'backup.download',
+  'player.read',
+  'player.kick',
+  'player.ban',
+  'player.whitelist',
 ];
 
 export function registerApiV1Routes(
@@ -85,7 +92,7 @@ export function registerApiV1Routes(
   registry: ServerRegistry,
   account: LocalAccount | null = null,
   installs: InstallManager | null = null,
-  options: { fetchImpl?: Fetcher; scheduler?: boolean } = {},
+  options: { fetchImpl?: Fetcher; scheduler?: boolean; ping?: (host: string, port: number) => Promise<SlpResult> } = {},
 ): void {
   const coverDir = coverDirFor(registry.dir);
   const storedCover = (eggId: string) => registry.getSetting<CoverChoice>(`cover.${eggId}`);
@@ -166,6 +173,7 @@ export function registerApiV1Routes(
     },
     gameName: async (c) => (await loadEggs()).find((e) => e.id === c.game)?.name ?? c.game,
   });
+  const players = new PlayerManager({ registry, driver, ...(options.ping ? { ping: options.ping } : {}) });
   const scheduler = new Scheduler(registry, {
     restart: async (id) => void (await power.restart(id)),
     command: (id, line) => power.command(id, line),
@@ -178,14 +186,17 @@ export function registerApiV1Routes(
   if (options.scheduler !== false) {
     scheduler.start();
     backups.start();
+    players.start();
     server.addHook('onClose', async () => {
       scheduler.stop();
       backups.stop();
+      players.stop();
     });
   }
 
   registerScheduleRoutes(server, { registry, find: findServer, scheduler });
   registerBackupRoutes(server, { find: findServer, backups });
+  registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
   registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: (id) => backups.purgeServer(id) });
   registerLogFileRoutes(server, { registry, find: findServer, eggs: loadEggs });

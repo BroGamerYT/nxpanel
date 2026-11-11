@@ -27,6 +27,7 @@ import { registerStatsRoutes } from './routes/stats.js';
 import { registerLogRoutes } from './routes/logs.js';
 import { registerStandaloneRoutes } from './routes/standalone.js';
 import { registerApiV1Routes } from './routes/api-v1.js';
+import type { SlpResult } from '../games/minecraft.js';
 import { registerWebRoutes } from './routes/web.js';
 import { LocalAccount } from '../store/account.js';
 import { InstallManager, runtimesDirFor } from '../install/manager.js';
@@ -36,7 +37,7 @@ export async function createCoreServer(
   driver: HostDriver,
   bus: EventBus,
   registry: ServerRegistry,
-  options: { installs?: InstallManager | null; fetchImpl?: Fetcher } = {},
+  options: { installs?: InstallManager | null; fetchImpl?: Fetcher; ping?: (host: string, port: number) => Promise<SlpResult> } = {},
 ): Promise<FastifyInstance> {
   // Fastify loggt nicht selbst: der Core bringt seinen eigenen pino-Logger
   // mit, damit Request-Log und Anwendungslog dasselbe Format und dieselbe
@@ -222,6 +223,7 @@ export async function createCoreServer(
 
   registerApiV1Routes(server, driver, bus, registry, account, installs, {
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    ...(options.ping ? { ping: options.ping } : {}),
   });
   registerInfoRoutes(server);
   registerPairRoutes(server);
