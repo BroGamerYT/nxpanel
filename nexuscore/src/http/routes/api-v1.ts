@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -19,7 +19,7 @@ import {
 } from '../../protocol/security.js';
 import { serverRootFor, resolveInsideRoot, PathOutsideRootError } from '../../protocol/paths.js';
 import { allocatePort } from '../../protocol/ports.js';
-import type { LocalAccount } from '../../store/account.js';
+import type { AccountUser, LocalAccount } from '../../store/account.js';
 import { installPlanFor, installSpecOf, type InstallManager } from '../../install/manager.js';
 import { writeServerProperties } from '../../install/minecraft.js';
 import { registerFileRoutes } from './files.js';
@@ -34,6 +34,7 @@ import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
 import { registerPasskeyRoutes } from './passkeys.js';
+import { registerSteamLoginRoutes } from './steam-login.js';
 import { PasskeyService } from '../../auth/passkeys.js';
 import { registerSystemRoutes } from './system.js';
 import { GamingMode } from '../../gaming/manager.js';
@@ -72,7 +73,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys', 'steam'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -271,16 +272,13 @@ export function registerApiV1Routes(
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
   if (account) {
-    registerPasskeyRoutes(server, {
-      registry,
-      account,
-      service: new PasskeyService(account),
-      issueSession: async (req, reply, user) => {
-        const token = createSessionToken({ userId: user.id, ip: req.ip, userAgent: req.headers['user-agent'] });
-        reply.header('Set-Cookie', sessionCookie(token));
-        return { accessToken: token };
-      },
-    });
+    const issueSession = async (req: FastifyRequest, reply: FastifyReply, user: AccountUser) => {
+      const token = createSessionToken({ userId: user.id, ip: req.ip, userAgent: req.headers['user-agent'] });
+      reply.header('Set-Cookie', sessionCookie(token));
+      return { accessToken: token };
+    };
+    registerPasskeyRoutes(server, { registry, account, service: new PasskeyService(account), issueSession });
+    registerSteamLoginRoutes(server, { registry, account, issueSession });
   }
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });

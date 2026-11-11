@@ -205,6 +205,8 @@ export function isPublicRoute(method: string, normalizedPath: string): boolean {
   if (m === 'POST' && p === '/api/v1/auth/refresh') return true;
   // Anmeldung mit Passkey: die Challenge vor und die Pruefung nach der Anmeldung
   if (m === 'POST' && (p === '/api/v1/auth/passkeys/login-options' || p === '/api/v1/auth/passkeys/login-verify')) return true;
+  // Anmeldung mit Steam: Weiterleitung zu Steam und Rueckkehr (die Rueckkehr prueft Steam selbst)
+  if (m === 'GET' && (p === '/api/v1/auth/steam/login' || p === '/api/v1/auth/steam/callback')) return true;
   // Welche Anmeldewege es gibt - die Anmeldeseite fragt das vor der Anmeldung
   if (m === 'GET' && p === '/api/v1/auth/methods') return true;
 

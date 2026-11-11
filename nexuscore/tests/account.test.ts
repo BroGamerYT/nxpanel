@@ -71,11 +71,11 @@ async function enableTotp(c: Ctx): Promise<{ secret: string; codes: string[]; st
 }
 
 describe('Anmeldewege und Profil', () => {
-  it('die Anmeldewege sind ohne Anmeldung lesbar: Passwort und Passkey, kein Steam', async () => {
+  it('die Anmeldewege sind ohne Anmeldung lesbar: Passwort, Passkey und Steam', async () => {
     const c = await boot();
     const res = await c.call('GET', '/api/v1/auth/methods', undefined, null);
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ password: true, passkey: true, steam: false });
+    expect(res.json()).toEqual({ password: true, passkey: true, steam: true });
   });
 
   it('Konto: Funktion gemeldet, Profil lesen und ändern', async () => {

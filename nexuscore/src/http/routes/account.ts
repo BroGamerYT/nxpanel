@@ -19,7 +19,7 @@ import type { RequestActor } from '../authz.js';
  * liegen in api-v1.ts, weil sie die Sitzungen beruehren.
  *
  * Jeder Benutzer sieht und aendert nur sein eigenes Konto. Passkeys und
- * Steam-Anmeldung kennt der Core nicht.
+ * Die Steam-Anmeldung liegt in steam-login.ts.
  */
 
 declare module 'fastify' {
@@ -91,7 +91,7 @@ export function registerAccountRoutes(server: FastifyInstance, deps: AccountRout
   };
 
   // Vor der Anmeldung: welche Wege gibt es? Die Anmeldeseite blendet sonst nicht Vorhandenes aus.
-  server.get('/api/v1/auth/methods', async () => ({ password: true, passkey: Boolean(account), steam: false }));
+  server.get('/api/v1/auth/methods', async () => ({ password: true, passkey: Boolean(account), steam: Boolean(account) }));
 
   server.get('/api/v1/auth/me', async (req, reply) => {
     const actor = req.actor;
@@ -107,8 +107,8 @@ export function registerAccountRoutes(server: FastifyInstance, deps: AccountRout
         canCreateServers: actor.role === 'admin' || actor.canCreateServers,
         totpEnabled: p?.totpEnabled ?? false,
         avatar: p?.avatar ?? null,
-        steamId: null,
-        steamName: null,
+        steamId: p?.steamId ?? null,
+        steamName: p?.steamName ?? null,
       },
       permissions: globalPermissions(actor),
     };

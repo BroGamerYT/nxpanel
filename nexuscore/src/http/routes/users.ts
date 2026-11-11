@@ -24,7 +24,6 @@ const newUserBody = z.object({
   username: z.string().min(3).max(32),
   email: z.string().max(254).nullable().optional(),
   password: z.string().max(256).optional(),
-  // Steam-Anmeldung gibt es im Core nicht - das Feld wird angenommen und ignoriert
   steamId: z.string().max(32).nullable().optional(),
   role: z.enum(['admin', 'moderator', 'user']).default('user'),
   canCreateServers: z.boolean().default(false),
@@ -89,8 +88,8 @@ export function registerUserRoutes(
       ramLimitMb: u.ramLimitMb,
       diskLimitMb: u.diskLimitMb,
       allowedEggs: u.allowedEggs,
-      steamId: null,
-      steamName: null,
+      steamId: u.steamId,
+      steamName: u.steamName,
       createdAt: u.createdAt,
       lastLoginAt: u.lastLoginAt,
       lastSeenAt: null,
@@ -125,6 +124,7 @@ export function registerUserRoutes(
         canCreateServers: b.canCreateServers || (b.globalPermissions?.includes('server.create') ?? false),
         ...(b.globalPermissions !== undefined ? { globalPermissions: b.globalPermissions } : {}),
         ...(b.allowedEggs !== undefined ? { allowedEggs: b.allowedEggs } : {}),
+        ...(b.steamId ? { steamId: b.steamId } : {}),
       });
       registry.audit('user.create', null, 'standalone', { username: user.username, role: user.role });
       reply.code(201);
@@ -152,11 +152,11 @@ export function registerUserRoutes(
         ...(b.ramLimitMb !== undefined ? { ramLimitMb: b.ramLimitMb } : {}),
         ...(b.diskLimitMb !== undefined ? { diskLimitMb: b.diskLimitMb } : {}),
         ...(b.allowedEggs !== undefined ? { allowedEggs: b.allowedEggs } : {}),
+        ...(b.steamId !== undefined ? { steamId: b.steamId } : {}),
       });
       // Gesperrt heisst: sofort raus, auch aus offenen Sitzungen
       if (b.suspended) revokeUserSessions(u.id);
-      const { steamId: _steam, ...changed } = b;
-      registry.audit('user.update', null, 'standalone', { target: u.username, ...changed });
+      registry.audit('user.update', null, 'standalone', { target: u.username, ...b });
       return { ok: true };
     });
   });

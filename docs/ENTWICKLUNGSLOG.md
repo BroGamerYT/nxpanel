@@ -5,6 +5,13 @@ Zeiten in Europe/Berlin.
 
 ---
 
+## 2026-11-12
+
+| Zeit | Was | Dateien |
+| --- | --- | --- |
+| 00:40 | **Anmeldung mit Steam (OpenID).** Dieselben Routen und Weiterleitungen wie im Panel: `GET /auth/steam/login`, `/auth/steam/callback`, `POST /auth/steam/link-start`, `/auth/steam/unlink`. Steam ist nur der Ausweis: hinein kommt nur, wer schon ein Konto mit dieser SteamID64 hat. Verknüpfen läuft über ein Einmal-Token, das serverseitig an das angemeldete Konto gebunden ist. Geprüft werden Anbieter, Rückkehr-Adresse (muss zu diesem Core passen) und jede Antwort nur einmal. Gesperrte Benutzer kommen nicht hinein, ein Steam-Konto gehört höchstens einem Benutzer. Der Administrator kann die SteamID64 in der Benutzerverwaltung setzen und entfernen. 10 Tests mit Steam-Attrappe (nicht gegen das echte Steam getestet). | `src/auth/{steam-openid,one-time}.ts`, `src/http/routes/steam-login.ts`, `src/store/account.ts`, `tests/steam-login.test.ts` |
+| 00:05 | **Passkeys (WebAuthn).** Registrieren, umbenennen, löschen, anmelden ohne Passwort. Herkunft und Host müssen genau passen, nur Namen (auch localhost), keine IP-Adressen; Challenges gelten einmal; unbekannte Namen bekommen eine gleich aussehende Attrappe; Fehlschläge zählen für die Sperre je Herkunft. 12 Tests mit Software-Authenticator (noch nicht im echten Browser). **Außerdem:** Zip64 und `.tar.zst` lesen; `SERVER_DIR` für absolute Pfade (Arma Reforger); Installationstest für jedes Steam-Spiel (der Fehler `template.replace is not a function` aus dem Nachttest war ein veralteter Build, kein Codefehler). | `src/auth/passkeys.ts`, `src/http/routes/passkeys.ts`, `tests/passkeys.test.ts` |
+
 ## 2026-11-11
 
 | Zeit | Was | Dateien |

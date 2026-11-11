@@ -273,7 +273,7 @@ Endlosschleife läuft. Nichts wird installiert.
 > **Spieler (11.11.2026, erledigt, nur Minecraft Paper):** `src/players/manager.ts`, `src/games/minecraft.ts`. Server List Ping für den Live-Zustand, Listen aus den Dateien des Servers, Aktionen über die Konsole (kein RCON), Banns auf Zeit mit Aufhebung durch den Core. Noch nicht an einem echten Server erprobt.
 > **Packen, Entpacken, Versionsverlauf (11.11.2026, erledigt):** `src/files/archive.ts` (zip lesen/schreiben, tar/tar.gz lesen, mit Schutz gegen Pfad-Ausbruch, Verknüpfungen und Archivbomben), Versionen in `core.db` (Migration 4, 25 je Datei, Rollback sichert den Stand davor).
 > **Audit und Admin-Übersicht (11.11.2026, erledigt):** `src/http/routes/admin.ts`, Abfragen in `registry.queryAudit/auditStats`. Übrige Admin-Kacheln (Benutzer, Hosts, Netzwerk, Integrationen, Host-Logs, Testbericht, Dateien) bleiben ausgeblendet.
-> **Konto (11.11.2026, erledigt):** `src/http/routes/account.ts`; Profil, Zwei-Faktor (TOTP, Wiederherstellungscodes, jeder Code nur einmal), Sitzungen mit Kennung. Kein QR-Code, keine Passkeys, keine Steam-Anmeldung. Öffentliche Route `/auth/methods` für die Anmeldeseite.
+> **Konto (11.11.2026, erledigt):** `src/http/routes/account.ts`; Profil, Zwei-Faktor (TOTP, Wiederherstellungscodes, jeder Code nur einmal), Sitzungen mit Kennung. Passkeys und Steam-Anmeldung (OpenID) sind inzwischen gebaut (12.11.2026, mit Attrappen getestet, noch nicht live). Öffentliche Route `/auth/methods` für die Anmeldeseite.
 
 * Dateiendpunkte: auflisten, lesen, schreiben, umbenennen, löschen, hochladen, Archiv entpacken –
   alles unter der Pfadbeschränkung aus A3, ohne Ausnahme.
@@ -379,7 +379,7 @@ Zuletzt, und erst wenn Windows und der Tunnel stehen.
    eigenen VPS mit eigener IPv4?
 6. **Benutzerverwaltung im Standalone-Core:** Der Core kennt bisher bewusst nur ein Konto. Benutzer, Rollen und
    Mitnutzer (Tab „Mitnutzer“, Admin-Seiten) im Core bräuchten eine eigene Benutzer- und Rechtetabelle in `core.db`
-   und widersprechen „Der Core kennt keine Nutzer“ aus Abschnitt 0. **Entschieden und gebaut (Ja, bauen):** Benutzer in `users.json`, Rollen, Modul-Rechte, Server-Besitz und Rechte-Flags je Server, zentrale Rechtetabelle (`http/authz.ts`). Auf dem nativen Treiber dürfen nur Administratoren Dateien schreiben und entpacken (`NEXUSCORE_ALLOW_USER_FILE_WRITE` hebt das auf). Offen: Mitnutzer selbst einladen (Tab „Mitnutzer“), Sichtprüfung als anderer Benutzer, Plattenplatz-Grenze je Benutzer, Steam-Anmeldung.
+   und widersprechen „Der Core kennt keine Nutzer“ aus Abschnitt 0. **Entschieden und gebaut (Ja, bauen):** Benutzer in `users.json`, Rollen, Modul-Rechte, Server-Besitz und Rechte-Flags je Server, zentrale Rechtetabelle (`http/authz.ts`). Auf dem nativen Treiber dürfen nur Administratoren Dateien schreiben und entpacken (`NEXUSCORE_ALLOW_USER_FILE_WRITE` hebt das auf). Offen: Mitnutzer selbst einladen (Tab „Mitnutzer“), Sichtprüfung als anderer Benutzer, Plattenplatz-Grenze je Benutzer. (Steam-Anmeldung: gebaut am 12.11.2026.)
 
 ---
 

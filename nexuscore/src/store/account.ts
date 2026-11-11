@@ -72,6 +72,9 @@ interface UserRecord {
   /** SHA-256 der noch unbenutzten Wiederherstellungscodes. */
   recovery?: string[];
   passkeys?: PasskeyRecord[];
+  /** Verknuepftes Steam-Konto (SteamID64) fuer die Anmeldung mit Steam. */
+  steamId?: string;
+  steamName?: string;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -97,6 +100,8 @@ export interface AccountUser {
   avatar: string | null;
   locale: string | null;
   totpEnabled: boolean;
+  steamId: string | null;
+  steamName: string | null;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -190,9 +195,17 @@ const view = (u: UserRecord): AccountUser => ({
   avatar: u.avatar,
   locale: u.locale,
   totpEnabled: Boolean(u.totp),
+  steamId: u.steamId ?? null,
+  steamName: u.steamName ?? null,
   createdAt: u.createdAt,
   lastLoginAt: u.lastLoginAt,
 });
+
+function validSteamId(value: string): string {
+  const id = value.trim();
+  if (!/^\d{17}$/.test(id)) throw new AccountError('Die Steam-ID64 besteht aus 17 Ziffern', 'invalid_steam_id');
+  return id;
+}
 
 /** Hash, gegen den bei unbekanntem Namen gerechnet wird - die Antwortzeit verraet so nicht, ob es den Namen gibt. */
 let dummyHash: Promise<string> | undefined;
@@ -208,6 +221,8 @@ export interface NewUserInput {
   serverLimit?: number | undefined;
   ramLimitMb?: number | undefined;
   diskLimitMb?: number | undefined;
+  /** SteamID64 des verknuepften Steam-Kontos (null = trennen). */
+  steamId?: string | null | undefined;
 }
 
 export type UserAdminPatch = Partial<Omit<NewUserInput, 'password' | 'username'>> & {
@@ -334,6 +349,42 @@ export class LocalAccount {
     return u;
   }
 
+  private bySteamId(steamId: string): UserRecord | undefined {
+    return this.users.find((u) => u.steamId === steamId);
+  }
+
+  /** Wem gehoert dieses Steam-Konto? */
+  findBySteamId(steamId: string): AccountUser | undefined {
+    const u = this.bySteamId(steamId);
+    return u ? view(u) : undefined;
+  }
+
+  /** Steam-Konto verknuepfen (oder mit null trennen); ein Steam-Konto gehoert hoechstens einem Benutzer. */
+  async setSteam(userId: string, steam: { id: string; name: string | null; avatar?: string | null } | null): Promise<void> {
+    const u = this.rec(userId);
+    if (!steam) {
+      delete u.steamId;
+      delete u.steamName;
+    } else {
+      const steamId = validSteamId(steam.id);
+      const other = this.bySteamId(steamId);
+      if (other && other.id !== userId) throw new AccountError('Dieses Steam-Konto ist schon einem Benutzer zugewiesen', 'steam_already_linked', 409);
+      u.steamId = steamId;
+      if (steam.name) u.steamName = steam.name.replace(/[\r\n]+/g, ' ').trim().slice(0, 100);
+      else delete u.steamName;
+      if (!u.avatar && steam.avatar && /^https:\/\//i.test(steam.avatar) && steam.avatar.length <= 500) u.avatar = steam.avatar;
+    }
+    await this.save();
+  }
+
+  /** Aktualisiert Namen/Bild eines verknuepften Steam-Kontos beim Anmelden. */
+  async refreshSteamProfile(userId: string, name: string | null, avatar: string | null): Promise<void> {
+    const u = this.rec(userId);
+    if (name) u.steamName = name.replace(/[\r\n]+/g, ' ').trim().slice(0, 100);
+    if (!u.avatar && avatar && /^https:\/\//i.test(avatar) && avatar.length <= 500) u.avatar = avatar;
+    await this.save();
+  }
+
   /** Benutzer zu Name oder E-Mail (ohne Beachtung der Schreibweise). */
   findByLogin(login: string): AccountUser | undefined {
     const u = this.byLogin(login);
@@ -418,6 +469,10 @@ export class LocalAccount {
       ...(input.ramLimitMb !== undefined ? { ramLimitMb: input.ramLimitMb } : {}),
       ...(input.diskLimitMb !== undefined ? { diskLimitMb: input.diskLimitMb } : {}),
     });
+    if (input.steamId) {
+      rec.steamId = validSteamId(input.steamId);
+      if (this.bySteamId(rec.steamId)) throw new AccountError('Dieses Steam-Konto ist schon einem Benutzer zugewiesen', 'steam_already_linked', 409);
+    }
     this.users.push(rec);
     await this.save();
     return { user: view(rec), password, generated };
@@ -444,6 +499,18 @@ export class LocalAccount {
     if (patch.serverLimit !== undefined) next.serverLimit = patch.serverLimit;
     if (patch.ramLimitMb !== undefined) next.ramLimitMb = patch.ramLimitMb;
     if (patch.diskLimitMb !== undefined) next.diskLimitMb = patch.diskLimitMb;
+    if (patch.steamId !== undefined) {
+      if (patch.steamId) {
+        const steamId = validSteamId(patch.steamId);
+        const other = this.bySteamId(steamId);
+        if (other && other.id !== id) throw new AccountError('Dieses Steam-Konto ist schon einem Benutzer zugewiesen', 'steam_already_linked', 409);
+        if (steamId !== u.steamId) delete next.steamName;
+        next.steamId = steamId;
+      } else {
+        delete next.steamId;
+        delete next.steamName;
+      }
+    }
 
     const wasActiveAdmin = u.role === 'admin' && !u.suspended;
     const stillActiveAdmin = next.role === 'admin' && !next.suspended;
@@ -451,6 +518,9 @@ export class LocalAccount {
       throw new AccountError('Das ist der letzte aktive Administrator - er kann nicht herabgestuft oder gesperrt werden.', 'last_admin', 409);
     }
     Object.assign(u, next);
+    // Object.assign entfernt keine Felder: getrennte Steam-Verknuepfung ausdruecklich loeschen
+    if (next.steamId === undefined) delete u.steamId;
+    if (next.steamName === undefined) delete u.steamName;
     await this.save();
     return view(u);
   }
@@ -785,6 +855,8 @@ function normalize(raw: Partial<UserRecord>): UserRecord | null {
             })),
         }
       : {}),
+    ...(typeof raw.steamId === 'string' && /^\d{17}$/.test(raw.steamId) ? { steamId: raw.steamId } : {}),
+    ...(typeof raw.steamName === 'string' ? { steamName: raw.steamName.slice(0, 100) } : {}),
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
     lastLoginAt: typeof raw.lastLoginAt === 'string' ? raw.lastLoginAt : null,
   };
