@@ -68,6 +68,7 @@ export function registerServerRoutes(
 
     try {
       const state = await driver.registerServer(config);
+      registry.audit('server.create', config.id, 'panel', { name: config.name, game: config.game });
       return reply.status(201).send({ status: 'created', state });
     } catch (err) {
       await registry.remove(config.id);

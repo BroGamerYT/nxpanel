@@ -129,7 +129,7 @@ nexuscored (Node 22, als einzelne .exe über Node SEA)
 ├── http       Fastify-Server, Routen /core/v1/... (vorhanden), Ziel: nur mTLS
 ├── drivers    Schnittstelle HostDriver + windows-native | docker | mock (vorhanden), podman (geplant)
 ├── protocol   Ereignisstrom, Kopplung per PIN und Token (vorhanden)
-├── store      Registry der Instanzen, heute servers.json (vorhanden), Ziel: SQLite core.db
+├── store      SQLite core.db: Instanzen, Einstellungen, Audit, Aufgaben (vorhanden)
 ├── system     CPU, RAM und Platte des Hosts (vorhanden)
 ├── jobs       Warteschlange für lange Aufgaben (Install, Backup, Update), mit Fortschritt
 ├── steam      SteamCMD verwalten (laden, aktualisieren, Login-Sitzungen)
@@ -149,7 +149,7 @@ nexuscored (Node 22, als einzelne .exe über Node SEA)
 | Docker/Podman | dockerode |
 | Eingabeprüfung | zod |
 | Protokollierung | pino |
-| lokale Datenbank | `node:sqlite` oder better-sqlite3 (offen, siehe `nexuscore/AUFGABEN-CORE.md`) |
+| lokale Datenbank | `node:sqlite` (in Node eingebaut, ab 22.13) |
 | Backup-Archive | tar und zstd des Systems, wie im Panel |
 | Prüfsummen, Signaturen | `node:crypto` (SHA-256, Ed25519) |
 | Egg-Logik | gemeinsam mit dem Panel (`src/eggs/`) |

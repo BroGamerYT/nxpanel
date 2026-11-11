@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { HostDriver } from '../../drivers/interface.js';
+import type { ServerRegistry } from '../../store/registry.js';
 
 /**
  * Starten, Stoppen und erzwungenes Beenden einer Instanz.
@@ -7,7 +8,11 @@ import type { HostDriver } from '../../drivers/interface.js';
  * Alle drei Routen antworten mit dem neuen Zustand der Instanz. Unbekannte
  * IDs ergeben 404, Fehler des Treibers 400.
  */
-export function registerActionRoutes(server: FastifyInstance, driver: HostDriver): void {
+export function registerActionRoutes(
+  server: FastifyInstance,
+  driver: HostDriver,
+  registry?: ServerRegistry,
+): void {
   server.post<{ Params: { id: string } }>('/core/v1/servers/:id/start', async (req, reply) => {
     if (!(await serverExists(driver, req.params.id))) {
       return reply.status(404).send({
@@ -17,6 +22,7 @@ export function registerActionRoutes(server: FastifyInstance, driver: HostDriver
     }
     try {
       const state = await driver.startServer(req.params.id);
+      registry?.audit('server.start', req.params.id, 'panel');
       return { status: 'starting', state };
     } catch (err) {
       return reply.status(400).send({ error: (err as Error).message });
@@ -32,6 +38,7 @@ export function registerActionRoutes(server: FastifyInstance, driver: HostDriver
     }
     try {
       const state = await driver.stopServer(req.params.id);
+      registry?.audit('server.stop', req.params.id, 'panel');
       return { status: 'stopping', state };
     } catch (err) {
       return reply.status(400).send({ error: (err as Error).message });
@@ -47,6 +54,7 @@ export function registerActionRoutes(server: FastifyInstance, driver: HostDriver
     }
     try {
       const state = await driver.killServer(req.params.id);
+      registry?.audit('server.kill', req.params.id, 'panel');
       return { status: 'killed', state };
     } catch (err) {
       return reply.status(400).send({ error: (err as Error).message });

@@ -175,7 +175,15 @@ ohne Cloud, ohne feste IP. Heute ist davon die Oberfläche da, aber die Server s
 `POST /api/v1/servers` schreibt ein `start.bat`, das nur eine Zeile ausgibt und dann `ping` in einer
 Endlosschleife läuft. Nichts wird installiert.
 
-### B1 – Lokale Datenbank statt `servers.json`
+### B1 – Lokale Datenbank statt `servers.json` – erledigt 11.11.2026
+
+> **Umgesetzt** in `src/store/database.ts` und `src/store/registry.ts` mit `node:sqlite`
+> (Entscheidung 2 in Abschnitt 5). Migrationen stehen im Code, weil die gepackte `.exe` keine
+> Dateien nachladen kann. Die Registry hat jetzt auch Einstellungen (`getSetting`/`setSetting`),
+> Audit (`audit`/`recentAudit`) und Aufgaben (`createTask`/`updateTask`/`listTasks`).
+> Anlegen, Start, Stopp, Kill und Anmeldungen werden ins Audit geschrieben. **Noch offen:** das
+> Konto liegt weiter in `account.json`, und `GET /api/v1/tasks/active` liefert noch eine leere
+> Liste – die Aufgaben füllt erst B2 (Installation).
 
 * SQLite (`core.db`) im `dataDir`, Tabellen für Instanzen, Einstellungen, Audit und Aufgaben.
 * Eigener kleiner Migrations-Runner, Vorbild `src/db/` im Panel.
@@ -300,8 +308,8 @@ Zuletzt, und erst wenn Windows und der Tunnel stehen.
    das Produkt. `nexuscore/rust/` ist entfernt. Rust ist auf ein kleines Hilfsprogramm für Windows
    begrenzt (Job Objects, Dienst, Tray), das der Core als Prozess aufruft, und auf die Hülle der
    Tauri-Apps. Keine Fachlogik in Rust.
-2. **SQLite-Anbindung:** `node:sqlite` aus Node 22 (keine Abhängigkeit, aber noch experimentell)
-   oder `better-sqlite3` (stabil, aber nativ gebaut, was das SEA-Binary verkompliziert).
+2. ~~SQLite-Anbindung~~ **Entschieden am 11.11.2026:** `node:sqlite`. Keine native Abhängigkeit,
+   das Paket als einzelne `.exe` bleibt einfach. Der Core verlangt dafür Node 22.13 oder neuer.
 3. ~~Native Windows-Anbindung für Job Objects~~ **Entschieden am 11.11.2026:** kleines
    Rust-Hilfsprogramm (folgt aus Entscheidung 1). Der MSVC-Linker muss dafür auf dem Baurechner
    oder in CI (`windows-latest`) vorhanden sein.

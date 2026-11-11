@@ -66,7 +66,7 @@ gelesen; Vorlage ist `.env.example` (**nur leere Werte**).
 | `NEXUSCORE_HOST` | `127.0.0.1` | Bindeadresse |
 | `NEXUSCORE_PORT` | `8443` | HTTP-Port |
 | `NEXUSCORE_RUNTIME` | plattformabhängig | `windows-native` \| `docker` \| `mock` |
-| `NEXUSCORE_DATA_DIR` | `<Projekt>/data` | Registry und Laufzeitdaten |
+| `NEXUSCORE_DATA_DIR` | `<Projekt>/data` | Datenbank `core.db` und Laufzeitdaten |
 | `NEXUSCORE_TOKEN` | leer | Bearer-Token für geschützte Routen |
 | `NEXUSCORE_PAIRING_PIN` | leer | Kopplungs-PIN (leer = zufällig erzeugen) |
 | `NEXUSCORE_CORS_ORIGINS` | leer | erlaubte CORS-Herkünfte |
@@ -127,7 +127,7 @@ src/
 └── http/                Fastify-Server und Routen
 ```
 
-Daten liegen in `data/` (`servers.json` = Registry). Der Ordner ist von Git
+Daten liegen in `data/` (`core.db` = Datenbank des Cores). Der Ordner ist von Git
 ausgenommen und kann jederzeit gelöscht werden – der Core legt ihn neu an.
 
 ---

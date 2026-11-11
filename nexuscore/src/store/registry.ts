@@ -1,16 +1,16 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
 import type { ServerInstanceConfig } from '../types.js';
+import { backupStamp, openDatabase } from './database.js';
 
-interface RegistryFile {
+interface LegacyRegistryFile {
   version: number;
   servers: ServerInstanceConfig[];
 }
 
-const FILE_VERSION = 1;
-
-/** Die Registry-Datei ist beschaedigt - der Core darf damit nicht weiterlaufen. */
+/** Die alte servers.json ist beschaedigt - der Core darf damit nicht weiterlaufen. */
 export class RegistryCorruptError extends Error {
   constructor(
     readonly file: string,
@@ -25,66 +25,171 @@ export class RegistryCorruptError extends Error {
   }
 }
 
+export type AuditActor = 'panel' | 'standalone' | 'core';
+
+export interface AuditEntry {
+  id: number;
+  ts: string;
+  action: string;
+  serverId: string | null;
+  actor: AuditActor;
+  detail: Record<string, unknown> | null;
+}
+
+export type TaskStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+
+export interface TaskRecord {
+  id: string;
+  serverId: string | null;
+  kind: string;
+  status: TaskStatus;
+  /** 0..1 */
+  progress: number;
+  message: string;
+  result: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Felder, die nie in Audit-Details landen duerfen. */
+const SECRET_KEYS = /pass|token|secret|pin|key|cookie|authorization/i;
+
+function withoutSecrets(detail: Record<string, unknown>): Record<string, unknown> {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(detail)) {
+    clean[key] = SECRET_KEYS.test(key) ? '[entfernt]' : value;
+  }
+  return clean;
+}
+
+function parseJson<T>(raw: unknown): T | null {
+  if (typeof raw !== 'string' || raw === '') return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Persistenz der registrierten Server.
+ * Persistenz des Cores: Instanzen, Einstellungen, Audit und Aufgaben.
  *
- * Die Datei wird atomar geschrieben (eigene Temp-Datei je Vorgang, fsync,
- * dann Rename), damit ein Absturz keine halb geschriebene Registry
- * hinterlaesst und sich zwei Schreibvorgaenge nicht gegenseitig ueberschreiben.
+ * Seit Block B1 liegt alles in SQLite (`core.db`) statt in `servers.json`.
+ * Eine vorhandene `servers.json` wird beim ersten Start uebernommen und
+ * bleibt als `servers.json.migriert` liegen.
  *
- * Eine beschaedigte Datei wird NICHT still durch eine leere Registry ersetzt:
- * alle Instanzen waeren dann ohne Hinweis weg. Stattdessen wird sie als
- * `servers.json.korrupt-<zeitstempel>` weggesichert und der Start bricht ab.
+ * Die Instanzen stehen zusaetzlich im Speicher: der Core liest sie staendig
+ * (jede Anfrage), schreibt sie aber selten. Geschrieben wird zuerst in die
+ * Datenbank, erst danach in den Speicher - schlaegt das Schreiben fehl,
+ * bleibt beides beim alten Stand.
  */
 export class ServerRegistry {
-  private servers = new Map<string, ServerInstanceConfig>();
-
-  /** Schreibvorgaenge laufen nacheinander, damit der letzte Stand gewinnt. */
-  private writing: Promise<void> = Promise.resolve();
+  private readonly servers = new Map<string, ServerInstanceConfig>();
+  private closed = false;
 
   private constructor(
+    /** Datenverzeichnis des Cores. */
     readonly dir: string,
+    /** Pfad der Datenbankdatei. */
     readonly file: string,
+    private readonly db: DatabaseSync,
   ) {}
 
   static async open(dir: string): Promise<ServerRegistry> {
-    await fs.mkdir(dir, { recursive: true });
-    const file = path.join(dir, 'servers.json');
-    const registry = new ServerRegistry(dir, file);
+    const { db, file } = await openDatabase(dir);
+    const registry = new ServerRegistry(dir, file, db);
 
+    try {
+      registry.load();
+      await registry.importLegacyFile();
+    } catch (err) {
+      registry.close();
+      throw err;
+    }
+    return registry;
+  }
+
+  private load(): void {
+    const rows = this.db.prepare('SELECT id, config FROM instances ORDER BY position, id').all() as {
+      id: string;
+      config: string;
+    }[];
+    for (const row of rows) {
+      const config = parseJson<ServerInstanceConfig>(row.config);
+      if (config && typeof config.id === 'string') this.servers.set(config.id, config);
+    }
+  }
+
+  /**
+   * Uebernimmt eine alte `servers.json` (bis Core 0.2).
+   *
+   * Nur wenn die Datenbank noch keine Instanzen hat - sonst wuerde ein
+   * liegengebliebenes Altfile neuere Daten ueberschreiben. Nach der
+   * Uebernahme heisst die Datei `servers.json.migriert`.
+   */
+  private async importLegacyFile(): Promise<void> {
+    const legacy = path.join(this.dir, 'servers.json');
     let raw: string;
     try {
-      raw = await fs.readFile(file, 'utf8');
+      raw = await fs.readFile(legacy, 'utf8');
     } catch (err) {
-      // Noch keine Datei: erster Start, leere Registry ist richtig.
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return registry;
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
       throw err;
     }
 
     let reason: string | null = null;
+    let servers: ServerInstanceConfig[] = [];
     try {
-      const parsed = JSON.parse(raw) as Partial<RegistryFile> | null;
-      if (!parsed || !Array.isArray(parsed.servers)) {
-        reason = 'Feld "servers" fehlt';
-      } else {
-        for (const server of parsed.servers) {
-          if (server && typeof server.id === 'string') {
-            registry.servers.set(server.id, server);
-          }
-        }
-      }
+      const parsed = JSON.parse(raw) as Partial<LegacyRegistryFile> | null;
+      if (!parsed || !Array.isArray(parsed.servers)) reason = 'Feld "servers" fehlt';
+      else servers = parsed.servers.filter((s) => s && typeof s.id === 'string');
     } catch (err) {
       reason = err instanceof Error ? err.message : 'kein gueltiges JSON';
     }
 
     if (reason !== null) {
-      const backup = `${file}.korrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-      await fs.rename(file, backup);
-      throw new RegistryCorruptError(file, backup, reason);
+      const backup = `${legacy}.korrupt-${backupStamp()}`;
+      await fs.rename(legacy, backup);
+      throw new RegistryCorruptError(legacy, backup, reason);
     }
 
-    return registry;
+    if (this.servers.size === 0 && servers.length > 0) {
+      this.db.exec('BEGIN');
+      try {
+        for (const server of servers) this.insert(server);
+        this.db.exec('COMMIT');
+      } catch (err) {
+        this.db.exec('ROLLBACK');
+        throw err;
+      }
+      for (const server of servers) this.servers.set(server.id, server);
+      this.audit('registry.migrated', null, 'core', { from: 'servers.json', instances: servers.length });
+    }
+
+    // Vorhandenes .migriert nicht ueberschreiben - das waere die aeltere Sicherung.
+    let target = `${legacy}.migriert`;
+    try {
+      await fs.access(target);
+      target = `${target}-${backupStamp()}`;
+    } catch {
+      /* frei */
+    }
+    await fs.rename(legacy, target);
   }
+
+  private insert(config: ServerInstanceConfig): void {
+    const now = new Date().toISOString();
+    const next = this.db.prepare('SELECT COALESCE(MAX(position), 0) + 1 AS next FROM instances').get() as {
+      next: number;
+    };
+    this.db
+      .prepare(
+        'INSERT INTO instances (id, name, game, config, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(config.id, config.name, config.game, JSON.stringify(config), Number(next.next), now, now);
+  }
+
+  // ------------------------------------------------------------------ Instanzen
 
   list(): ServerInstanceConfig[] {
     return Array.from(this.servers.values());
@@ -98,37 +203,202 @@ export class ServerRegistry {
     if (this.servers.has(config.id)) {
       throw new Error(`Server "${config.id}" existiert bereits.`);
     }
+    this.insert(config);
     this.servers.set(config.id, config);
-    await this.save();
+  }
+
+  /** Aendert eine vorhandene Instanz. */
+  async update(config: ServerInstanceConfig): Promise<void> {
+    if (!this.servers.has(config.id)) {
+      throw new Error(`Server "${config.id}" nicht gefunden.`);
+    }
+    this.db
+      .prepare('UPDATE instances SET name = ?, game = ?, config = ?, updated_at = ? WHERE id = ?')
+      .run(config.name, config.game, JSON.stringify(config), new Date().toISOString(), config.id);
+    this.servers.set(config.id, config);
   }
 
   async remove(id: string): Promise<boolean> {
-    const removed = this.servers.delete(id);
-    if (removed) await this.save();
-    return removed;
+    if (!this.servers.has(id)) return false;
+    this.db.prepare('DELETE FROM instances WHERE id = ?').run(id);
+    this.servers.delete(id);
+    return true;
   }
 
-  save(): Promise<void> {
-    const next = this.writing.catch(() => {}).then(() => this.writeNow());
-    this.writing = next;
-    return next;
+  /**
+   * Frueher schrieb das die servers.json. Mit SQLite ist jede Aenderung
+   * sofort gespeichert - die Methode bleibt fuer bestehende Aufrufer und
+   * raeumt nur den WAL-Puffer in die Hauptdatei.
+   */
+  async save(): Promise<void> {
+    if (this.closed) return;
+    this.db.exec('PRAGMA wal_checkpoint(PASSIVE)');
   }
 
-  private async writeNow(): Promise<void> {
-    const payload: RegistryFile = { version: FILE_VERSION, servers: this.list() };
-    const tmp = `${this.file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-    const handle = await fs.open(tmp, 'w');
+  /** Schliesst die Datenbank. Danach darf die Registry nicht mehr benutzt werden. */
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
     try {
-      await handle.writeFile(JSON.stringify(payload, null, 2), 'utf8');
-      await handle.sync();
-    } finally {
-      await handle.close();
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch {
+      /* beim Beenden nicht mehr wichtig */
     }
-    try {
-      await fs.rename(tmp, this.file);
-    } catch (err) {
-      await fs.rm(tmp, { force: true }).catch(() => {});
-      throw err;
-    }
+    this.db.close();
   }
+
+  // ------------------------------------------------------------------ Einstellungen
+
+  getSetting<T>(key: string): T | undefined {
+    const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+    const value = row ? parseJson<T>(row.value) : null;
+    return value === null ? undefined : value;
+  }
+
+  setSetting(key: string, value: unknown): void {
+    this.db
+      .prepare(
+        `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(key, JSON.stringify(value), new Date().toISOString());
+  }
+
+  deleteSetting(key: string): void {
+    this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+  }
+
+  // ------------------------------------------------------------------ Audit
+
+  /**
+   * Schreibt einen Audit-Eintrag: was der Core ausgefuehrt hat.
+   *
+   * Wer es ausgeloest hat, weiss das Panel - der Core kennt nur den Weg
+   * (`panel` ueber /core/v1, `standalone` ueber die eigene Oberflaeche,
+   * `core` fuer eigene Vorgaenge). Felder, die nach Geheimnis aussehen,
+   * werden entfernt.
+   */
+  audit(action: string, serverId: string | null, actor: AuditActor, detail?: Record<string, unknown>): void {
+    if (this.closed) return;
+    this.db
+      .prepare('INSERT INTO audit (ts, action, server_id, actor, detail) VALUES (?, ?, ?, ?, ?)')
+      .run(new Date().toISOString(), action, serverId, actor, detail ? JSON.stringify(withoutSecrets(detail)) : null);
+  }
+
+  /** Neueste Eintraege zuerst. */
+  recentAudit(options: { serverId?: string; limit?: number } = {}): AuditEntry[] {
+    const limit = Math.min(Math.max(1, Math.floor(options.limit ?? 100)), 1000);
+    const rows = (
+      options.serverId
+        ? this.db
+            .prepare('SELECT * FROM audit WHERE server_id = ? ORDER BY id DESC LIMIT ?')
+            .all(options.serverId, limit)
+        : this.db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT ?').all(limit)
+    ) as { id: number; ts: string; action: string; server_id: string | null; actor: AuditActor; detail: string | null }[];
+    return rows.map((row) => ({
+      id: Number(row.id),
+      ts: row.ts,
+      action: row.action,
+      serverId: row.server_id,
+      actor: row.actor,
+      detail: parseJson<Record<string, unknown>>(row.detail),
+    }));
+  }
+
+  // ------------------------------------------------------------------ Aufgaben
+
+  /** Legt eine lange Aufgabe an (Installation, Backup, Update). */
+  createTask(kind: string, serverId: string | null = null, message = ''): TaskRecord {
+    const now = new Date().toISOString();
+    const id = `t_${crypto.randomBytes(8).toString('hex')}`;
+    this.db
+      .prepare(
+        `INSERT INTO tasks (id, server_id, kind, status, progress, message, created_at, updated_at)
+         VALUES (?, ?, ?, 'queued', 0, ?, ?, ?)`,
+      )
+      .run(id, serverId, kind, message, now, now);
+    return this.getTask(id)!;
+  }
+
+  updateTask(
+    id: string,
+    patch: { status?: TaskStatus; progress?: number; message?: string; result?: Record<string, unknown> | null },
+  ): TaskRecord | undefined {
+    const current = this.getTask(id);
+    if (!current) return undefined;
+    const progress = patch.progress === undefined ? current.progress : Math.min(1, Math.max(0, patch.progress));
+    const result = patch.result === undefined ? current.result : patch.result;
+    this.db
+      .prepare('UPDATE tasks SET status = ?, progress = ?, message = ?, result = ?, updated_at = ? WHERE id = ?')
+      .run(
+        patch.status ?? current.status,
+        progress,
+        patch.message ?? current.message,
+        result ? JSON.stringify(result) : null,
+        new Date().toISOString(),
+        id,
+      );
+    return this.getTask(id);
+  }
+
+  getTask(id: string): TaskRecord | undefined {
+    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
+    return row ? toTask(row) : undefined;
+  }
+
+  /** Aufgaben, neueste zuerst. `active` = nur wartende und laufende. */
+  listTasks(options: { active?: boolean; serverId?: string; limit?: number } = {}): TaskRecord[] {
+    const limit = Math.min(Math.max(1, Math.floor(options.limit ?? 100)), 1000);
+    const where: string[] = [];
+    const params: (string | number)[] = [];
+    if (options.active) where.push("status IN ('queued', 'running')");
+    if (options.serverId) {
+      where.push('server_id = ?');
+      params.push(options.serverId);
+    }
+    const sql = `SELECT * FROM tasks ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC, id DESC LIMIT ?`;
+    return (this.db.prepare(sql).all(...params, limit) as unknown as TaskRow[]).map(toTask);
+  }
+
+  /**
+   * Nach einem Neustart laeuft keine der alten Aufgaben mehr - ohne diesen
+   * Schritt staenden sie fuer immer auf "laeuft".
+   *
+   * @returns Anzahl der abgebrochenen Aufgaben
+   */
+  failInterruptedTasks(): number {
+    const result = this.db
+      .prepare(
+        `UPDATE tasks SET status = 'failed', message = 'Durch Neustart des Cores unterbrochen', updated_at = ?
+         WHERE status IN ('queued', 'running')`,
+      )
+      .run(new Date().toISOString());
+    return Number(result.changes);
+  }
+}
+
+interface TaskRow {
+  id: string;
+  server_id: string | null;
+  kind: string;
+  status: TaskStatus;
+  progress: number;
+  message: string;
+  result: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function toTask(row: TaskRow): TaskRecord {
+  return {
+    id: row.id,
+    serverId: row.server_id,
+    kind: row.kind,
+    status: row.status,
+    progress: Number(row.progress),
+    message: row.message,
+    result: parseJson<Record<string, unknown>>(row.result),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }

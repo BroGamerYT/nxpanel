@@ -9,6 +9,7 @@ import { createCoreServer } from './http/server.js';
 import { EventBus } from './protocol/events.js';
 import { currentPairingPin, tokenFingerprint } from './protocol/security.js';
 import { ServerRegistry, RegistryCorruptError } from './store/registry.js';
+import { DatabaseCorruptError } from './store/database.js';
 import type { ServerInstanceConfig } from './types.js';
 import { getSystemMetrics } from './system/monitor.js';
 
@@ -75,6 +76,11 @@ async function main(): Promise<void> {
 
   // Registry oeffnen und gespeicherte Instanzen uebernehmen.
   const registry = await ServerRegistry.open(config.dataDir);
+  const interrupted = registry.failInterruptedTasks();
+  if (interrupted > 0) {
+    logger.warn({ interrupted }, 'Aufgaben vom letzten Lauf als unterbrochen markiert');
+  }
+  registry.audit('core.start', null, 'core', { runtime: config.runtime, mode: config.mode });
   for (const server of registry.list()) {
     try {
       await driver.registerServer(server);
@@ -140,7 +146,8 @@ async function main(): Promise<void> {
     try {
       await server.close();
       await driver.shutdown();
-      await registry.save();
+      registry.audit('core.stop', null, 'core', { signal });
+      registry.close();
     } catch (err) {
       logger.error({ err }, 'Fehler beim Beenden');
     }
@@ -153,7 +160,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  if (err instanceof RegistryCorruptError) {
+  if (err instanceof RegistryCorruptError || err instanceof DatabaseCorruptError) {
     // Laut und eindeutig: hier geht es um die Liste aller Server.
     console.error(`\n  ${err.message}\n`);
   }

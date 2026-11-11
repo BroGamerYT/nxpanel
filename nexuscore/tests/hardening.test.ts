@@ -380,3 +380,25 @@ describe('Block A5 - Ports und unbekannte Instanzen', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe('Block B1 - Audit der Aktionen', () => {
+  it('haelt Anlegen, Start und Anmeldung im Audit fest - ohne Passwort', async () => {
+    await server.inject({ method: 'POST', url: '/core/v1/servers/a3-ok/start', headers: AUTH });
+    await login(PASSWORD, 'admin', '10.0.0.77');
+    await login('ganz-falsches-passwort', 'admin', '10.0.0.78');
+
+    const entries = registry.recentAudit({ limit: 500 });
+    const actions = entries.map((e) => `${e.action}:${e.serverId ?? '-'}:${e.actor}`);
+    expect(actions).toContain('server.create:a3-ok:panel');
+    expect(actions).toContain('server.start:a3-ok:panel');
+    expect(actions).toContain('server.create:a3-panel:standalone');
+    expect(actions).toContain('server.kill:a3-ok:standalone');
+    expect(actions).toContain('auth.login:-:standalone');
+    expect(actions).toContain('auth.login_failed:-:standalone');
+
+    const dump = JSON.stringify(entries);
+    expect(dump).not.toContain(PASSWORD);
+    expect(dump).not.toContain('ganz-falsches-passwort');
+    expect(dump).not.toContain('test-token-0123456789abcdefghij');
+  });
+});

@@ -269,10 +269,12 @@ export function registerApiV1Routes(
 
       if (!login || !password || password.length > 1024 || !(await account.verify(login, password, origin))) {
         logger.warn({ origin }, 'Fehlgeschlagene Anmeldung an der Standalone-Oberflaeche');
+        registry.audit('auth.login_failed', null, 'standalone', { origin });
         return reply.status(401).send({ error: 'Benutzername oder Passwort falsch.', code: 'invalid_credentials' });
       }
 
       const token = createSessionToken();
+      registry.audit('auth.login', null, 'standalone', { origin });
       reply.header('Set-Cookie', sessionCookie(token));
       return { accessToken: token };
     },
@@ -297,6 +299,7 @@ export function registerApiV1Routes(
         return reply.status(400).send({ error: (err as Error).message });
       }
       revokeAllSessionTokens();
+      registry.audit('auth.password_changed', null, 'standalone');
       const token = createSessionToken();
       reply.header('Set-Cookie', sessionCookie(token));
       return { ok: true, accessToken: token };
@@ -557,6 +560,7 @@ export function registerApiV1Routes(
 
     await driver.registerServer(serverConfig);
     await registry.add(serverConfig);
+    registry.audit('server.create', id, 'standalone', { name, game: eggId, port });
 
     bus.emit({
       type: 'state',
@@ -597,6 +601,7 @@ export function registerApiV1Routes(
         } else {
           return reply.status(400).send({ error: 'Unbekannte Aktion', code: 'invalid_action' });
         }
+        registry.audit(`server.${action}`, id, 'standalone');
         return { ok: true, status: action };
       } catch (err) {
         return reply.status(400).send({ error: (err as Error).message });

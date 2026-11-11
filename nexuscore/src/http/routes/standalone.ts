@@ -106,6 +106,7 @@ export function registerStandaloneRoutes(
     try {
       await driver.registerServer(serverConfig);
       await registry.add(serverConfig);
+      registry.audit('server.create', serverConfig.id, 'standalone', { name: serverConfig.name, game: serverConfig.game });
       return reply.status(201).send({ status: 'created', server: serverConfig });
     } catch (err) {
       return reply.status(400).send({ error: (err as Error).message });
@@ -119,6 +120,7 @@ export function registerStandaloneRoutes(
     }
     try {
       const state = await driver.startServer(req.params.id);
+      registry.audit('server.start', req.params.id, 'standalone');
       return { status: 'starting', state };
     } catch (err) {
       return reply.status(400).send({ error: (err as Error).message });
@@ -132,6 +134,7 @@ export function registerStandaloneRoutes(
     }
     try {
       const state = await driver.stopServer(req.params.id);
+      registry.audit('server.stop', req.params.id, 'standalone');
       return { status: 'stopping', state };
     } catch (err) {
       return reply.status(400).send({ error: (err as Error).message });

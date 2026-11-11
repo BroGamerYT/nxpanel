@@ -207,7 +207,7 @@ export async function createCoreServer(
   registerInfoRoutes(server);
   registerPairRoutes(server);
   registerServerRoutes(server, driver, registry);
-  registerActionRoutes(server, driver);
+  registerActionRoutes(server, driver, registry);
   registerStatsRoutes(server, driver);
   registerLogRoutes(server, driver, bus);
 
