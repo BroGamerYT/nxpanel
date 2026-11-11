@@ -14,8 +14,13 @@ import {
   createSessionToken,
   isValidSessionToken,
   revokeSessionToken,
+  revokeAllSessionTokens,
   parseCookie,
+  SESSION_TTL_MS,
 } from '../../protocol/security.js';
+import { serverRootFor, resolveInsideRoot, PathOutsideRootError } from '../../protocol/paths.js';
+import { allocatePort } from '../../protocol/ports.js';
+import type { LocalAccount } from '../../store/account.js';
 
 export const ALL_SERVER_PERMISSIONS = [
   'control.console',
@@ -186,7 +191,12 @@ export function registerApiV1Routes(
   driver: HostDriver,
   bus: EventBus,
   registry: ServerRegistry,
+  account: LocalAccount | null = null,
 ): void {
+  /** Cookie der Sitzung: nur fuer den Server lesbar, nie an fremde Seiten. */
+  const sessionCookie = (token: string): string =>
+    `nxp_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`;
+
   function findServer(idOrShortId: string): ServerInstanceConfig | undefined {
     const list = registry.list();
     const exact = list.find((s) => s.id === idOrShortId);
@@ -199,21 +209,21 @@ export function registerApiV1Routes(
   }
 
   // 1. Authentifizierung & Sitzung
+  // Block A4: refresh gibt nur dann ein Token heraus, wenn es schon eine
+  // gueltige Sitzung gibt. Frueher bekam hier jeder ohne Anmeldung ein Token.
   server.post('/api/v1/auth/refresh', async (req, reply) => {
     const existingCookie = parseCookie(req.headers.cookie, 'nxp_session');
-    const token = existingCookie && isValidSessionToken(existingCookie)
-      ? existingCookie
-      : createSessionToken();
-
-    reply.header('Set-Cookie', `nxp_session=${token}; Path=/; HttpOnly; SameSite=Strict`);
-    return { accessToken: token };
+    if (!existingCookie || !isValidSessionToken(existingCookie)) {
+      return reply.status(401).send({ error: 'Nicht angemeldet', code: 'unauthorized' });
+    }
+    return { accessToken: existingCookie };
   });
 
   server.get('/api/v1/auth/me', async () => {
     return {
       user: {
         id: 'standalone-admin',
-        username: 'Admin',
+        username: account?.username ?? 'Admin',
         email: 'admin@localhost',
         role: 'admin',
         locale: 'de',
@@ -237,11 +247,61 @@ export function registerApiV1Routes(
     return { ok: true };
   });
 
-  server.post('/api/v1/auth/login', async (_req, reply) => {
-    const token = createSessionToken();
-    reply.header('Set-Cookie', `nxp_session=${token}; Path=/; HttpOnly; SameSite=Strict`);
-    return { accessToken: token };
-  });
+  // Block A4: echte Anmeldung mit dem lokalen Konto.
+  server.post<{ Body: { login?: unknown; password?: unknown } | undefined }>(
+    '/api/v1/auth/login',
+    async (req, reply) => {
+      if (!account) {
+        return reply.status(403).send({ error: 'Anmeldung ist in diesem Modus nicht verfuegbar.' });
+      }
+      const login = typeof req.body?.login === 'string' ? req.body.login : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+      const origin = req.ip;
+
+      const locked = account.lockedForSeconds(origin);
+      if (locked > 0) {
+        reply.header('Retry-After', String(locked));
+        return reply.status(429).send({
+          error: `Zu viele Fehlversuche. Bitte in ${Math.ceil(locked / 60)} Minuten erneut versuchen.`,
+          code: 'too_many_attempts',
+        });
+      }
+
+      if (!login || !password || password.length > 1024 || !(await account.verify(login, password, origin))) {
+        logger.warn({ origin }, 'Fehlgeschlagene Anmeldung an der Standalone-Oberflaeche');
+        return reply.status(401).send({ error: 'Benutzername oder Passwort falsch.', code: 'invalid_credentials' });
+      }
+
+      const token = createSessionToken();
+      reply.header('Set-Cookie', sessionCookie(token));
+      return { accessToken: token };
+    },
+  );
+
+  // Eigenes Passwort aendern: altes Passwort noetig, danach gelten alle
+  // anderen Sitzungen nicht mehr.
+  server.post<{ Body: { currentPassword?: unknown; newPassword?: unknown } | undefined }>(
+    '/api/v1/auth/password',
+    async (req, reply) => {
+      if (!account) {
+        return reply.status(403).send({ error: 'Anmeldung ist in diesem Modus nicht verfuegbar.' });
+      }
+      const current = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
+      const next = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+      if (!(await account.verify(account.username, current, req.ip))) {
+        return reply.status(401).send({ error: 'Das aktuelle Passwort stimmt nicht.', code: 'invalid_credentials' });
+      }
+      try {
+        await account.setPassword(next);
+      } catch (err) {
+        return reply.status(400).send({ error: (err as Error).message });
+      }
+      revokeAllSessionTokens();
+      const token = createSessionToken();
+      reply.header('Set-Cookie', sessionCookie(token));
+      return { ok: true, accessToken: token };
+    },
+  );
 
   server.post('/api/v1/auth/logout', async (req, reply) => {
     const existingCookie = parseCookie(req.headers.cookie, 'nxp_session');
@@ -453,11 +513,22 @@ export function registerApiV1Routes(
       .replace(/^-|-$/g, '') || `server-${Date.now().toString(36)}`;
 
     const id = registry.get(cleanId) ? `${cleanId}-${Date.now().toString(36).slice(-4)}` : cleanId;
-    const serverDir = path.resolve(config.dataDir, 'servers', id);
+    let serverDir: string;
+    try {
+      serverDir = await resolveInsideRoot(serverRootFor(registry.dir), id, 'id');
+    } catch (err) {
+      if (err instanceof PathOutsideRootError) return reply.status(400).send({ error: err.message });
+      throw err;
+    }
     await fs.mkdir(serverDir, { recursive: true });
 
-    // Port ermitteln
-    const port = 25565 + registry.list().length;
+    // Freien Port im konfigurierten Bereich suchen (Block A5)
+    let port: number;
+    try {
+      port = await allocatePort(registry.list());
+    } catch (err) {
+      return reply.status(409).send({ error: (err as Error).message });
+    }
 
     // Erstelle Standardausführung oder Script
     const isWindows = process.platform === 'win32';
@@ -516,11 +587,15 @@ export function registerApiV1Routes(
       try {
         if (action === 'start') {
           await driver.startServer(id);
-        } else if (action === 'stop' || action === 'kill') {
+        } else if (action === 'stop') {
           await driver.stopServer(id);
+        } else if (action === 'kill') {
+          await driver.killServer(id);
         } else if (action === 'restart') {
           await driver.stopServer(id).catch(() => {});
           await driver.startServer(id);
+        } else {
+          return reply.status(400).send({ error: 'Unbekannte Aktion', code: 'invalid_action' });
         }
         return { ok: true, status: action };
       } catch (err) {
@@ -559,7 +634,12 @@ export function registerApiV1Routes(
   // Server Live WebSocket
   server.get<{ Params: { id: string } }>('/api/v1/servers/:id/ws', { websocket: true }, (socket, req) => {
     const c = findServer(req.params.id);
-    const id = c ? c.id : req.params.id;
+    if (!c) {
+      socket.send(JSON.stringify({ type: 'error', code: 'not_found', message: 'Server nicht gefunden' }));
+      socket.close(1008, 'Server nicht gefunden');
+      return;
+    }
+    const id = c.id;
 
     void (async () => {
       const state = await driver.getServerState(id);
@@ -569,7 +649,7 @@ export function registerApiV1Routes(
           status: state?.status ?? 'offline',
           consoleMode: 'full',
           canCommand: true,
-          name: c?.name ?? id,
+          name: c.name,
           startedAt: state?.startedAt ?? null,
         }),
       );

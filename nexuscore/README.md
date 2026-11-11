@@ -70,7 +70,18 @@ gelesen; Vorlage ist `.env.example` (**nur leere Werte**).
 | `NEXUSCORE_TOKEN` | leer | Bearer-Token für geschützte Routen |
 | `NEXUSCORE_PAIRING_PIN` | leer | Kopplungs-PIN (leer = zufällig erzeugen) |
 | `NEXUSCORE_CORS_ORIGINS` | leer | erlaubte CORS-Herkünfte |
+| `NEXUSCORE_ALLOWED_HOSTS` | leer | zusätzliche Hostnamen, unter denen der Core erreichbar sein darf (IP-Adressen und `localhost` gehen immer) |
+| `NEXUSCORE_SERVER_ROOT` | `<Datenverzeichnis>/servers` | hier müssen alle Server liegen; Pfade außerhalb werden abgelehnt |
+| `NEXUSCORE_PORT_RANGE` | `25565-25664` | Bereich, aus dem der Core Spielports vergibt |
+| `NEXUSCORE_ADMIN_USER` | `admin` | Name des lokalen Kontos der Standalone-Oberfläche |
+| `NEXUSCORE_ADMIN_PASSWORD` | leer | festes Passwort des lokalen Kontos (mindestens 10 Zeichen) |
 | `NEXUSCORE_LOG_LEVEL` | `info` | Log-Level |
+
+**Anmeldung an der Standalone-Oberfläche:** Ohne `NEXUSCORE_ADMIN_PASSWORD` erzeugt
+der Core beim ersten Start ein Passwort, zeigt es einmal im Fenster und schreibt es
+nach `ERSTES-PASSWORT.txt` im Datenverzeichnis. Die Datei wird nach der ersten
+erfolgreichen Anmeldung gelöscht. Passwort vergessen: `account.json` im
+Datenverzeichnis löschen und den Core neu starten.
 
 Im Modus `production` sind Token (mindestens 24 Zeichen) und PIN Pflicht – ohne
 sie startet der Core nicht, statt halb offen zu laufen.

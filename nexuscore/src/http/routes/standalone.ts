@@ -6,15 +6,16 @@ import type { HostDriver } from '../../drivers/interface.js';
 import type { EventBus } from '../../protocol/events.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig } from '../../types.js';
-import { config } from '../../config/index.js';
+import { PathOutsideRootError, resolveInsideRoot, serverRootFor } from '../../protocol/paths.js';
+import { allocatePort } from '../../protocol/ports.js';
 
 const newServerSchema = z.object({
   id: z.string().trim().min(2).max(32).regex(/^[a-z0-9_-]+$/i, 'Nur Buchstaben, Zahlen, Bindestrich und Unterstrich'),
   name: z.string().trim().min(1).max(64),
   game: z.string().trim().min(1).max(32),
-  executable: z.string().trim().min(1),
-  args: z.array(z.string()).default([]),
-  port: z.coerce.number().int().min(1).max(65535).default(25565),
+  executable: z.string().trim().min(1).max(512),
+  args: z.array(z.string().max(4096)).max(64).default([]),
+  port: z.coerce.number().int().min(1).max(65535).optional(),
 });
 
 export function registerStandaloneRoutes(
@@ -66,18 +67,40 @@ export function registerStandaloneRoutes(
       return reply.status(409).send({ error: `Server "${data.id}" existiert bereits.` });
     }
 
-    // Server-Verzeichnis im dataDir anlegen
-    const serverDir = path.resolve(config.dataDir, 'servers', data.id);
+    // Block A3: Die Instanz liegt immer im Server-Verzeichnis, und das Programm
+    // muss in ihrem eigenen Ordner liegen - freie Pfade aus dem Netz gibt es nicht.
+    const serverRoot = serverRootFor(registry.dir);
+    let serverDir: string;
+    let executable: string;
+    try {
+      serverDir = await resolveInsideRoot(serverRoot, data.id, 'id');
+      executable =
+        driver.name === 'docker'
+          ? data.executable
+          : await resolveInsideRoot(serverRoot, data.executable, 'executable', serverDir);
+    } catch (err) {
+      if (err instanceof PathOutsideRootError) {
+        return reply.status(400).send({ error: 'Ungueltiger Pfad', message: err.message });
+      }
+      throw err;
+    }
     await fs.mkdir(serverDir, { recursive: true });
+
+    let port: number;
+    try {
+      port = data.port ?? (await allocatePort(registry.list()));
+    } catch (err) {
+      return reply.status(409).send({ error: (err as Error).message });
+    }
 
     const serverConfig: ServerInstanceConfig = {
       id: data.id,
       name: data.name,
       game: data.game,
-      executable: data.executable,
+      executable,
       args: data.args,
       workingDir: serverDir,
-      ports: [{ name: 'game', hostPort: data.port, protocol: 'tcp' }],
+      ports: [{ name: 'game', hostPort: port, protocol: 'tcp' }],
     };
 
     try {
@@ -91,6 +114,9 @@ export function registerStandaloneRoutes(
 
   // Server Starten
   server.post<{ Params: { id: string } }>('/api/panel/servers/:id/start', async (req, reply) => {
+    if (!registry.get(req.params.id)) {
+      return reply.status(404).send({ error: 'Server nicht gefunden', message: `Unbekannte ID "${req.params.id}".` });
+    }
     try {
       const state = await driver.startServer(req.params.id);
       return { status: 'starting', state };
@@ -101,6 +127,9 @@ export function registerStandaloneRoutes(
 
   // Server Stoppen
   server.post<{ Params: { id: string } }>('/api/panel/servers/:id/stop', async (req, reply) => {
+    if (!registry.get(req.params.id)) {
+      return reply.status(404).send({ error: 'Server nicht gefunden', message: `Unbekannte ID "${req.params.id}".` });
+    }
     try {
       const state = await driver.stopServer(req.params.id);
       return { status: 'stopping', state };
@@ -113,6 +142,9 @@ export function registerStandaloneRoutes(
   server.post<{ Params: { id: string }; Body: { command: string } }>(
     '/api/panel/servers/:id/command',
     async (req, reply) => {
+      if (!registry.get(req.params.id)) {
+        return reply.status(404).send({ error: 'Server nicht gefunden', message: `Unbekannte ID "${req.params.id}".` });
+      }
       const command = (req.body as { command?: string } | undefined)?.command?.trim();
       if (!command) {
         return reply.status(400).send({ error: 'Kein Befehl angegeben.' });
@@ -131,7 +163,10 @@ export function registerStandaloneRoutes(
   // Server Logs holen
   server.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
     '/api/panel/servers/:id/logs',
-    async (req) => {
+    async (req, reply) => {
+      if (!registry.get(req.params.id)) {
+        return reply.status(404).send({ error: 'Server nicht gefunden', message: `Unbekannte ID "${req.params.id}".` });
+      }
       const limit = Number.parseInt(req.query.limit ?? '200', 10);
       return { serverId: req.params.id, lines: bus.logsFor(req.params.id, limit) };
     },

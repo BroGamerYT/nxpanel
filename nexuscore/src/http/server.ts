@@ -27,6 +27,7 @@ import { registerLogRoutes } from './routes/logs.js';
 import { registerStandaloneRoutes } from './routes/standalone.js';
 import { registerApiV1Routes } from './routes/api-v1.js';
 import { registerWebRoutes } from './routes/web.js';
+import { LocalAccount } from '../store/account.js';
 
 export async function createCoreServer(
   driver: HostDriver,
@@ -197,8 +198,12 @@ export async function createCoreServer(
   });
 
   await registerWebRoutes(server);
+  // Das lokale Konto gibt es nur im Standalone-Modus - im Knoten-Modus
+  // steuert ausschliesslich das Panel ueber /core/v1.
+  const account = config.role === 'standalone' ? await LocalAccount.open(registry.dir) : null;
+
   registerStandaloneRoutes(server, driver, bus, registry);
-  registerApiV1Routes(server, driver, bus, registry);
+  registerApiV1Routes(server, driver, bus, registry, account);
   registerInfoRoutes(server);
   registerPairRoutes(server);
   registerServerRoutes(server, driver, registry);

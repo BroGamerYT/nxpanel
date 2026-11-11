@@ -3,6 +3,7 @@ import type { HostDriver } from '../../drivers/interface.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig } from '../../types.js';
 import { serverConfigSchema } from './schema.js';
+import { PathOutsideRootError, resolveInstancePaths, serverRootFor } from '../../protocol/paths.js';
 
 /**
  * Serververwaltung: Liste und Registrierung.
@@ -33,6 +34,22 @@ export function registerServerRoutes(
     }
 
     const config = parsed.data as ServerInstanceConfig;
+
+    // Block A3: Programm und Arbeitsverzeichnis muessen im Server-Verzeichnis
+    // liegen. Beim Docker-Treiber sind beide Angaben Image und Pfad IM
+    // Container - dort gibt es auf dem Host nichts zu pruefen.
+    if (driver.name !== 'docker') {
+      try {
+        const paths = await resolveInstancePaths(serverRootFor(registry.dir), config);
+        config.executable = paths.executable;
+        config.workingDir = paths.workingDir;
+      } catch (err) {
+        if (err instanceof PathOutsideRootError) {
+          return reply.status(400).send({ error: 'Ungueltiger Pfad', message: err.message });
+        }
+        throw err;
+      }
+    }
 
     if (registry.get(config.id)) {
       return reply.status(409).send({

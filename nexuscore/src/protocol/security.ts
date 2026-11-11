@@ -16,25 +16,39 @@ let activePin = config.pairingPin.toUpperCase();
 let pinCreatedAt = Date.now();
 const attempts: number[] = [];
 
-/** Aktive Sitzungs-Tokens fuer den Standalone-Modus */
-const activeSessions = new Set<string>();
+/** Eine Sitzung der Standalone-Oberflaeche gilt 7 Tage, danach ist eine neue Anmeldung noetig. */
+export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Aktive Sitzungs-Tokens fuer den Standalone-Modus: Token -> Ablaufzeitpunkt. */
+const activeSessions = new Map<string, number>();
 
 export function createSessionToken(): string {
   const token = `nxp_${crypto.randomBytes(24).toString('hex')}`;
-  activeSessions.add(token);
+  activeSessions.set(token, Date.now() + SESSION_TTL_MS);
   return token;
 }
 
 export function registerSessionToken(token: string): void {
-  activeSessions.add(token);
+  activeSessions.set(token, Date.now() + SESSION_TTL_MS);
 }
 
 export function revokeSessionToken(token: string): void {
   activeSessions.delete(token);
 }
 
+/** Beendet alle Sitzungen - z. B. nach einem Passwortwechsel. */
+export function revokeAllSessionTokens(): void {
+  activeSessions.clear();
+}
+
 export function isValidSessionToken(token: string): boolean {
-  return activeSessions.has(token);
+  const expires = activeSessions.get(token);
+  if (expires === undefined) return false;
+  if (expires <= Date.now()) {
+    activeSessions.delete(token);
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -133,7 +147,7 @@ export function validateRequestToken(headerToken?: string): AuthValidationResult
   }
 
   // 2. Pruefung gegen aktive Sitzungs-Tokens (Standalone-Modus)
-  if (activeSessions.has(token)) {
+  if (isValidSessionToken(token)) {
     return { valid: true };
   }
 
@@ -283,7 +297,15 @@ export function isAllowedOrigin(
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
 
-  if (hostHeader && parsed.host.toLowerCase() === hostHeader.trim().toLowerCase()) return true;
+  // Ueber URL vergleichen, damit ein ausgeschriebener Standardport
+  // ("localhost:80" bei http) dieselbe Herkunft bleibt.
+  if (hostHeader) {
+    try {
+      if (new URL(`${parsed.protocol}//${hostHeader.trim()}`).host === parsed.host) return true;
+    } catch {
+      /* kaputter Host-Header: keine eigene Herkunft */
+    }
+  }
 
   const normalized = parsed.origin.toLowerCase();
   return config.corsOrigins.some((allowed) => {

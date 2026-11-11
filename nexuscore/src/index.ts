@@ -8,7 +8,8 @@ import type { HostDriver } from './drivers/interface.js';
 import { createCoreServer } from './http/server.js';
 import { EventBus } from './protocol/events.js';
 import { currentPairingPin, tokenFingerprint } from './protocol/security.js';
-import { ServerRegistry } from './store/registry.js';
+import { ServerRegistry, RegistryCorruptError } from './store/registry.js';
+import type { ServerInstanceConfig } from './types.js';
 import { getSystemMetrics } from './system/monitor.js';
 
 const STATE_POLL_MS = 2000;
@@ -86,7 +87,9 @@ async function main(): Promise<void> {
   // Im Testmodus gibt es immer eine Beispiel-Instanz, damit /core/v1/servers
   // nicht leer ist und der Smoke-Test etwas zum Starten hat.
   if (config.mode === 'test' && !registry.get('test-minecraft-01')) {
-    await driver.registerServer({
+    // Ein Objekt fuer Treiber und Registry - frueher wurden zwei getrennt
+    // aufgebaute Kopien registriert.
+    const testInstance: ServerInstanceConfig = {
       id: 'test-minecraft-01',
       name: 'Test Minecraft Server (Local)',
       game: 'minecraft',
@@ -94,16 +97,9 @@ async function main(): Promise<void> {
       args: ['-e', 'console.log("NexusCore Testserver laeuft."); setInterval(() => {}, 1000)'],
       workingDir: process.cwd(),
       ports: [{ name: 'game', hostPort: 25565, protocol: 'tcp' }],
-    });
-    await registry.add({
-      id: 'test-minecraft-01',
-      name: 'Test Minecraft Server (Local)',
-      game: 'minecraft',
-      executable: process.execPath,
-      args: ['-e', 'console.log("NexusCore Testserver laeuft."); setInterval(() => {}, 1000)'],
-      workingDir: process.cwd(),
-      ports: [{ name: 'game', hostPort: 25565, protocol: 'tcp' }],
-    });
+    };
+    await registry.add(testInstance);
+    await driver.registerServer(testInstance);
   }
 
   const server = await createCoreServer(driver, bus, registry);
@@ -157,6 +153,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  if (err instanceof RegistryCorruptError) {
+    // Laut und eindeutig: hier geht es um die Liste aller Server.
+    console.error(`\n  ${err.message}\n`);
+  }
   logger.error({ err }, 'NexusCore konnte nicht starten');
   process.exit(1);
 });

@@ -97,7 +97,15 @@ im Knoten-Modus) ist der Rechner offen im Netz.
 * Schutz gegen DNS-Rebinding: `Host`-Header auf `127.0.0.1`, `localhost` oder die konfigurierte
   Adresse prüfen, alles andere ablehnen.
 
-### A3 – `executable` einschränken
+### A3 – `executable` einschränken – erledigt 11.11.2026
+
+> **Umgesetzt** in `src/protocol/paths.ts`, eingebaut in `POST /core/v1/servers`,
+> `POST /api/panel/servers` und `POST /api/v1/servers`. Relative Angaben werden aufgelöst:
+> `workingDir` gegen das Server-Verzeichnis, `executable` gegen `workingDir`. Beim
+> Docker-Treiber entfällt die Prüfung, dort sind beide Angaben Image und Pfad im Container.
+> **Folge für B2:** Java oder SteamCMD müssen unter dem Server-Verzeichnis liegen oder vom Core
+> selbst gestartet werden, ein Pfad wie `C:\Program Files\Java\…` wird über die Schnittstelle
+> abgelehnt.
 
 Freie Pfade aus dem Netz sind nicht haltbar, auch nicht mit Token.
 
@@ -109,7 +117,16 @@ Freie Pfade aus dem Netz sind nicht haltbar, auch nicht mit Token.
   unerreichbar bleiben. Das ist die Umsetzung dieses Versprechens.
 * Tests: Pfad außerhalb → `400`; `..`-Pfad → `400`; Symlink nach draußen → `400`.
 
-### A4 – Rechte im Standalone-Modus ehrlich machen
+### A4 – Rechte im Standalone-Modus ehrlich machen – erledigt 11.11.2026
+
+> **Umgesetzt** in `src/store/account.ts` und `src/http/routes/api-v1.ts`. Ein lokales Konto
+> (`NEXUSCORE_ADMIN_USER`, Standard `admin`), Passwort als scrypt-Hash in `account.json`.
+> Ohne `NEXUSCORE_ADMIN_PASSWORD` erzeugt der Core beim ersten Start ein Passwort, zeigt es
+> einmal im Fenster und schreibt es nach `ERSTES-PASSWORT.txt` im Datenverzeichnis; die Datei
+> wird nach der ersten Anmeldung gelöscht. `/api/v1/auth/refresh` gibt ohne gültige Sitzung
+> `401`. Fünf Fehlversuche sperren die jeweilige Herkunft für zehn Minuten. Sitzungen gelten
+> sieben Tage und liegen nur im Speicher, nach einem Neustart ist eine neue Anmeldung nötig.
+> `POST /api/v1/auth/password` ändert das Passwort; die Oberfläche hat dafür noch kein Formular.
 
 `GET /api/v1/auth/me` in `src/http/routes/api-v1.ts` gibt jedem alle Adminrechte. Im lokalen
 Einzelplatzbetrieb ist das vertretbar, als Dauerzustand nicht.
@@ -122,7 +139,12 @@ Einzelplatzbetrieb ist das vertretbar, als Dauerzustand nicht.
   `HttpOnly; SameSite=Strict; Path=/`. Kein festes `nexus-standalone-token` mehr.
 * `/api/v1/auth/login` und `/logout` tatsächlich implementieren statt Platzhalter zurückzugeben.
 
-### A5 – Kleinere Fehler, gleich mitnehmen
+### A5 – Kleinere Fehler, gleich mitnehmen – erledigt 11.11.2026
+
+> **Umgesetzt:** Portvergabe über `src/protocol/ports.ts` (Bereich `NEXUSCORE_PORT_RANGE`, echter
+> Bindungstest), `findServer` nur exakt, unbekannte Instanzen geben `404` (auch im WebSocket),
+> `kill` beendet hart statt nur zu stoppen, beschädigte `servers.json` wird weggesichert und der
+> Start bricht ab, eindeutige Temp-Datei mit `fsync`, Testinstanz nur noch einmal aufgebaut.
 
 * **Portvergabe** (`api-v1.ts`): `25565 + registry.list().length` vergibt nach einer Löschung einen
   schon belegten Port. Freien Port im konfigurierten Bereich suchen und mit echtem Bindungstest
@@ -283,7 +305,8 @@ Zuletzt, und erst wenn Windows und der Tunnel stehen.
 3. ~~Native Windows-Anbindung für Job Objects~~ **Entschieden am 11.11.2026:** kleines
    Rust-Hilfsprogramm (folgt aus Entscheidung 1). Der MSVC-Linker muss dafür auf dem Baurechner
    oder in CI (`windows-latest`) vorhanden sein.
-4. **Standalone-Anmeldung:** ein Konto mit Passwort, oder nur Loopback plus Gerätekopplung?
+4. ~~Standalone-Anmeldung~~ **Entschieden am 11.11.2026:** ein Konto mit Passwort. Es schützt
+   auch dann, wenn der Core im LAN erreichbar ist.
 5. **Tunnel-Master:** läuft der Ingress auf der VM 10.0.0.120 hinter Caddy, oder braucht das einen
    eigenen VPS mit eigener IPv4?
 

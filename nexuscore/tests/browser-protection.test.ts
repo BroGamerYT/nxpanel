@@ -40,14 +40,14 @@ beforeAll(async () => {
   server = await createCoreServer(driver, new EventBus(), registry);
 
   // Sitzung der Standalone-Oberflaeche - so, wie sie der Browser als Cookie haelt.
-  const refresh = await server.inject({
+  const login = await server.inject({
     method: 'POST',
-    url: '/api/v1/auth/refresh',
+    url: '/api/v1/auth/login',
     headers: { host: HOST, origin: `http://${HOST}`, 'content-type': 'application/json' },
-    payload: {},
+    payload: { login: 'admin', password: 'nur-fuer-tests-0815' },
   });
-  expect(refresh.statusCode).toBe(200);
-  sessionCookie = `nxp_session=${refresh.json().accessToken}`;
+  expect(login.statusCode).toBe(200);
+  sessionCookie = `nxp_session=${login.json().accessToken}`;
 });
 
 afterAll(async () => {

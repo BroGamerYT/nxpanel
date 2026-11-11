@@ -36,10 +36,32 @@ const schema = z
     NEXUSCORE_PAIRING_PIN: z.string().default(''),
     NEXUSCORE_CORS_ORIGINS: z.string().default(''),
     NEXUSCORE_ALLOWED_HOSTS: z.string().default(''),
+    NEXUSCORE_SERVER_ROOT: z.string().default(''),
+    NEXUSCORE_PORT_RANGE: z
+      .string()
+      .regex(/^\d+-\d+$/, 'NEXUSCORE_PORT_RANGE muss z. B. 25565-25664 sein')
+      .default('25565-25664'),
+    NEXUSCORE_ADMIN_USER: z.string().trim().min(1).max(64).default('admin'),
+    NEXUSCORE_ADMIN_PASSWORD: z.string().default(''),
     NEXUSCORE_LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
     NEXUSCORE_ALLOW_INSECURE_AUTH: envBool(false),
   })
   .superRefine((env, ctx) => {
+    const [rangeFrom, rangeTo] = env.NEXUSCORE_PORT_RANGE.split('-').map(Number);
+    if (!rangeFrom || !rangeTo || rangeFrom > rangeTo || rangeTo > 65535) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEXUSCORE_PORT_RANGE'],
+        message: 'NEXUSCORE_PORT_RANGE: Anfang muss kleiner oder gleich Ende sein, hoechstens 65535',
+      });
+    }
+    if (env.NEXUSCORE_ADMIN_PASSWORD !== '' && env.NEXUSCORE_ADMIN_PASSWORD.length < 10) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NEXUSCORE_ADMIN_PASSWORD'],
+        message: 'NEXUSCORE_ADMIN_PASSWORD braucht mindestens 10 Zeichen',
+      });
+    }
     if (env.NEXUSCORE_MODE !== 'production') return;
     if (env.NEXUSCORE_TOKEN.length < 24) {
       ctx.addIssue({
@@ -89,6 +111,17 @@ export const config = {
   allowedHosts: env.NEXUSCORE_ALLOWED_HOSTS.split(',')
     .map((h) => h.trim().toLowerCase())
     .filter(Boolean),
+  /** Verzeichnis, in dem alle Instanzen liegen muessen. Leer = `<dataDir>/servers`. */
+  serverRoot: env.NEXUSCORE_SERVER_ROOT.trim(),
+  /** Bereich, aus dem der Core Spielports vergibt. */
+  portRange: {
+    from: Number(env.NEXUSCORE_PORT_RANGE.split('-')[0]),
+    to: Number(env.NEXUSCORE_PORT_RANGE.split('-')[1]),
+  },
+  /** Name des lokalen Kontos im Standalone-Modus. */
+  adminUser: env.NEXUSCORE_ADMIN_USER,
+  /** Optional: festes Passwort des lokalen Kontos. Leer = beim ersten Start erzeugt. */
+  adminPassword: env.NEXUSCORE_ADMIN_PASSWORD,
   logLevel: env.NEXUSCORE_LOG_LEVEL,
   /** Nur fuer den lokalen Einstiegstest: erlaubt Zugriff ohne Token. */
   allowInsecureAuth: env.NEXUSCORE_ALLOW_INSECURE_AUTH,

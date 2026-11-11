@@ -24,13 +24,14 @@ describe('1:1 Frontend Integration & Standalone API v1', () => {
     registry = await ServerRegistry.open(tmpDir);
     server = await createCoreServer(driver, bus, registry);
 
-    const refreshRes = await server.inject({
+    const loginRes = await server.inject({
       method: 'POST',
-      url: '/api/v1/auth/refresh',
+      url: '/api/v1/auth/login',
       headers: { 'content-type': 'application/json' },
-      payload: {},
+      payload: { login: 'admin', password: 'nur-fuer-tests-0815' },
     });
-    const { accessToken } = refreshRes.json();
+    expect(loginRes.statusCode).toBe(200);
+    const { accessToken } = loginRes.json();
     authHeaders = { authorization: `Bearer ${accessToken}` };
   });
 
