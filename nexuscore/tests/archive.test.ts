@@ -295,10 +295,175 @@ describe('Tar entpacken', () => {
     expect(await exists(path.join(out, 'a.txt'))).toBe(false);
   });
 
-  it('unbekannte Formate und .tar.zst werden klar abgelehnt', async () => {
+  it('unbekannte Formate werden klar abgelehnt', async () => {
     const dir = await fresh();
     await expect(extractArchive(path.join(dir, 'a.rar'), dir)).rejects.toThrow(/Nicht unterstützt/);
-    await expect(extractArchive(path.join(dir, 'a.tar.zst'), dir)).rejects.toThrow(/zst/);
+  });
+});
+
+/** Ein Zip64-Archiv von Hand: die echten Werte stehen im Zusatzfeld und im Zip64-Abschluss. */
+function buildZip64(entries: Array<{ name: string; data: string }>, only: 'all' | 'offset' = 'all', markEntryCount = true): Buffer {
+  const parts: Buffer[] = [];
+  const central: Buffer[] = [];
+  let offset = 0;
+  for (const e of entries) {
+    const data = Buffer.from(e.data);
+    const name = Buffer.from(e.name, 'utf8');
+    const crc = zlib.crc32(data) >>> 0;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(45, 4);
+    local.writeUInt16LE(0x800, 6);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    const big = only === 'all';
+    const extra = Buffer.alloc(4 + (big ? 24 : 8));
+    extra.writeUInt16LE(0x0001, 0);
+    extra.writeUInt16LE(big ? 24 : 8, 2);
+    let q = 4;
+    if (big) {
+      extra.writeBigUInt64LE(BigInt(data.length), q); // Originalgroesse
+      extra.writeBigUInt64LE(BigInt(data.length), q + 8); // gepackte Groesse
+      q += 16;
+    }
+    extra.writeBigUInt64LE(BigInt(offset), q); // Ort der lokalen Kopfzeile
+    const cen = Buffer.alloc(46);
+    cen.writeUInt32LE(0x02014b50, 0);
+    cen.writeUInt16LE(45, 4);
+    cen.writeUInt16LE(45, 6);
+    cen.writeUInt16LE(0x800, 8);
+    cen.writeUInt32LE(crc, 16);
+    cen.writeUInt32LE(big ? 0xffffffff : data.length, 20);
+    cen.writeUInt32LE(big ? 0xffffffff : data.length, 24);
+    cen.writeUInt16LE(name.length, 28);
+    cen.writeUInt16LE(extra.length, 30);
+    cen.writeUInt32LE(0xffffffff, 42);
+    central.push(Buffer.concat([cen, name, extra]));
+    const chunk = Buffer.concat([local, name, data]);
+    parts.push(chunk);
+    offset += chunk.length;
+  }
+  const cd = Buffer.concat(central);
+  const record = Buffer.alloc(56);
+  record.writeUInt32LE(0x06064b50, 0);
+  record.writeBigUInt64LE(44n, 4);
+  record.writeUInt16LE(45, 12);
+  record.writeUInt16LE(45, 14);
+  record.writeBigUInt64LE(BigInt(entries.length), 24);
+  record.writeBigUInt64LE(BigInt(entries.length), 32);
+  record.writeBigUInt64LE(BigInt(cd.length), 40);
+  record.writeBigUInt64LE(BigInt(offset), 48);
+  const locator = Buffer.alloc(20);
+  locator.writeUInt32LE(0x07064b50, 0);
+  locator.writeBigUInt64LE(BigInt(offset + cd.length), 8);
+  locator.writeUInt32LE(1, 16);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(markEntryCount ? 0xffff : entries.length, 8);
+  end.writeUInt16LE(markEntryCount ? 0xffff : entries.length, 10);
+  end.writeUInt32LE(0xffffffff, 12);
+  end.writeUInt32LE(0xffffffff, 16);
+  return Buffer.concat([...parts, cd, record, locator, end]);
+}
+
+describe('Zip64 lesen', () => {
+  it('liest ein Zip64-Archiv: Größen, gepackte Größen und Orte aus dem Zusatzfeld', async () => {
+    const dir = await fresh();
+    const zip = path.join(dir, 'gross.zip');
+    await fs.writeFile(zip, buildZip64([{ name: 'a.txt', data: 'Hallo' }, { name: 'ordner/b.txt', data: 'Welt, noch ein Eintrag' }, { name: 'c.txt', data: '' }]));
+    const out = path.join(dir, 'out');
+    await fs.mkdir(out);
+    const res = await extractZip(zip, out);
+    expect(res).toMatchObject({ filesCount: 3, skipped: 0 });
+    expect(await fs.readFile(path.join(out, 'a.txt'), 'utf8')).toBe('Hallo');
+    expect(await fs.readFile(path.join(out, 'ordner', 'b.txt'), 'utf8')).toBe('Welt, noch ein Eintrag');
+    expect(await fs.readFile(path.join(out, 'c.txt'), 'utf8')).toBe('');
+  });
+
+  it('auch wenn nur der Ort im Zusatzfeld steht (Größen normal) und die Anzahl normal ist', async () => {
+    const dir = await fresh();
+    const zip = path.join(dir, 'z.zip');
+    await fs.writeFile(zip, buildZip64([{ name: 'x.txt', data: 'abc' }, { name: 'y.txt', data: 'defg' }], 'offset', false));
+    const out = path.join(dir, 'out');
+    await fs.mkdir(out);
+    await extractZip(zip, out);
+    expect(await fs.readFile(path.join(out, 'y.txt'), 'utf8')).toBe('defg');
+  });
+
+  it('beschädigte Zip64-Angaben werden abgelehnt, ohne etwas zu schreiben', async () => {
+    const dir = await fresh();
+    const good = buildZip64([{ name: 'a.txt', data: 'Hallo' }]);
+    const out = path.join(dir, 'out');
+    await fs.mkdir(out);
+
+    // Zip64-Locator fehlt
+    const noLocator = Buffer.from(good);
+    noLocator.writeUInt32LE(0, noLocator.length - 22 - 20);
+    await fs.writeFile(path.join(dir, 'a.zip'), noLocator);
+    await expect(extractZip(path.join(dir, 'a.zip'), out)).rejects.toThrow(/Zip64/);
+
+    // Zip64-Abschluss zeigt ins Leere
+    const wrongRecord = Buffer.from(good);
+    wrongRecord.writeBigUInt64LE(BigInt(good.length * 4), good.length - 22 - 20 + 8);
+    await fs.writeFile(path.join(dir, 'b.zip'), wrongRecord);
+    await expect(extractZip(path.join(dir, 'b.zip'), out)).rejects.toThrow(/beschädigt/);
+
+    // Zusatzfeld fehlt, obwohl die Felder 0xFFFFFFFF melden
+    const noExtra = Buffer.from(good);
+    const cdAt = good.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    noExtra.writeUInt16LE(0, cdAt + 30);
+    await fs.writeFile(path.join(dir, 'c.zip'), noExtra);
+    await expect(extractZip(path.join(dir, 'c.zip'), out)).rejects.toThrow();
+
+    // unmögliche Größe (über 2^53)
+    const huge = Buffer.from(good);
+    huge.writeBigUInt64LE(2n ** 60n, cdAt + 46 + 'a.txt'.length + 4);
+    await fs.writeFile(path.join(dir, 'd.zip'), huge);
+    await expect(extractZip(path.join(dir, 'd.zip'), out)).rejects.toThrow(/beschädigt/);
+    expect(await fs.readdir(out)).toEqual([]);
+  });
+});
+
+describe('Zstandard-Tar lesen', () => {
+  const hasZstd = typeof (zlib as unknown as { zstdCompressSync?: unknown }).zstdCompressSync === 'function';
+
+  it.skipIf(!hasZstd)('entpackt .tar.zst, erkannt am Dateianfang - auch unter falscher Endung', async () => {
+    const dir = await fresh();
+    const tar = buildTar([{ name: 'a.txt', data: 'Hallo' }, { name: 'ordner/', type: '5' }, { name: 'ordner/b.txt', data: 'Welt' }]);
+    const zst = (zlib as unknown as { zstdCompressSync(b: Buffer): Buffer }).zstdCompressSync(tar);
+    expect([...zst.subarray(0, 4)]).toEqual([0x28, 0xb5, 0x2f, 0xfd]);
+    for (const file of ['x.tar.zst', 'y.tzst', 'versteckt.tar']) {
+      const archive = path.join(dir, file);
+      await fs.writeFile(archive, zst);
+      const out = path.join(dir, `out-${file}`);
+      await fs.mkdir(out);
+      const res = await extractArchive(archive, out);
+      expect(res.filesCount, file).toBe(2);
+      expect(await fs.readFile(path.join(out, 'ordner', 'b.txt'), 'utf8')).toBe('Welt');
+    }
+  });
+
+  it.skipIf(!hasZstd)('gefährliche Einträge werden wie bei jedem Tar übersprungen', async () => {
+    const dir = await fresh();
+    const tar = buildTar([{ name: '../draussen.txt', data: 'böse' }, { name: '/absolut.txt', data: 'böse' }, { name: 'ok.txt', data: 'gut' }]);
+    const archive = path.join(dir, 'e.tar.zst');
+    await fs.writeFile(archive, (zlib as unknown as { zstdCompressSync(b: Buffer): Buffer }).zstdCompressSync(tar));
+    const out = path.join(dir, 'out');
+    await fs.mkdir(out);
+    const res = await extractArchive(archive, out);
+    expect(res).toMatchObject({ filesCount: 1, skipped: 2 });
+    expect(await exists(path.join(dir, 'draussen.txt'))).toBe(false);
+  });
+
+  it.skipIf(!hasZstd)('ein beschädigtes Zstandard-Archiv ist ein Fehler, kein Hängenbleiben', async () => {
+    const dir = await fresh();
+    const archive = path.join(dir, 'kaputt.tar.zst');
+    await fs.writeFile(archive, Buffer.concat([Buffer.from([0x28, 0xb5, 0x2f, 0xfd]), Buffer.from('das ist kein gültiger Datenstrom')]));
+    const out = path.join(dir, 'out');
+    await fs.mkdir(out);
+    await expect(extractArchive(archive, out)).rejects.toThrow();
   });
 });
 

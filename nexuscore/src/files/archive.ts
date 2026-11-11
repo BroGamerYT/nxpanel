@@ -8,7 +8,7 @@ import { FileAccessError, assertSafeName, resolveEntry } from './files.js';
 
 /**
  * Packen und Entpacken fuer den Dateimanager - ohne fremde Programme und ohne
- * neue Abhaengigkeit: .zip (lesen und schreiben) sowie .tar, .tar.gz, .tgz (lesen).
+ * neue Abhaengigkeit: .zip (lesen, auch Zip64, und schreiben) sowie .tar, .tar.gz, .tgz, .tar.zst (lesen).
  *
  * Archive kommen von Nutzern. Beim Entpacken gilt deshalb:
  *  - Eintraege mit absolutem Pfad, "..", unzulaessigem Namen oder als Verknuepfung
@@ -100,6 +100,15 @@ interface ZipEntry {
   isSymlink: boolean;
 }
 
+/** Eine 64-Bit-Zahl aus einem Zip64-Feld als normale Zahl; groesser als 2^53 ist ein beschaedigtes Archiv. */
+function zip64Number(value: bigint): number {
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw bad('Das Zip-Archiv ist beschädigt');
+  return Number(value);
+}
+
+/** Obergrenze fuer das Inhaltsverzeichnis im Speicher - mehr ist kein ehrliches Archiv. */
+const MAX_DIRECTORY_BYTES = 512 * 1024 * 1024;
+
 async function readZipDirectory(handle: fs.FileHandle, fileSize: number): Promise<ZipEntry[]> {
   const tailLen = Math.min(fileSize, 65_557);
   const tail = Buffer.alloc(tailLen);
@@ -112,11 +121,23 @@ async function readZipDirectory(handle: fs.FileHandle, fileSize: number): Promis
     }
   }
   if (eocd < 0) throw bad('Das ist kein gültiges Zip-Archiv');
-  const count = tail.readUInt16LE(eocd + 10);
-  const cdSize = tail.readUInt32LE(eocd + 12);
-  const cdOffset = tail.readUInt32LE(eocd + 16);
-  if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) throw bad('Zip64-Archive (über 4 GB) werden nicht unterstützt');
-  if (cdOffset + cdSize > fileSize) throw bad('Das Zip-Archiv ist beschädigt');
+  let count = tail.readUInt16LE(eocd + 10);
+  let cdSize = tail.readUInt32LE(eocd + 12);
+  let cdOffset = tail.readUInt32LE(eocd + 16);
+  // Zip64 (ueber 4 GB oder mehr als 65.535 Dateien): die echten Werte stehen im Zip64-Abschluss davor
+  if (count === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) {
+    const locator = eocd - 20;
+    if (locator < 0 || tail.readUInt32LE(locator) !== 0x07064b50) throw bad('Das Zip64-Archiv ist beschädigt');
+    const recordAt = zip64Number(tail.readBigUInt64LE(locator + 8));
+    if (recordAt + 56 > fileSize) throw bad('Das Zip-Archiv ist beschädigt');
+    const record = Buffer.alloc(56);
+    await handle.read(record, 0, 56, recordAt);
+    if (record.readUInt32LE(0) !== 0x06064b50) throw bad('Das Zip64-Archiv ist beschädigt');
+    count = zip64Number(record.readBigUInt64LE(32));
+    cdSize = zip64Number(record.readBigUInt64LE(40));
+    cdOffset = zip64Number(record.readBigUInt64LE(48));
+  }
+  if (cdSize > MAX_DIRECTORY_BYTES || cdOffset + cdSize > fileSize) throw bad('Das Zip-Archiv ist beschädigt');
 
   const cd = Buffer.alloc(cdSize);
   await handle.read(cd, 0, cdSize, cdOffset);
@@ -131,14 +152,42 @@ async function readZipDirectory(handle: fs.FileHandle, fileSize: number): Promis
     const madeBy = cd.readUInt16LE(pos + 4);
     const extAttr = cd.readUInt32LE(pos + 38);
     const name = cd.toString(flags & 0x800 ? 'utf8' : 'latin1', pos + 46, pos + 46 + nameLen);
+    let compSize = cd.readUInt32LE(pos + 20);
+    let size = cd.readUInt32LE(pos + 24);
+    let offset = cd.readUInt32LE(pos + 42);
+    if (size === 0xffffffff || compSize === 0xffffffff || offset === 0xffffffff) {
+      // Die echten Werte stehen im Zusatzfeld 0x0001, in dieser Reihenfolge, nur fuer die Felder mit 0xFFFFFFFF
+      let ep = pos + 46 + nameLen;
+      const end = Math.min(cd.length, ep + extraLen);
+      while (ep + 4 <= end) {
+        const id = cd.readUInt16LE(ep);
+        const len = cd.readUInt16LE(ep + 2);
+        if (id === 0x0001) {
+          let q = ep + 4;
+          const stop = Math.min(end, ep + 4 + len);
+          const next = (): number => {
+            if (q + 8 > stop) throw bad('Das Zip64-Archiv ist beschädigt');
+            const v = zip64Number(cd.readBigUInt64LE(q));
+            q += 8;
+            return v;
+          };
+          if (size === 0xffffffff) size = next();
+          if (compSize === 0xffffffff) compSize = next();
+          if (offset === 0xffffffff) offset = next();
+          break;
+        }
+        ep += 4 + len;
+      }
+      if (size === 0xffffffff || compSize === 0xffffffff || offset === 0xffffffff) throw bad('Das Zip64-Archiv ist beschädigt');
+    }
     entries.push({
       name,
       method: cd.readUInt16LE(pos + 10),
       flags,
       crc: cd.readUInt32LE(pos + 16),
-      compSize: cd.readUInt32LE(pos + 20),
-      size: cd.readUInt32LE(pos + 24),
-      offset: cd.readUInt32LE(pos + 42),
+      compSize,
+      size,
+      offset,
       isSymlink: madeBy >> 8 === 3 && ((extAttr >>> 16) & 0o170000) === 0o120000,
     });
     pos += 46 + nameLen + extraLen + commentLen;
@@ -274,16 +323,26 @@ function parsePax(body: Buffer): Record<string, string> {
 
 export async function extractTar(archive: string, target: string, limits: ArchiveLimits = DEFAULT_LIMITS): Promise<ExtractResult> {
   const sink = new Sink(target, limits);
-  const head = Buffer.alloc(2);
+  const head = Buffer.alloc(4);
   const fh = await fs.open(archive, 'r');
   try {
-    await fh.read(head, 0, 2, 0);
+    await fh.read(head, 0, 4, 0);
   } finally {
     await fh.close();
   }
   const raw = createReadStream(archive);
   const gz = head[0] === 0x1f && head[1] === 0x8b;
-  const source: AsyncIterable<Buffer> = gz ? raw.pipe(zlib.createGunzip()) : raw;
+  // Zstandard: Erkennung am Anfang der Datei (28 B5 2F FD), nicht an der Endung
+  const zst = head[0] === 0x28 && head[1] === 0xb5 && head[2] === 0x2f && head[3] === 0xfd;
+  if (zst && typeof (zlib as { createZstdDecompress?: unknown }).createZstdDecompress !== 'function') {
+    raw.destroy();
+    throw bad('Zstandard-Archive braucht Node.js ab Version 22.15 - bitte als .zip oder .tar.gz packen');
+  }
+  const source: AsyncIterable<Buffer> = gz
+    ? raw.pipe(zlib.createGunzip())
+    : zst
+      ? raw.pipe((zlib as unknown as { createZstdDecompress(): NodeJS.ReadWriteStream }).createZstdDecompress() as unknown as zlib.Gunzip)
+      : raw;
   raw.on('error', () => {});
   const reader = new ByteReader(source);
 
@@ -376,8 +435,9 @@ export async function extractTar(archive: string, target: string, limits: Archiv
 export async function extractArchive(archive: string, target: string, limits?: ArchiveLimits): Promise<ExtractResult> {
   const lower = archive.toLowerCase();
   if (lower.endsWith('.zip')) return extractZip(archive, target, limits);
-  if (lower.endsWith('.tar') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) return extractTar(archive, target, limits);
-  if (lower.endsWith('.tar.zst')) throw bad('.tar.zst kann der Core nicht entpacken - bitte als .zip oder .tar.gz packen');
+  if (lower.endsWith('.tar') || lower.endsWith('.tar.gz') || lower.endsWith('.tgz') || lower.endsWith('.tar.zst') || lower.endsWith('.tzst')) {
+    return extractTar(archive, target, limits);
+  }
   throw bad(`Nicht unterstütztes Archivformat: ${path.basename(archive)}`);
 }
 
