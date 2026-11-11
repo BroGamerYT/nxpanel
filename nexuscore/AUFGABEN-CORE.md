@@ -375,7 +375,7 @@ Zuletzt, und erst wenn Windows und der Tunnel stehen.
    eigenen VPS mit eigener IPv4?
 6. **Benutzerverwaltung im Standalone-Core:** Der Core kennt bisher bewusst nur ein Konto. Benutzer, Rollen und
    Mitnutzer (Tab „Mitnutzer“, Admin-Seiten) im Core bräuchten eine eigene Benutzer- und Rechtetabelle in `core.db`
-   und widersprechen „Der Core kennt keine Nutzer“ aus Abschnitt 0. Entscheidung offen, bevor dort gebaut wird.
+   und widersprechen „Der Core kennt keine Nutzer“ aus Abschnitt 0. **Entschieden und gebaut (Ja, bauen):** Benutzer in `users.json`, Rollen, Modul-Rechte, Server-Besitz und Rechte-Flags je Server, zentrale Rechtetabelle (`http/authz.ts`). Auf dem nativen Treiber dürfen nur Administratoren Dateien schreiben und entpacken (`NEXUSCORE_ALLOW_USER_FILE_WRITE` hebt das auf). Offen: Mitnutzer selbst einladen (Tab „Mitnutzer“), Sichtprüfung als anderer Benutzer, Plattenplatz-Grenze je Benutzer, Steam-Anmeldung.
 
 ---
 
