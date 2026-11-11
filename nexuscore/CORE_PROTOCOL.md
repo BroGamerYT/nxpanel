@@ -2,7 +2,7 @@
 
 **Status:** Lauffähiger Prototyp / lokaler Testmodus
 **Zielumgebung:** Windows Nativ, Linux (Docker/Podman) & NexusPanel OS
-**Implementierung:** TypeScript (Fastify 5) unter `src/`, geplant ist zusätzlich ein Rust-Kern (siehe `docs/ARCHITEKTUR.md`)
+**Implementierung:** TypeScript (Fastify 5) unter `src/`. Ein Rust-Kern ist nicht mehr geplant (Entscheidung 11.11.2026, siehe `docs/ARCHITEKTUR.md`)
 
 ---
 
@@ -164,7 +164,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1 -BaseUrl http:
 ## 5. Meilenstein-Planung
 
 1. **M1 (abgeschlossen):** Lauffähiger NexusCore-Prototyp in TypeScript – Modultreiber, REST/WS-Schnittstelle, Persistenz, Auth, Windows-Test-Runner und Selbsttest-Skript.
-2. **M2:** Zertifikatsbasierte mTLS-Authentifizierung und automatischer Zertifikatstausch mit NexusPanel (Rust-Kern, siehe `rust/README.md`).
+2. **M2:** Zertifikatsbasierte mTLS-Authentifizierung und automatischer Zertifikatstausch mit NexusPanel.
 3. **M3:** Ausbau der Windows Job Objects, eigener Benutzer je Server und automatische Windows-Firewall-Freigabe.
 4. **M4:** Vorbereitung für NexusPanel OS (Podman/Container-Integration für Bare-Metal-ISO).
 5. **M5:** Host-Schicht im Panel, damit mehrere Cores nebeneinander verwaltet werden können (siehe `docs/ARCHITEKTUR.md`).

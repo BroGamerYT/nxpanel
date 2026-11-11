@@ -121,8 +121,10 @@ ausgenommen und kann jederzeit gelöscht werden – der Core legt ihn neu an.
 
 ---
 
-## Rust-Teil
+## Sprache
 
-`rust/` enthält den älteren Rust-Prototyp. Er ist **Planung** und nicht baubar
-(siehe [`rust/README.md`](./rust/README.md)). Die Zielarchitektur des
-Rust-Kerns steht in [`../docs/ARCHITEKTUR.md`](../docs/ARCHITEKTUR.md).
+Der Core ist und bleibt TypeScript (Entscheidung 11.11.2026). Der frühere
+Rust-Prototyp unter `rust/` ist entfernt. Rust ist nur noch für ein kleines
+Windows-Hilfsprogramm vorgesehen (Job Objects, Dienst, Tray), das der Core als
+Prozess aufruft. Das Zielbild steht in
+[`../docs/ARCHITEKTUR.md`](../docs/ARCHITEKTUR.md).

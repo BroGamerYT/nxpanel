@@ -138,7 +138,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [ ] Desktop-App (Tauri 2, Rust): Verbindungen, Schlüsselbund, Tray mit Serverstatus, Benachrichtigungen, Autostart, Updater
 - [ ] App-Pakete: Windows (NSIS-.exe, MSI), macOS (.dmg Universal), Linux (AppImage, .deb, .rpm)
 - [ ] Android-App (APK/AAB) mit QR-Kopplung und Push
-- [ ] Server-Setup für Windows in Rust: eine .exe mit Assistent (Doppelklick) und Befehlszeile (--unattended)
+- [ ] Server-Setup für Windows: eine .exe mit Assistent (Doppelklick) und Befehlszeile (--unattended)
 - [ ] Server-Setup: Hyper-V-Modus (eigene VM mit LAN-IP, auch Windows Server Core)
 - [ ] Server-Setup: WSL2-Modus mit Mirrored-Netzwerk (Windows 11), Hinweis bei Windows 10
 - [ ] Server-Setup: Prüfungen, Firewall-Regeln, Autostart, Status, Update mit Backup, Reparieren, Deinstallieren (Daten behalten)
@@ -147,7 +147,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [ ] GitHub Actions: Builds für alle Plattformen, Releases mit Prüfsummen, Updater-Signatur
 - [ ] Optional: Code-Signatur Windows, Apple-Notarisierung, winget, Homebrew, Play Store, iOS
 - [ ] Laufzeit-Schicht im Panel: Docker, Podman und Windows nativ austauschbar (Konzept Abschnitt 8)
-- [ ] Windows nativ ohne VM: Rust-Dienst `nxagent` mit Job Objects, eigenem Benutzer je Server, SteamCMD, Firewall je .exe
+- [ ] Windows nativ ohne VM: NexusCore (TypeScript) mit kleinem Rust-Hilfsprogramm für Job Objects, eigenem Benutzer je Server, SteamCMD, Firewall je .exe
 - [ ] Windows-Varianten in den Eggs (zuerst ARK Ascended, Enshrouded, Farming Simulator, Palworld)
 - [ ] Podman (rootless) als optionale Laufzeit unter Linux, Testlauf aller Eggs
 - [ ] NexusPanel OS: schlankes Linux-Abbild (ISO, Proxmox/Hyper-V), Einrichtung im Browser, A/B-Updates
@@ -157,7 +157,7 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [ ] NexusCluster (Freundeskreis-Verbund): Power Pooling (mehrere PCs bündeln), 1-Klick Invite-Code, Smart Placement, Gaming-Schutzmodus
 - [ ] Intelligentes Failover & Live-Sync: Savegame-Delta-Replikation, 30s-Heartbeat-Timeout, Notfall-Spawn bei Stromausfall, Split-Brain-Schutz
 - [ ] NexusCore (Windows): `.msi` / `.exe` Setup-Assistent, Windows-Dienst `nexuscored`, Systray-Icon mit PIN-Kopplung
-- [ ] NexusCore (Rust): gemeinsamer Kern für alle Hosts – Dienst `nexuscored`, Kommandozeile `nxctl`, Kopplung mit mTLS (Konzept Abschnitt 9)
+- [ ] NexusCore (TypeScript, Entscheidung 11.11.2026): gemeinsamer Kern für alle Hosts – Dienst `nexuscored`, Kommandozeile `nxctl`, Kopplung mit mTLS (Konzept Abschnitt 9)
 - [ ] Host-Schicht im Panel: alle Server-Aktionen über „lokal“ oder „NexusCore“
 - [ ] NexusCore übernimmt Docker/Podman, danach Dateien und Backups; mehrere Hosts im Panel
 - [ ] Umsetzung nach den Meilensteinen M1–M8 in docs/ARCHITEKTUR.md (Start: M1 Host-Schicht, M2 Kern-Grundgerüst, M3 Windows nativ)

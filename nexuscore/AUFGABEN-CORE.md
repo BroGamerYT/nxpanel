@@ -173,8 +173,8 @@ Endlosschleife läuft. Nichts wird installiert.
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, damit kein verwaister Kindprozess übrig bleibt.
 * Heute räumt `windows-native.ts` nur mit `taskkill /T` hinterher – das greift erst beim Beenden
   und begrenzt nichts.
-* Braucht eine native Anbindung (`koffi`, `ffi-napi` oder ein kleines Rust-Hilfsprogramm) →
-  Entscheidung in Abschnitt 5.
+* Umsetzung über ein kleines Rust-Hilfsprogramm, das der Core als Prozess aufruft
+  (Entscheidung 11.11.2026, Abschnitt 5). Keine native Anbindung im Node-Prozess.
 * Erst danach: eigener Dienstbenutzer `nxp-<id>` und NTFS-Rechte (Konzept Abschnitt 6, „Isolierung“).
 
 ### B4 – Dateimanager und Backups lokal
@@ -266,15 +266,15 @@ Zuletzt, und erst wenn Windows und der Tunnel stehen.
 
 ## 5. Offene Entscheidungen – bei Dominik nachfragen, nicht selbst festlegen
 
-1. **Rust oder TypeScript als Kern?** `nexuscore/rust/` liegt als Planungsstand da, ist nicht baubar
-   (falsche Modulpfade, auf diesem Rechner fehlt der MSVC-Linker) und `docs/TODO.md` nennt beides.
-   Doppelte Entwicklung lohnt sich nicht: entweder der TS-Core bleibt das Produkt und Rust fliegt
-   raus oder wird klar auf Hilfsprogramme begrenzt (Job Objects, Dienst, Tray), oder der Umstieg
-   wird geplant. Vorher keine Zeile Rust mehr.
+1. ~~Rust oder TypeScript als Kern?~~ **Entschieden am 11.11.2026: TypeScript.** Der TS-Core ist
+   das Produkt. `nexuscore/rust/` ist entfernt. Rust ist auf ein kleines Hilfsprogramm für Windows
+   begrenzt (Job Objects, Dienst, Tray), das der Core als Prozess aufruft, und auf die Hülle der
+   Tauri-Apps. Keine Fachlogik in Rust.
 2. **SQLite-Anbindung:** `node:sqlite` aus Node 22 (keine Abhängigkeit, aber noch experimentell)
    oder `better-sqlite3` (stabil, aber nativ gebaut, was das SEA-Binary verkompliziert).
-3. **Native Windows-Anbindung für Job Objects:** `koffi`, `ffi-napi` oder ein kleines Rust-Hilfsprogramm.
-   Hängt an Entscheidung 1.
+3. ~~Native Windows-Anbindung für Job Objects~~ **Entschieden am 11.11.2026:** kleines
+   Rust-Hilfsprogramm (folgt aus Entscheidung 1). Der MSVC-Linker muss dafür auf dem Baurechner
+   oder in CI (`windows-latest`) vorhanden sein.
 4. **Standalone-Anmeldung:** ein Konto mit Passwort, oder nur Loopback plus Gerätekopplung?
 5. **Tunnel-Master:** läuft der Ingress auf der VM 10.0.0.120 hinter Caddy, oder braucht das einen
    eigenen VPS mit eigener IPv4?

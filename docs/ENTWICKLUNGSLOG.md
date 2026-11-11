@@ -5,6 +5,13 @@ Zeiten in Europe/Berlin.
 
 ---
 
+## 2026-11-11
+
+| Zeit | Was | Dateien |
+| --- | --- | --- |
+| 10:30 | **Entscheidung: NexusCore bleibt TypeScript.** Der nicht baubare Rust-Prototyp `nexuscore/rust/` ist entfernt. Rust ist auf ein kleines Windows-Hilfsprogramm (Job Objects, Dienst, Tray) und die Hülle der Tauri-Apps begrenzt. Die Architektur-Doku beschreibt jetzt den echten Stand: TypeScript-Core unter `nexuscore/`, heute Token + PIN über HTTP, mTLS als Ziel. Offene Entscheidungen 1 und 3 in der Aufgabenliste sind geschlossen. | `docs/ARCHITEKTUR.md`, `nexuscore/AUFGABEN-CORE.md`, `docs/AUFGABEN-CORE.md`, `docs/TODO.md`, `nexuscore/README.md`, `nexuscore/CORE_PROTOCOL.md`, `nexuscore/.gitignore`, `nexuscore/rust/` (entfernt) |
+| 10:15 | **CI erweitert und grün:** Lint, Typecheck, Tests mit Postgres und Redis sowie Build für das Panel; NexusCore-Tests auf Linux und Windows. Sechs Lint-Fehler behoben, Version auf 0.26.2 an den CHANGELOG angeglichen, Windows-Treiber-Tests außerhalb von Windows übersprungen. `deploy/loginusers.vdf` und `deploy/dedicatedServer.xml` aus den Commits entfernt und in `.gitignore`. | `.github/workflows/ci.yml`, `.gitignore`, `package.json`, `web/package.json`, `nexuscore/tests/windows-driver.test.ts`, `src/servers/sftp.ts` u. a. |
+
 ## 2026-11-10
 
 | Zeit | Was | Dateien |

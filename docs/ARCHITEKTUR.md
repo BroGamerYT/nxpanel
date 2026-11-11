@@ -1,6 +1,8 @@
 # NexusPanel – Gesamtarchitektur
 
-Stand: 07.11.2026 · Status: **Zielbild**. Das Panel (Abschnitt 3) gibt es. NexusCore, Apps, Installer und NexusPanel OS sind geplant.
+Stand: 11.11.2026 · Status: **Zielbild**. Das Panel (Abschnitt 3) gibt es. NexusCore gibt es als lauffähigen Prototyp in TypeScript (`nexuscore/`). Apps, Installer und NexusPanel OS sind geplant.
+
+> **Entscheidung 11.11.2026: NexusCore bleibt TypeScript.** Panel, Oberfläche und Core teilen sich Sprache, Werkzeuge und die Egg-Logik. Rust kommt nur dort zum Einsatz, wo Node nicht hinreicht: als kleines Hilfsprogramm für Windows (Job Objects, Dienst, Tray) und als Hülle der Tauri-Apps. Der frühere Rust-Prototyp unter `nexuscore/rust/` ist entfernt.
 Ergänzt `docs/KONZEPT-APPS.md` (Entscheidungen und Begründungen). Die Aufgaben stehen in `docs/TODO.md`.
 
 ---
@@ -21,9 +23,9 @@ Ergänzt `docs/KONZEPT-APPS.md` (Entscheidungen und Begründungen). Die Aufgaben
 │  Nutzer · Rechte · Eggs · Modpacks · Audit · Zeitpläne · Benachrichtigungen    │
 │  Host-Schicht:  "lokal" (heutiger Docker-Code)  |  "NexusCore" (neu)          │
 └───────────────┬──────────────────────────────────────────────┬──────────────┘
-                │ mTLS, JSON + WebSocket, versioniert (/core/v1) │
+                │ Token (Ziel: mTLS), JSON + WebSocket (/core/v1) │
      ┌──────────┴──────────┐   ┌───────────────────────┐   ┌───┴───────────────────┐
-     │ NexusCore (Rust)    │   │ NexusCore (Rust)      │   │ NexusCore (Rust)      │
+     │ NexusCore (TS)      │   │ NexusCore (TS)        │   │ NexusCore (TS)        │
      │ Linux-VM (Proxmox)  │   │ Windows-PC / Server   │   │ NexusPanel OS / VPS   │
      │ Laufzeit: Docker    │   │ Laufzeit: Windows     │   │ Laufzeit: Podman      │
      │                     │   │ nativ + Docker (WSL2) │   │                       │
@@ -47,10 +49,11 @@ Ergänzt `docs/KONZEPT-APPS.md` (Entscheidungen und Begründungen). Die Aufgaben
 | --- | --- | --- | --- | --- |
 | NexusPanel (Server) | TypeScript (Node 22, Fastify 5) | Linux-Container | `src/` | vorhanden |
 | Weboberfläche | TypeScript (React 19, Vite, Tailwind) | Browser, App | `web/` | vorhanden |
-| NexusCore | Rust | Windows, Linux, macOS | `core/` | neu |
-| `nxctl` (Kommandozeile) | Rust | wie NexusCore | `core/nxctl/` | neu |
+| NexusCore | TypeScript (Node 22, Fastify 5) | Windows, Linux, macOS | `nexuscore/` | Prototyp vorhanden |
+| Windows-Hilfsprogramm (Job Objects, Dienst, Tray) | Rust | Windows | `nexuscore/helper/` | geplant |
+| `nxctl` (Kommandozeile) | TypeScript | wie NexusCore | `nexuscore/src/cli/` | geplant |
 | Desktop-/Android-App | Rust (Tauri 2) + `web/` | Win/macOS/Linux/Android | `apps/client/` | neu |
-| Server-Setup | Rust (+ Slint oder Tauri) | Windows | `apps/server-setup/` | neu |
+| Server-Setup | Tauri (Rust-Hülle + `web/`) | Windows | `apps/server-setup/` | neu |
 | Linux-Installer | Bash | Debian/Ubuntu/Proxmox | `install/` | vorhanden, wird ausgebaut |
 | NexusPanel OS | mkosi/live-build-Rezept | x86_64 | `os/` | neu |
 | Eggs | JSON | – | `eggs/` | vorhanden, wird erweitert |
@@ -61,12 +64,14 @@ Gameserver Interface/
 ├── web/                 Oberfläche (React)
 ├── eggs/                Spielvorlagen
 ├── migrations/          Datenbank
-├── core/                ── neu: Rust-Workspace ──
-│   ├── Cargo.toml       Workspace
-│   ├── nexuscore/       Bibliothek: Laufzeiten, Dateien, Backups, Statistiken, Abfragen
-│   ├── nexuscored/      Dienst (Windows-Dienst / systemd / launchd)
-│   ├── nxctl/           Kommandozeile
-│   └── protocol/        gemeinsame Typen der Schnittstelle (serde), auch für die App
+├── nexuscore/           NexusCore (TypeScript)
+│   ├── src/drivers/     Laufzeiten: windows-native, docker, mock (Schnittstelle HostDriver)
+│   ├── src/http/        Routen /core/v1 (Panel) und /api/v1 (Standalone-Oberfläche)
+│   ├── src/protocol/    Ereignisse, Kopplung, gemeinsame Typen
+│   ├── src/store/       Registry der Instanzen
+│   ├── src/system/      Auslastung des Hosts
+│   ├── tests/           Vitest
+│   └── helper/          ── geplant: kleines Rust-Programm für Job Objects, Dienst, Tray ──
 ├── apps/
 │   ├── client/          Tauri-App (nutzt web/ als Oberfläche)
 │   └── server-setup/    Windows-Installer (bettet nexuscore ein)
@@ -117,73 +122,61 @@ export interface Host {
 
 ### 4.1 Aufbau als Prozess
 
+Zielbild der Module. Mit `(vorhanden)` markierte Teile gibt es heute unter `nexuscore/src/`.
+
 ```
-nexuscored
-├── api        HTTPS-Server (axum + rustls), nur mTLS, Routen /core/v1/...
+nexuscored (Node 22, als einzelne .exe über Node SEA)
+├── http       Fastify-Server, Routen /core/v1/... (vorhanden), Ziel: nur mTLS
+├── drivers    Schnittstelle HostDriver + windows-native | docker | mock (vorhanden), podman (geplant)
+├── protocol   Ereignisstrom, Kopplung per PIN und Token (vorhanden)
+├── store      Registry der Instanzen, heute servers.json (vorhanden), Ziel: SQLite core.db
+├── system     CPU, RAM und Platte des Hosts (vorhanden)
 ├── jobs       Warteschlange für lange Aufgaben (Install, Backup, Update), mit Fortschritt
-├── runtime    Trait Runtime + Umsetzungen docker | podman | windows | (linux-native)
 ├── steam      SteamCMD verwalten (laden, aktualisieren, Login-Sitzungen)
 ├── fs         sichere Dateizugriffe (Wurzel je Server, keine Ausbrüche über ".." oder Links)
 ├── backup     tar + zstd, SHA-256, Ziele: lokal, SMB/NAS, S3, SFTP
-├── stats      CPU, RAM, Netz und Platte je Server, 10-s-Raster, 1 h im Speicher
 ├── query      Minecraft-Ping, A2S (Valve), RCON (Source/Minecraft), Palworld-REST
 ├── ports      Vergabe-Prüfung, Firewall-Regeln (Windows Firewall / nftables)
 ├── update     Selbst-Update, signiert, mit Rückfall auf die alte Version
-├── audit      lokales, nur anhängendes Protokoll jeder ausgeführten Aktion
-└── state      SQLite (core.db): Server, Jobs, Zertifikate, Einstellungen
+└── audit      lokales, nur anhängendes Protokoll jeder ausgeführten Aktion
 ```
 
-**Rust-Bibliotheken (Auswahl):**
+**Bibliotheken (Auswahl):**
 
-| Zweck | Crate |
+| Zweck | Paket |
 | --- | --- |
-| Async-Grundlage | tokio |
-| HTTP-Schnittstelle | axum |
-| TLS | rustls |
-| Docker/Podman | bollard |
-| Windows-Schnittstellen | windows |
-| Windows-Dienst | windows-service |
-| lokale Datenbank | rusqlite |
-| Serialisierung | serde |
-| Backup-Archive | tar, zstd |
-| Prüfsummen | sha2 |
-| Protokollierung | tracing |
-| Kommandozeile | clap |
-| Signaturen | ed25519-dalek |
+| HTTP-Schnittstelle und WebSocket | fastify, @fastify/websocket |
+| Docker/Podman | dockerode |
+| Eingabeprüfung | zod |
+| Protokollierung | pino |
+| lokale Datenbank | `node:sqlite` oder better-sqlite3 (offen, siehe `nexuscore/AUFGABEN-CORE.md`) |
+| Backup-Archive | tar und zstd des Systems, wie im Panel |
+| Prüfsummen, Signaturen | `node:crypto` (SHA-256, Ed25519) |
+| Egg-Logik | gemeinsam mit dem Panel (`src/eggs/`) |
+| Windows-Schnittstellen (Job Objects, Dienst, Tray) | kleines Rust-Hilfsprogramm, vom Core als Prozess aufgerufen |
 
 ### 4.2 Die Laufzeit-Schnittstelle
 
-```rust
-// core/nexuscore/src/runtime/mod.rs
-#[async_trait]
-pub trait Runtime: Send + Sync {
-    fn kind(&self) -> RuntimeKind;                     // Docker | Podman | Windows | LinuxNative
-    async fn create(&self, spec: &ServerSpec) -> Result<()>;
-    async fn remove(&self, id: &ServerId, keep_data: bool) -> Result<()>;
-    async fn start(&self, id: &ServerId) -> Result<()>;
-    async fn stop(&self, id: &ServerId, how: StopSpec) -> Result<()>; // Befehl oder Signal, mit Frist
-    async fn kill(&self, id: &ServerId) -> Result<()>;
-    async fn state(&self, id: &ServerId) -> Result<RunState>;   // Offline | Starting | Running | Crashed
-    fn console(&self, id: &ServerId) -> BoxStream<'static, ConsoleLine>;
-    async fn send(&self, id: &ServerId, line: &str) -> Result<()>;
-    fn stats(&self, id: &ServerId) -> BoxStream<'static, Stats>;
-    async fn set_limits(&self, id: &ServerId, l: &Limits) -> Result<()>; // RAM, CPU, I/O
-}
+Heute (`nexuscore/src/drivers/interface.ts`):
 
-pub struct ServerSpec {
-    pub id: ServerId,              // kurz, z. B. "ff9dcda9"
-    pub runtime: RuntimeKind,
-    pub image: Option<String>,     // Container-Laufzeiten
-    pub windows: Option<WinSpec>,  // Windows nativ: exe, args, workdir
-    pub env: BTreeMap<String, String>,
-    pub ports: Vec<PortBinding>,   // inkl. internal (nicht freigeben)
-    pub limits: Limits,            // ram_mb, swap_mb, cpu_percent, io_weight, pids
-    pub data_dir: PathBuf,         // auf dem Host
-    pub stop: StopSpec,
-    pub ready: ReadyCheck,         // Log-Muster oder Port
+```ts
+export interface HostDriver {
+  readonly name: string;
+  initialize(): Promise<void>;
+  registerServer(config: ServerInstanceConfig): Promise<ServerState>;
+  startServer(serverId: string): Promise<ServerState>;
+  stopServer(serverId: string): Promise<ServerState>;
+  killServer(serverId: string): Promise<ServerState>;
+  getServerState(serverId: string): Promise<ServerState>;
+  getServerStats(serverId: string): Promise<ServerStats>;
+  listServers(): Promise<ServerState[]>;
+  sendCommand?(serverId: string, command: string): Promise<void>;
+  setLogSink(sink: LogSink): void;
+  shutdown(): Promise<void>;
 }
 ```
 
+Noch offen gegenüber dem Zielbild: Entfernen mit `keepData`, Stoppen mit Befehl und Frist aus dem Egg (`StopSpec`), harte Grenzen für RAM, CPU und I/O (`setLimits`) sowie das Bereit-Muster (`ReadyCheck`).
 ### 4.3 Laufzeit „Docker“ und „Podman“
 
 - Übernimmt, was heute `src/docker/client.ts` macht:
@@ -267,7 +260,8 @@ Geht die Verbindung zum Panel verloren, laufen die Server weiter. Zeitpläne, di
 
 ### 5.1 Grundregeln
 
-- Nur HTTPS mit **gegenseitigen Zertifikaten** (mTLS) auf einem Port, Vorgabe **8443**. Ohne gültiges Client-Zertifikat antwortet der Kern nicht.
+- **Heute:** HTTP auf Port **8443** mit Bearer-Token, Kopplung über eine einmalige PIN (siehe `nexuscore/CORE_PROTOCOL.md`). Der Core bindet standardmäßig nur an `127.0.0.1`.
+- **Ziel:** nur HTTPS mit **gegenseitigen Zertifikaten** (mTLS) auf demselben Port. Ohne gültiges Client-Zertifikat antwortet der Kern nicht. Bis dahin gehört ein Core nicht ungeschützt ins Internet.
 - Alle Routen unter `/core/v1`. Felder kommen nur dazu, werden nie umgedeutet. Bei inkompatiblen Änderungen kommt `/core/v2`, und der Kern spricht eine Zeit lang beide.
 - Beim Verbinden tauschen beide ihre Version. Das Panel zeigt „Kern veraltet – aktualisieren“ und kann das Update auslösen.
 - Jede verändernde Anfrage trägt eine `request_id`. Doppelt gesendete Aufträge, z. B. nach einem Netzwackler, werden nur einmal ausgeführt.
@@ -309,6 +303,8 @@ Geht die Verbindung zum Panel verloren, laufen die Server weiter. Zeitpläne, di
 ## 6. Sicherheit
 
 ### 6.1 Kopplung (einmalig je Host)
+
+Der Ablauf unten ist das **Ziel** mit Zertifikaten. Heute koppelt das Panel über Adresse, Token und optional eine PIN: Der Core nennt den Fingerabdruck seines Tokens, das Panel vergleicht ihn mit dem eingegebenen (`src/hosts/registry.ts`).
 
 ```
 Panel                                                  NexusCore (frisch installiert)
@@ -411,7 +407,7 @@ Die Server laufen weiter, und geplante Neustarts und Backups führt der Kern aus
 | Windows Server Core | NexusCore nativ und/oder Panel in Hyper-V-VM | `NexusPanel-Server-Setup.exe install --unattended …` bzw. `irm …/install.ps1 \| iex` |
 | NexusPanel OS | Panel + NexusCore + Podman/Docker vorinstalliert | ISO oder fertiges VM-Abbild, Einrichtung im Browser |
 
-Der Windows-Installer bettet `nexuscore` als Bibliothek ein. Prüfungen, Kopplung und Dienst-Einrichtung sind derselbe Code wie im Kern.
+Der Windows-Installer liefert den Core als einzelne `.exe` (Node SEA) mit. Prüfungen, Kopplung und Dienst-Einrichtung ruft er über den Core auf, statt sie ein zweites Mal zu bauen.
 
 ---
 
@@ -421,7 +417,7 @@ Der Windows-Installer bettet `nexuscore` als Bibliothek ein. Prüfungen, Kopplun
   - Oberfläche aus `web/`, Rust-Hülle für Schlüsselbund, Tray, Benachrichtigungen, Updater und Kopplung per QR-Code
   - Einzelheiten in `docs/KONZEPT-APPS.md`, Abschnitt 2
 - **„Server auf diesem PC hosten“ (Desktop):** Die App kann einen eingebetteten NexusCore starten. Der PC wird zum Host, solange die App läuft, oder dauerhaft als Dienst. Für LAN-Partys ideal: App installieren, Code scannen, Server läuft.
-- **Gemeinsamer Rust-Code** (`core/protocol`): Kopplung, Zertifikatsprüfung und Update-Prüfung nutzen App, Installer und Kern gemeinsam.
+- **Gemeinsame Typen** (`nexuscore/src/protocol/`): Die Typen der Schnittstelle nutzen Panel, Core und die Oberfläche der Apps gemeinsam. Die Rust-Hülle der Apps bleibt dünn und enthält keine Fachlogik.
 
 ---
 
@@ -430,8 +426,8 @@ Der Windows-Installer bettet `nexuscore` als Bibliothek ein. Prüfungen, Kopplun
 | Teil | Tests | Build |
 | --- | --- | --- |
 | Panel | Vitest (heute rund 290 Tests), API-Tests mit Fake-Host | Docker-Image wie heute (`deploy.ps1`) |
-| NexusCore | `cargo test`: Einheitstests je Modul, Laufzeit-Tests gegen echtes Docker/Podman in CI (Linux), Windows-Tests in CI (windows-latest: Job Object, Benutzer, Firewall im Testmodus) | `cargo build --release` für `x86_64-pc-windows-msvc`, `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` |
-| Schnittstelle | **Vertragstests:** Panel und Kern prüfen gegen dieselben Beispiele (`core/protocol/fixtures/*.json`) | – |
+| NexusCore | Vitest (heute 50 Tests), in CI auf `ubuntu-latest` und `windows-latest`. Geplant: Laufzeit-Tests gegen echtes Docker/Podman (Linux) sowie Job Object, Benutzer und Firewall im Testmodus (Windows) | `tsc`, danach Paket als einzelne `.exe` (Node SEA) für Windows sowie Pakete für Linux x86_64 und arm64 |
+| Schnittstelle | **Vertragstests:** Panel und Kern prüfen gegen dieselben Beispiele (`nexuscore/src/protocol/fixtures/*.json`) | – |
 | Eggs | Egg-Testlauf je Laufzeit auf echten Hosts, Bericht im Panel (vorhanden) | – |
 | Apps/Installer | Rauchtests (startet, koppelt, zeigt Server) | Tauri-Bundles, signiert |
 
@@ -444,7 +440,7 @@ Alle Teile tragen **dieselbe Versionsnummer**. Ein Git-Tag `v0.x.y` baut alles u
 | Meilenstein | Version (Ziel) | Inhalt | Danach möglich |
 | --- | --- | --- | --- |
 | M1 | 0.20 | Host-Schicht im Panel, Typ `local` = heutiger Code, Tabelle `hosts` | nichts sichtbar, Grundlage |
-| M2 | 0.21 | NexusCore-Grundgerüst: Dienst, Kopplung/mTLS, `/info`, Ereignisstrom, `nxctl` | Host im Panel hinzufügen und Werte sehen |
+| M2 | 0.21 | NexusCore-Grundgerüst: Dienst, Kopplung (heute Token + PIN, Ziel mTLS), `/info`, Ereignisstrom, `nxctl` | Host im Panel hinzufügen und Werte sehen |
 | M3 | 0.22–0.23 | **Windows nativ:** Benutzer, Job Object, Firewall, SteamCMD, Konsole; Eggs ARK, Enshrouded, Palworld, FS25 mit Windows-Block | ARK/Enshrouded ohne Proton auf einem Windows-PC |
 | M4 | 0.24 | Windows-Server-Setup (`.exe`, GUI + CLI) mit Modus „nur Host“ | Windows-Host in 5 Minuten einrichten |
 | M5 | 0.25–0.26 | Docker- und Podman-Laufzeit im Kern, Umzug deiner VM von `local` auf `core` | ein Weg für alle Hosts, mehrere Linux-Hosts |
