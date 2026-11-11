@@ -417,12 +417,12 @@ describe('Einstellungen - Spiel-Einstellungen', () => {
     expect(t2.installs.start).not.toHaveBeenCalled();
   });
 
-  it('nimmt keinen anderen Servertyp als Paper an', async () => {
+  it('nimmt keinen anderen Servertyp als Paper und Vanilla an', async () => {
     const t = await setup();
     await t.paper();
     const res = await t.call('PATCH', '/api/v1/servers/set-1/startup', { variables: { TYPE: 'FORGE' } });
     expect(res.statusCode).toBe(400);
-    expect(res.json().issues).toEqual([{ variable: 'TYPE', message: 'Der Core installiert derzeit nur Paper.' }]);
+    expect(res.json().issues).toEqual([{ variable: 'TYPE', message: 'Der Core installiert derzeit nur Paper und Vanilla.' }]);
     expect(t.registry.get('set-1')!.install!.variables!.TYPE).toBe('PAPER');
     expect(t.installs.start).not.toHaveBeenCalled();
   });

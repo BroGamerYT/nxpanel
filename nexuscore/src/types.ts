@@ -84,7 +84,7 @@ export interface SteamLaunch {
 
 export interface ServerInstallInfo {
   state: 'installing' | 'done' | 'failed';
-  kind: 'minecraft-paper' | 'steamcmd';
+  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd';
   /** Nur bei kind = steamcmd. */
   steam?: SteamLaunch;
   version?: string;

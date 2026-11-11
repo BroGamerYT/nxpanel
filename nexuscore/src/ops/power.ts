@@ -1,6 +1,6 @@
 import type { HostDriver } from '../drivers/interface.js';
 import { logger } from '../logger.js';
-import { writeServerProperties } from '../install/minecraft.js';
+import { isMinecraftKind, writeServerProperties } from '../install/minecraft.js';
 import { prepareSteamStart } from '../install/steam-game.js';
 import type { ServerRegistry } from '../store/registry.js';
 import type { ServerInstanceConfig, ServerState } from '../types.js';
@@ -54,11 +54,12 @@ export function createPowerOps(deps: { registry: ServerRegistry; driver: HostDri
       );
     }
     // Port und Einstellungen koennen sich seit der Installation geaendert haben.
-    if (c.install?.kind === 'minecraft-paper') {
+    const install = c.install;
+    if (install && isMinecraftKind(install.kind)) {
       await writeServerProperties({
         serverDir: c.workingDir,
-        variables: c.install.variables ?? {},
-        propertiesTemplate: c.install.propertiesTemplate ?? {},
+        variables: install.variables ?? {},
+        propertiesTemplate: install.propertiesTemplate ?? {},
         ramMb: c.maxMemoryMb ?? 2048,
         port: c.ports[0]?.hostPort ?? 25565,
         serverName: c.name,

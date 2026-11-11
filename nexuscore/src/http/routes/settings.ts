@@ -4,7 +4,8 @@ import { z } from 'zod';
 import type { HostDriver } from '../../drivers/interface.js';
 import type { LoadedEgg } from '../../eggs/loader.js';
 import { isSecretVariable, isUserVariable, parseRules, validateVariables } from '../../eggs/rules.js';
-import { installSpecOf, type InstallManager } from '../../install/manager.js';
+import { installKindFor, installSpecOf, type InstallManager } from '../../install/manager.js';
+import { isMinecraftKind } from '../../install/minecraft.js';
 import { heapMb } from '../../install/minecraft.js';
 import { resolveInstanceDir } from '../../files/instance-dir.js';
 import { allocatePort, isPortFree } from '../../protocol/ports.js';
@@ -251,7 +252,7 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
     const ramNow = b.ramMb ?? ramBefore;
     // Der Java-Heap haengt an einem Startargument: bei neuer Groesse mitziehen.
     const args =
-      c.install?.kind === 'minecraft-paper' && ramNow !== ramBefore
+      isMinecraftKind(c.install?.kind) && ramNow !== ramBefore
         ? c.args.map((a) => (a.startsWith('-Xmx') ? `-Xmx${heapMb(ramNow)}M` : a))
         : c.args;
     const next: ServerInstanceConfig = { ...c, maxMemoryMb: ramNow, maxCpuPercent: b.cpuPercent ?? c.maxCpuPercent ?? 100, args };
@@ -340,8 +341,8 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
 
     const { values, errors } = validateVariables(defs, input);
     // Der Core installiert derzeit nur Paper.
-    if (c.install?.kind === 'minecraft-paper' && (values.TYPE ?? 'PAPER').toUpperCase() !== 'PAPER') {
-      errors.push({ variable: 'TYPE', message: 'Der Core installiert derzeit nur Paper.' });
+    if (isMinecraftKind(c.install?.kind) && !['PAPER', 'VANILLA'].includes((values.TYPE ?? 'PAPER').toUpperCase())) {
+      errors.push({ variable: 'TYPE', message: 'Der Core installiert derzeit nur Paper und Vanilla.' });
     }
     if (errors.length > 0) {
       return reply.status(400).send({ error: 'Ungültige Werte', message: 'Ungültige Werte', code: 'invalid_variables', issues: errors });
@@ -360,10 +361,12 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
 
     // Eine andere Spielversion heisst: Spiel neu laden. Welt und Einstellungen bleiben liegen.
     const reinstall =
-      Boolean(installs) && next.install?.kind === 'minecraft-paper' && (changed.includes('VERSION') || changed.includes('TYPE'));
+      Boolean(installs) && isMinecraftKind(next.install?.kind) && (changed.includes('VERSION') || changed.includes('TYPE'));
     if (reinstall && installs && next.install) {
       await registry.update({ ...next, install: { ...next.install, state: 'installing' } });
-      installs.start(c.id, { ...installSpecOf(next.install), variables: values });
+      // Ein anderer Typ (Paper <-> Vanilla) ist eine andere Installationsart
+      const kind = installKindFor(c.game, values) ?? next.install.kind;
+      installs.start(c.id, { ...installSpecOf(next.install), kind, variables: values });
     } else {
       await syncDriver(next);
     }

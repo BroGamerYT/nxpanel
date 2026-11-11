@@ -7,7 +7,7 @@ import type { ServerInstallInfo, ServerInstanceConfig, SteamLaunch } from '../ty
 import type { RawEggFile } from '../eggs/loader.js';
 import type { FetchLike } from './download.js';
 import type { EnsureJavaOptions } from './java.js';
-import { installMinecraftPaper } from './minecraft.js';
+import { installMinecraft } from './minecraft.js';
 import { installSteamGame } from './steam-game.js';
 import type { SteamRunner } from './steamcmd.js';
 
@@ -21,7 +21,7 @@ import type { SteamRunner } from './steamcmd.js';
  */
 
 export interface InstallSpec {
-  kind: 'minecraft-paper' | 'steamcmd';
+  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd';
   variables: Record<string, string>;
   propertiesTemplate: Record<string, string>;
   /** Nur bei kind = steamcmd: App-ID, Programm, Argumente, Dateien. */
@@ -52,7 +52,8 @@ export interface InstallManagerOptions {
 export function installKindFor(eggId: string, variables: Record<string, string>): InstallSpec['kind'] | null {
   if (eggId !== 'minecraft-paper') return null;
   const type = (variables.TYPE ?? 'PAPER').trim().toUpperCase();
-  return type === 'PAPER' ? 'minecraft-paper' : null;
+  if (type === 'PAPER') return 'minecraft-paper';
+  return type === 'VANILLA' ? 'minecraft-vanilla' : null;
 }
 
 /**
@@ -135,7 +136,8 @@ export class InstallManager {
   }
 
   private async installPaper(config: ServerInstanceConfig, spec: InstallSpec, progress: (f: number, m: string) => void): Promise<InstallOutcome> {
-    const result = await installMinecraftPaper(
+    const result = await installMinecraft(
+      spec.kind === 'minecraft-vanilla' ? 'VANILLA' : 'PAPER',
       {
         serverDir: config.workingDir,
         runtimesDir: this.options.runtimesDir,
@@ -156,8 +158,8 @@ export class InstallManager {
       args: result.args,
       stopCommand: result.stopCommand,
       stopTimeoutSeconds: 30,
-      info: { version: result.version, build: result.build, java: result.javaRelease },
-      message: `Paper ${result.version} (Build ${result.build}) installiert`,
+      info: { version: result.version, ...(result.build !== null ? { build: result.build } : {}), java: result.javaRelease },
+      message: `${spec.kind === 'minecraft-vanilla' ? 'Vanilla' : 'Paper'} ${result.version}${result.build !== null ? ` (Build ${result.build})` : ''} installiert`,
       result: { version: result.version, build: result.build, java: result.javaRelease },
     };
   }

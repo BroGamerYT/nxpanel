@@ -16,6 +16,8 @@ export interface DownloadOptions {
    * Die tatsaechliche Summe steht im Ergebnis und gehoert ins Protokoll.
    */
   sha256: string | null;
+  /** Statt SHA-256: SHA-1, wenn die Quelle nur diese veroeffentlicht (Mojang). Zaehlt als Pflicht-Pruefsumme. */
+  sha1?: string;
   allowUnpinned?: boolean;
   /** Nur diese Hosts duerfen angesprochen werden (ohne Port, klein geschrieben). */
   allowedHosts: readonly string[];
@@ -66,8 +68,11 @@ export async function fetchJson<T>(
  */
 export async function downloadFile(url: string, dest: string, options: DownloadOptions): Promise<{ bytes: number; sha256: string }> {
   assertAllowed(url, options.allowedHosts);
-  const pinned = options.sha256 !== null;
-  if (pinned ? !/^[0-9a-f]{64}$/i.test(options.sha256!) : options.allowUnpinned !== true) {
+  const pinned = options.sha256 !== null || options.sha1 !== undefined;
+  const badSum =
+    (options.sha256 !== null && !/^[0-9a-f]{64}$/i.test(options.sha256)) ||
+    (options.sha1 !== undefined && !/^[0-9a-f]{40}$/i.test(options.sha1));
+  if (pinned ? badSum : options.allowUnpinned !== true) {
     throw new Error('Download ohne gueltige SHA-256-Pruefsumme abgelehnt.');
   }
 
@@ -88,6 +93,7 @@ export async function downloadFile(url: string, dest: string, options: DownloadO
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.part-${crypto.randomBytes(4).toString('hex')}`;
   const hash = crypto.createHash('sha256');
+  const hash1 = crypto.createHash('sha1');
   const out = fs.createWriteStream(tmp);
   let done = 0;
 
@@ -99,6 +105,7 @@ export async function downloadFile(url: string, dest: string, options: DownloadO
       done += value.byteLength;
       if (done > maxBytes) throw new Error('Download ist groesser als erlaubt.');
       hash.update(value);
+      hash1.update(value);
       if (!out.write(value)) await new Promise<void>((resolve) => out.once('drain', resolve));
       options.onProgress?.(done, total);
     }
@@ -108,7 +115,13 @@ export async function downloadFile(url: string, dest: string, options: DownloadO
     });
 
     const actual = hash.digest('hex');
-    if (pinned && actual.toLowerCase() !== options.sha256!.toLowerCase()) {
+    if (options.sha1 !== undefined) {
+      const actual1 = hash1.digest('hex');
+      if (actual1.toLowerCase() !== options.sha1.toLowerCase()) {
+        throw new Error(`Pruefsumme stimmt nicht (${path.basename(dest)}): erwartet ${options.sha1}, erhalten ${actual1}`);
+      }
+    }
+    if (options.sha256 !== null && actual.toLowerCase() !== options.sha256.toLowerCase()) {
       throw new Error(`Pruefsumme stimmt nicht (${path.basename(dest)}): erwartet ${options.sha256}, erhalten ${actual}`);
     }
     await fsp.rm(dest, { force: true });
@@ -117,6 +130,18 @@ export async function downloadFile(url: string, dest: string, options: DownloadO
   } catch (err) {
     out.destroy();
     await fsp.rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
+}
+
+/** SHA-1 einer vorhandenen Datei, oder null wenn es sie nicht gibt. */
+export async function sha1OfFile(file: string): Promise<string | null> {
+  try {
+    const hash = crypto.createHash('sha1');
+    for await (const chunk of fs.createReadStream(file)) hash.update(chunk as Buffer);
+    return hash.digest('hex');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw err;
   }
 }

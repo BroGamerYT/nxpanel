@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { downloadFile, sha256OfFile, type FetchLike } from './download.js';
+import { downloadFile, sha1OfFile, sha256OfFile, type FetchLike } from './download.js';
+import { VANILLA_HOSTS, resolveVanillaBuild } from './vanilla.js';
 import { ensureJava, type EnsureJavaOptions } from './java.js';
 import { PAPER_HOSTS, resolvePaperBuild } from './paper.js';
 import { patchProperties, substitute } from './properties.js';
@@ -32,7 +33,8 @@ export interface MinecraftInstallResult {
   args: string[];
   stopCommand: string;
   version: string;
-  build: number;
+  /** Nur Paper hat Build-Nummern. */
+  build: number | null;
   javaMajor: number;
   javaRelease: string;
 }
@@ -59,7 +61,18 @@ export function heapMb(ramMb: number): number {
   return Math.max(512, Math.floor(ramMb * 0.85));
 }
 
-export async function installMinecraftPaper(
+/** Welche Minecraft-Java-Server der Core selbst installiert. */
+export type MinecraftType = 'PAPER' | 'VANILLA';
+
+/** Instanzen, die der Core als Java-Minecraft installiert hat (Konfiguration vor dem Start schreiben). */
+export const isMinecraftKind = (kind: string | undefined): boolean => kind === 'minecraft-paper' || kind === 'minecraft-vanilla';
+
+export function installMinecraftPaper(input: MinecraftInstallInput, hooks: InstallHooks = {}): Promise<MinecraftInstallResult> {
+  return installMinecraft('PAPER', input, hooks);
+}
+
+export async function installMinecraft(
+  type: MinecraftType,
   input: MinecraftInstallInput,
   hooks: InstallHooks = {},
 ): Promise<MinecraftInstallResult> {
@@ -75,9 +88,22 @@ export async function installMinecraftPaper(
   }
 
   // 1) Version und Build
-  report(0.01, 'Suche Paper-Version');
-  const build = await resolvePaperBuild(input.variables.VERSION ?? 'LATEST', net);
-  report(0.05, `Paper ${build.version} (Build ${build.build}), braucht Java ${build.javaMajor}`);
+  const label = type === 'PAPER' ? 'Paper' : 'Vanilla';
+  report(0.01, `Suche ${label}-Version`);
+  const build: {
+    version: string;
+    build: number | null;
+    javaMajor: number;
+    url: string;
+    size: number;
+    sha256?: string;
+    sha1?: string;
+    hosts: readonly string[];
+  } =
+    type === 'PAPER'
+      ? { ...(await resolvePaperBuild(input.variables.VERSION ?? 'LATEST', net)), hosts: PAPER_HOSTS }
+      : { ...(await resolveVanillaBuild(input.variables.VERSION ?? 'LATEST', net)), build: null, hosts: VANILLA_HOSTS };
+  report(0.05, `${label} ${build.version}${build.build !== null ? ` (Build ${build.build})` : ''}, braucht Java ${build.javaMajor}`);
 
   // 2) Java
   const java = await ensureJava(build.javaMajor, input.runtimesDir, {
@@ -90,18 +116,20 @@ export async function installMinecraftPaper(
   // 3) Server-Jar - nur laden, wenn nicht schon genau diese Datei da liegt
   await fs.mkdir(input.serverDir, { recursive: true });
   const jar = path.join(input.serverDir, JAR_NAME);
-  if ((await sha256OfFile(jar))?.toLowerCase() === build.sha256.toLowerCase()) {
+  const present = build.sha256 ? (await sha256OfFile(jar))?.toLowerCase() === build.sha256.toLowerCase() : (await sha1OfFile(jar))?.toLowerCase() === build.sha1?.toLowerCase();
+  if (present) {
     report(0.95, 'Server-Datei ist schon vorhanden und unveraendert');
   } else {
     await downloadFile(build.url, jar, {
-      sha256: build.sha256,
-      allowedHosts: PAPER_HOSTS,
+      sha256: build.sha256 ?? null,
+      ...(build.sha1 ? { sha1: build.sha1 } : {}),
+      allowedHosts: build.hosts,
       maxBytes: 500 * 1024 * 1024,
       onProgress: (done, total) => {
         const size = total ?? build.size;
         report(
           0.5 + (size > 0 ? Math.min(1, done / size) : 0) * 0.45,
-          `Lade Paper: ${(done / 1048576).toFixed(0)} von ${(size / 1048576).toFixed(0)} MB`,
+          `Lade ${label}: ${(done / 1048576).toFixed(0)} von ${(size / 1048576).toFixed(0)} MB`,
         );
       },
       ...net,
@@ -121,10 +149,10 @@ export async function installMinecraftPaper(
     path.join(input.serverDir, 'nexuscore-install.json'),
     JSON.stringify(
       {
-        type: 'PAPER',
+        type,
         version: build.version,
         build: build.build,
-        sha256: build.sha256,
+        ...(build.sha256 ? { sha256: build.sha256 } : { sha1: build.sha1 }),
         javaMajor: java.major,
         javaRelease: java.release,
         installedAt: new Date().toISOString(),
@@ -135,7 +163,7 @@ export async function installMinecraftPaper(
     'utf8',
   );
 
-  report(1, `Installation fertig: Paper ${build.version} (Build ${build.build})`);
+  report(1, `Installation fertig: ${label} ${build.version}${build.build !== null ? ` (Build ${build.build})` : ''}`);
   return {
     executable: java.executable,
     args: [`-Xmx${heapMb(input.ramMb)}M`, '-Dfile.encoding=UTF-8', '-jar', JAR_NAME, '--nogui'],
