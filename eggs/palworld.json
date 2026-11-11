@@ -269,5 +269,48 @@
       "password_var": "ADMIN_PASSWORD"
     },
     "_comment": "Spielerliste und Kicken/Bannen ueber RCON (ShowPlayers, Steam-ID). RCON muss in den Spiel-Einstellungen an sein."
+  },
+  "windows": {
+    "steam_app_id": 2394010,
+    "executable": "PalServer.exe",
+    "args": [
+      "-port={{PORT_GAME}}",
+      "-publicport={{PORT_GAME}}",
+      "-players={{MAX_PLAYERS}}",
+      "-useperfthreads",
+      "-NoAsyncLoadingThread",
+      "-UseMultithreadForDS"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    },
+    "files": [
+      {
+        "path": "Pal/Saved/Config/WindowsServer/PalWorldSettings.ini",
+        "format": "unreal-options",
+        "section": "/Script/Pal.PalGameWorldSettings",
+        "key": "OptionSettings",
+        "set": {
+          "ServerName": "\"{{SERVER_NAME}}\"",
+          "ServerDescription": "\"{{SERVER_DESCRIPTION}}\"",
+          "ServerPassword": "\"{{SERVER_PASSWORD}}\"",
+          "AdminPassword": "\"{{ADMIN_PASSWORD}}\"",
+          "ServerPlayerMaxNum": "{{MAX_PLAYERS}}",
+          "PublicPort": "{{SERVER_PORT}}",
+          "RCONPort": "{{RCON_PORT}}",
+          "RCONEnabled": "{{RCON_ENABLED}}",
+          "Difficulty": "{{DIFFICULTY}}",
+          "ExpRate": "{{EXP_RATE}}",
+          "PalCaptureRate": "{{PAL_CAPTURE_RATE}}",
+          "PalSpawnNumRate": "{{PAL_SPAWN_NUM_RATE}}",
+          "PalDamageRateAttack": "{{PAL_DAMAGE_ATTACK}}",
+          "PalDamageRateDefense": "{{PAL_DAMAGE_DEFENSE}}",
+          "PlayerDamageRateAttack": "{{PLAYER_DAMAGE_ATTACK}}",
+          "PlayerDamageRateDefense": "{{PLAYER_DAMAGE_DEFENSE}}",
+          "DeathPenalty": "{{DEATH_PENALTY}}",
+          "bIsPvP": "{{PVP_ENABLED}}"
+        }
+      }
+    ]
   }
 }

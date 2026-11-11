@@ -1,6 +1,7 @@
 import type { HostDriver } from '../drivers/interface.js';
 import { logger } from '../logger.js';
 import { writeServerProperties } from '../install/minecraft.js';
+import { prepareSteamStart } from '../install/steam-game.js';
 import type { ServerRegistry } from '../store/registry.js';
 import type { ServerInstanceConfig, ServerState } from '../types.js';
 
@@ -63,8 +64,15 @@ export function createPowerOps(deps: { registry: ServerRegistry; driver: HostDri
         serverName: c.name,
       }).catch((err: unknown) => logger.warn({ err, serverId: id }, 'server.properties konnte nicht geschrieben werden'));
     }
+    // Steam-Spiele: Argumente und Konfigurationsdateien aus den jetzigen Variablen und Ports neu bauen
+    let current = c;
+    if (c.install?.kind === 'steamcmd') {
+      const args = await prepareSteamStart(c);
+      current = { ...c, args };
+      await registry.update(current);
+    }
     // Was in den Einstellungen geaendert wurde, gilt ab hier auch beim Treiber.
-    await driver.updateServer?.(c).catch(() => {});
+    await driver.updateServer?.(current).catch(() => {});
   }
 
   return {

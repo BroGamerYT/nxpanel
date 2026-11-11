@@ -9,8 +9,14 @@ export type FetchLike = (url: string, init?: { headers?: Record<string, string>;
 export const USER_AGENT = 'NexusCore (https://github.com/BroGamerYT/nxpanel)';
 
 export interface DownloadOptions {
-  /** Erwartete SHA-256-Pruefsumme (hex). Pflicht: ohne sie wird nichts gespeichert. */
-  sha256: string;
+  /**
+   * Erwartete SHA-256-Pruefsumme (hex). Pflicht: ohne sie wird nichts gespeichert -
+   * ausser der Aufrufer erlaubt es ausdruecklich mit `sha256: null` UND `allowUnpinned`
+   * (nur fuer Quellen, die gar keine Pruefsumme veroeffentlichen, z. B. SteamCMD).
+   * Die tatsaechliche Summe steht im Ergebnis und gehoert ins Protokoll.
+   */
+  sha256: string | null;
+  allowUnpinned?: boolean;
   /** Nur diese Hosts duerfen angesprochen werden (ohne Port, klein geschrieben). */
   allowedHosts: readonly string[];
   /** Obergrenze, damit ein falscher Link nicht die Platte fuellt. */
@@ -58,9 +64,12 @@ export async function fetchJson<T>(
  * Pruefung wird sie umbenannt. Eine abgebrochene oder verfaelschte Datei
  * liegt also nie unter dem endgueltigen Namen.
  */
-export async function downloadFile(url: string, dest: string, options: DownloadOptions): Promise<{ bytes: number }> {
+export async function downloadFile(url: string, dest: string, options: DownloadOptions): Promise<{ bytes: number; sha256: string }> {
   assertAllowed(url, options.allowedHosts);
-  if (!/^[0-9a-f]{64}$/i.test(options.sha256)) throw new Error('Download ohne gueltige SHA-256-Pruefsumme abgelehnt.');
+  const pinned = options.sha256 !== null;
+  if (pinned ? !/^[0-9a-f]{64}$/i.test(options.sha256!) : options.allowUnpinned !== true) {
+    throw new Error('Download ohne gueltige SHA-256-Pruefsumme abgelehnt.');
+  }
 
   const doFetch = options.fetchImpl ?? (fetch as unknown as FetchLike);
   const response = await doFetch(url, {
@@ -99,12 +108,12 @@ export async function downloadFile(url: string, dest: string, options: DownloadO
     });
 
     const actual = hash.digest('hex');
-    if (actual.toLowerCase() !== options.sha256.toLowerCase()) {
+    if (pinned && actual.toLowerCase() !== options.sha256!.toLowerCase()) {
       throw new Error(`Pruefsumme stimmt nicht (${path.basename(dest)}): erwartet ${options.sha256}, erhalten ${actual}`);
     }
     await fsp.rm(dest, { force: true });
     await fsp.rename(tmp, dest);
-    return { bytes: done };
+    return { bytes: done, sha256: actual };
   } catch (err) {
     out.destroy();
     await fsp.rm(tmp, { force: true }).catch(() => {});

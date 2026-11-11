@@ -56,9 +56,37 @@ export interface ServerInstanceConfig {
   install?: ServerInstallInfo;
 }
 
+/** Eine Konfigurationsdatei, die der Core vor jedem Start aus den Variablen schreibt (Egg: windows.files). */
+export interface SteamFile {
+  /** Relativ zum Server-Ordner. */
+  path: string;
+  format: 'json' | 'unreal-options';
+  /** "VARIABLE=Wert": hat die Variable diesen Wert, wird die Datei nicht angefasst (z. B. eigene Konfiguration). */
+  unless?: string;
+  /** Nur "unreal-options": [Abschnitt] und Schluessel (z. B. OptionSettings). */
+  section?: string;
+  key?: string;
+  /** Schluessel (bei json auch "a.b.c") -> Vorlage. Zahlen und Wahrheitswerte ueber $number / $boolean. */
+  set: Record<string, string | { $number?: string; $boolean?: string }>;
+}
+
+/** Wie ein Steam-Spiel installiert und gestartet wird (Egg: windows). */
+export interface SteamLaunch {
+  appId: number;
+  branch?: string | undefined;
+  /** Relativ zum Server-Ordner. */
+  executable: string;
+  /** Vorlagen mit Platzhaltern wie {{PORT_GAME}} und {{SERVER_NAME}}. */
+  args: string[];
+  stopTimeoutSeconds?: number | undefined;
+  files?: SteamFile[] | undefined;
+}
+
 export interface ServerInstallInfo {
   state: 'installing' | 'done' | 'failed';
-  kind: 'minecraft-paper';
+  kind: 'minecraft-paper' | 'steamcmd';
+  /** Nur bei kind = steamcmd. */
+  steam?: SteamLaunch;
   version?: string;
   build?: number;
   java?: string;

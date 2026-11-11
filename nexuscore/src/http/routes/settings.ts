@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { HostDriver } from '../../drivers/interface.js';
 import type { LoadedEgg } from '../../eggs/loader.js';
 import { isSecretVariable, isUserVariable, parseRules, validateVariables } from '../../eggs/rules.js';
-import type { InstallManager } from '../../install/manager.js';
+import { installSpecOf, type InstallManager } from '../../install/manager.js';
 import { heapMb } from '../../install/minecraft.js';
 import { resolveInstanceDir } from '../../files/instance-dir.js';
 import { allocatePort, isPortFree } from '../../protocol/ports.js';
@@ -363,11 +363,7 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
       Boolean(installs) && next.install?.kind === 'minecraft-paper' && (changed.includes('VERSION') || changed.includes('TYPE'));
     if (reinstall && installs && next.install) {
       await registry.update({ ...next, install: { ...next.install, state: 'installing' } });
-      installs.start(c.id, {
-        kind: next.install.kind,
-        variables: values,
-        propertiesTemplate: next.install.propertiesTemplate ?? {},
-      });
+      installs.start(c.id, { ...installSpecOf(next.install), variables: values });
     } else {
       await syncDriver(next);
     }

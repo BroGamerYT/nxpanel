@@ -3,10 +3,13 @@ import type { HostDriver } from '../drivers/interface.js';
 import { logger } from '../logger.js';
 import type { EventBus } from '../protocol/events.js';
 import type { ServerRegistry, TaskRecord } from '../store/registry.js';
-import type { ServerInstanceConfig } from '../types.js';
+import type { ServerInstallInfo, ServerInstanceConfig, SteamLaunch } from '../types.js';
+import type { RawEggFile } from '../eggs/loader.js';
 import type { FetchLike } from './download.js';
 import type { EnsureJavaOptions } from './java.js';
 import { installMinecraftPaper } from './minecraft.js';
+import { installSteamGame } from './steam-game.js';
+import type { SteamRunner } from './steamcmd.js';
 
 /**
  * Fuehrt Installationen als Aufgaben im Hintergrund aus (Block B2).
@@ -18,9 +21,21 @@ import { installMinecraftPaper } from './minecraft.js';
  */
 
 export interface InstallSpec {
-  kind: 'minecraft-paper';
+  kind: 'minecraft-paper' | 'steamcmd';
   variables: Record<string, string>;
   propertiesTemplate: Record<string, string>;
+  /** Nur bei kind = steamcmd: App-ID, Programm, Argumente, Dateien. */
+  steam?: SteamLaunch;
+}
+
+/** Die Angaben einer frueheren Installation - fuer Neuinstallation und Aenderung der Version. */
+export function installSpecOf(info: ServerInstallInfo): InstallSpec {
+  return {
+    kind: info.kind,
+    variables: info.variables ?? {},
+    propertiesTemplate: info.propertiesTemplate ?? {},
+    ...(info.steam ? { steam: info.steam } : {}),
+  };
 }
 
 export interface InstallManagerOptions {
@@ -28,6 +43,9 @@ export interface InstallManagerOptions {
   runtimesDir: string;
   fetchImpl?: FetchLike;
   extract?: EnsureJavaOptions['extract'];
+  /** Nur fuer Tests: ersetzt SteamCMD. */
+  steamRunner?: SteamRunner;
+  steamExe?: string;
 }
 
 /** Welche Installationsart zu einem Egg gehoert - null = der Core kann es (noch) nicht installieren. */
@@ -35,6 +53,42 @@ export function installKindFor(eggId: string, variables: Record<string, string>)
   if (eggId !== 'minecraft-paper') return null;
   const type = (variables.TYPE ?? 'PAPER').trim().toUpperCase();
   return type === 'PAPER' ? 'minecraft-paper' : null;
+}
+
+/**
+ * Wie der Core ein Spiel installiert: Paper ueber seine eigene Logik, Spiele mit
+ * `windows`-Block im Egg ueber SteamCMD. null = der Core kann es (noch) nicht.
+ */
+export function installPlanFor(
+  eggId: string,
+  raw: RawEggFile | undefined,
+  variables: Record<string, string>,
+): { kind: InstallSpec['kind']; steam?: SteamLaunch } | null {
+  const paper = installKindFor(eggId, variables);
+  if (paper) return { kind: paper };
+  const w = raw?.windows;
+  if (!w || !Number.isInteger(w.steam_app_id)) return null;
+  return {
+    kind: 'steamcmd',
+    steam: {
+      appId: w.steam_app_id,
+      branch: w.branch,
+      executable: w.executable,
+      args: w.args ?? [],
+      stopTimeoutSeconds: w.stop?.timeout_seconds,
+      files: w.files,
+    },
+  };
+}
+
+interface InstallOutcome {
+  executable: string;
+  args: string[];
+  stopCommand?: string;
+  stopTimeoutSeconds: number;
+  info: Partial<ServerInstallInfo>;
+  message: string;
+  result: Record<string, unknown>;
 }
 
 export class InstallManager {
@@ -80,6 +134,70 @@ export class InstallManager {
     this.bus.emit({ type: 'console', serverId, line: `[Installation] ${line}`, stream, ts: new Date().toISOString() });
   }
 
+  private async installPaper(config: ServerInstanceConfig, spec: InstallSpec, progress: (f: number, m: string) => void): Promise<InstallOutcome> {
+    const result = await installMinecraftPaper(
+      {
+        serverDir: config.workingDir,
+        runtimesDir: this.options.runtimesDir,
+        variables: spec.variables,
+        propertiesTemplate: spec.propertiesTemplate,
+        ramMb: config.maxMemoryMb ?? 2048,
+        port: config.ports[0]?.hostPort ?? 25565,
+        serverName: config.name,
+      },
+      {
+        onProgress: progress,
+        ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
+        ...(this.options.extract ? { extract: this.options.extract } : {}),
+      },
+    );
+    return {
+      executable: result.executable,
+      args: result.args,
+      stopCommand: result.stopCommand,
+      stopTimeoutSeconds: 30,
+      info: { version: result.version, build: result.build, java: result.javaRelease },
+      message: `Paper ${result.version} (Build ${result.build}) installiert`,
+      result: { version: result.version, build: result.build, java: result.javaRelease },
+    };
+  }
+
+  private async installSteam(
+    config: ServerInstanceConfig,
+    spec: InstallSpec,
+    progress: (f: number, m: string) => void,
+    serverId: string,
+  ): Promise<InstallOutcome> {
+    if (!spec.steam) throw new Error('Für dieses Spiel fehlen die Windows-Angaben im Egg.');
+    const result = await installSteamGame(
+      {
+        serverDir: config.workingDir,
+        runtimesDir: this.options.runtimesDir,
+        launch: spec.steam,
+        variables: spec.variables,
+        ports: config.ports,
+        ramMb: config.maxMemoryMb ?? 2048,
+        serverName: config.name,
+      },
+      {
+        onProgress: progress,
+        // SteamCMD ist gespraechig - nur in die Konsole der Instanz, nicht in den Aufgaben-Balken
+        onLine: (line) => this.say(serverId, line),
+        ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
+        ...(this.options.steamRunner ? { runner: this.options.steamRunner } : {}),
+        ...(this.options.steamExe ? { steamExe: this.options.steamExe } : {}),
+      },
+    );
+    return {
+      executable: result.executable,
+      args: result.args,
+      stopTimeoutSeconds: spec.steam.stopTimeoutSeconds ?? 60,
+      info: { ...(result.buildId ? { version: result.buildId } : {}) },
+      message: `Spiel installiert${result.buildId ? ` (Build ${result.buildId})` : ''}`,
+      result: { appId: spec.steam.appId, ...(result.buildId ? { build: result.buildId } : {}) },
+    };
+  }
+
   private async run(config: ServerInstanceConfig, spec: InstallSpec, taskId: string): Promise<void> {
     const serverId = config.id;
     let lastWrite = 0;
@@ -104,37 +222,24 @@ export class InstallManager {
 
     try {
       this.registry.updateTask(taskId, { status: 'running', message: 'Installation startet' });
-      const result = await installMinecraftPaper(
-        {
-          serverDir: config.workingDir,
-          runtimesDir: this.options.runtimesDir,
-          variables: spec.variables,
-          propertiesTemplate: spec.propertiesTemplate,
-          ramMb: config.maxMemoryMb ?? 2048,
-          port: config.ports[0]?.hostPort ?? 25565,
-          serverName: config.name,
-        },
-        {
-          onProgress: progress,
-          ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
-          ...(this.options.extract ? { extract: this.options.extract } : {}),
-        },
-      );
+      const outcome =
+        spec.kind === 'steamcmd'
+          ? await this.installSteam(config, spec, progress, serverId)
+          : await this.installPaper(config, spec, progress);
 
       const installed: ServerInstanceConfig = {
         ...config,
-        executable: result.executable,
-        args: result.args,
-        stopCommand: result.stopCommand,
-        stopTimeoutSeconds: 30,
+        executable: outcome.executable,
+        args: outcome.args,
+        ...(outcome.stopCommand ? { stopCommand: outcome.stopCommand } : {}),
+        stopTimeoutSeconds: outcome.stopTimeoutSeconds,
         install: {
           state: 'done',
           kind: spec.kind,
-          version: result.version,
-          build: result.build,
-          java: result.javaRelease,
+          ...outcome.info,
           variables: spec.variables,
           propertiesTemplate: spec.propertiesTemplate,
+          ...(spec.steam ? { steam: spec.steam } : {}),
         },
       };
       await this.registry.update(installed);
@@ -145,15 +250,10 @@ export class InstallManager {
       this.registry.updateTask(taskId, {
         status: 'done',
         progress: 1,
-        message: `Paper ${result.version} (Build ${result.build}) installiert`,
-        result: { version: result.version, build: result.build, java: result.javaRelease },
+        message: outcome.message,
+        result: outcome.result,
       });
-      this.registry.audit('server.install', serverId, 'core', {
-        kind: spec.kind,
-        version: result.version,
-        build: result.build,
-        java: result.javaRelease,
-      });
+      this.registry.audit('server.install', serverId, 'core', { kind: spec.kind, ...outcome.result });
       this.bus.emit({ type: 'state', serverId, state: { id: serverId, status: 'offline' }, ts: new Date().toISOString() });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -171,6 +271,7 @@ export class InstallManager {
               error: message,
               variables: spec.variables,
               propertiesTemplate: spec.propertiesTemplate,
+              ...(spec.steam ? { steam: spec.steam } : {}),
             },
           })
           .catch(() => {});

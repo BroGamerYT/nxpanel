@@ -510,7 +510,7 @@ describe('Block B2 - Installation als Aufgabe', () => {
         method: 'POST',
         url: '/api/v1/servers',
         headers: ctx.headers,
-        payload: { name: 'Fehler', eggId: 'palworld' },
+        payload: { name: 'Fehler', eggId: 'rust' },
       });
       const id = created.json().server.id as string;
       // Der Treiber meldet "error", etwa wenn der Prozess nicht starten konnte.
@@ -570,14 +570,14 @@ describe('Block B2 - Installation als Aufgabe', () => {
     }
   });
 
-  it('laesst andere Eggs unveraendert als Platzhalter anlegen', async () => {
+  it('laesst Eggs ohne windows-Block unveraendert als Platzhalter anlegen', async () => {
     const ctx = await setup();
     try {
       const created = await ctx.server.inject({
         method: 'POST',
         url: '/api/v1/servers',
         headers: ctx.headers,
-        payload: { name: 'Pal', eggId: 'palworld' },
+        payload: { name: 'Pal', eggId: 'rust' },
       });
       expect(created.statusCode).toBe(201);
       expect(created.json().taskId).toBeUndefined();

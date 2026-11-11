@@ -36,6 +36,25 @@ export interface RawEggFile {
   console?: string;
   ports?: unknown;
   config_files?: Record<string, { parser?: string; find?: Record<string, unknown> } | undefined>;
+  /**
+   * Windows-Server ueber SteamCMD: App-ID, Programm, Startargumente, Konfigurationsdateien.
+   * Fehlt der Block, kann der Core das Spiel nicht selbst installieren.
+   */
+  windows?: {
+    steam_app_id: number;
+    branch?: string;
+    executable: string;
+    args?: string[];
+    stop?: { timeout_seconds?: number };
+    files?: Array<{
+      path: string;
+      format: 'json' | 'unreal-options';
+      unless?: string;
+      section?: string;
+      key?: string;
+      set: Record<string, string | { $number?: string; $boolean?: string }>;
+    }>;
+  };
   /** Ordner mit Logdateien im Server-Ordner (Standard: logs). */
   log_dirs?: string[];
   /** Steam-Store-ID fuer das Titelbild. */

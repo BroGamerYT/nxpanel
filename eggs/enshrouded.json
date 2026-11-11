@@ -165,5 +165,28 @@
       "level": "ignore",
       "text": "Harmlose Meldung von Proton – kann ignoriert werden."
     }
-  ]
+  ],
+  "windows": {
+    "steam_app_id": 2278520,
+    "executable": "enshrouded_server.exe",
+    "args": [],
+    "stop": { "timeout_seconds": 90 },
+    "files": [
+      {
+        "path": "enshrouded_server.json",
+        "format": "json",
+        "unless": "EXTERNAL_CONFIG=1",
+        "set": {
+          "name": "{{SERVER_NAME}}",
+          "password": "{{SERVER_PASSWORD}}",
+          "ip": "0.0.0.0",
+          "saveDirectory": "./savegame",
+          "logDirectory": "./logs",
+          "gamePort": { "$number": "{{PORT_GAME}}" },
+          "queryPort": { "$number": "{{PORT_STEAM}}" },
+          "slotCount": { "$number": "{{SERVER_SLOTS}}" }
+        }
+      }
+    ]
+  }
 }

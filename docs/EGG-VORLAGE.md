@@ -378,6 +378,31 @@ Hier stehen **alle Felder**, die NexusPanel kennt. Du musst nicht jedes Feld in 
 
 ---
 
+### Windows-Server ohne Docker (nur NexusCore): Schlüssel `windows`
+
+Damit der eigenständige NexusCore ein Steam-Spiel selbst installieren kann (SteamCMD, anonym), braucht das Egg zusätzlich:
+
+```json
+"windows": {
+  "steam_app_id": 2394010,
+  "executable": "PalServer.exe",
+  "args": ["-port={{PORT_GAME}}", "-players={{MAX_PLAYERS}}"],
+  "stop": { "timeout_seconds": 60 },
+  "files": [
+    { "path": "Pal/Saved/Config/WindowsServer/PalWorldSettings.ini", "format": "unreal-options",
+      "section": "/Script/Pal.PalGameWorldSettings", "key": "OptionSettings",
+      "set": { "ServerName": "\"{{SERVER_NAME}}\"", "PublicPort": "{{PORT_GAME}}" } },
+    { "path": "enshrouded_server.json", "format": "json", "unless": "EXTERNAL_CONFIG=1",
+      "set": { "name": "{{SERVER_NAME}}", "gamePort": { "$number": "{{PORT_GAME}}" } } }
+  ]
+}
+```
+
+* `executable` und `files[].path` sind relativ zum Server-Ordner und müssen darin bleiben.
+* Platzhalter: alle Variablen des Eggs, `PORT_<REF>` / `<REF>_PORT` für jeden Port aus `ports` (z. B. `PORT_GAME`, `RCON_PORT`), `SERVER_PORT` (Spielport), `MAX_MEMORY_MB`.
+* Der Core setzt Argumente und Dateien **bei jedem Start** neu ein. Bei `json` sind `$number` und `$boolean` für Zahlen und Wahrheitswerte da, Schlüssel dürfen `a.b.c` sein. `unless: "VARIABLE=Wert"` überspringt die Datei (eigene Konfiguration).
+* Fehlt der Block, bleibt das Spiel im Core ein Platzhalter. Das Panel (Docker) ignoriert den Schlüssel.
+
 ## 2. Checkliste: Egg aus dem Internet abgleichen & korrigieren
 
 Wenn du dir ein Egg aus dem Internet (z. B. von GitHub aus `pelican-eggs`) herunterlädst, gehe diese **10 Punkte** der Reihe nach durch:

@@ -20,7 +20,7 @@ import {
 import { serverRootFor, resolveInsideRoot, PathOutsideRootError } from '../../protocol/paths.js';
 import { allocatePort } from '../../protocol/ports.js';
 import type { LocalAccount } from '../../store/account.js';
-import { installKindFor, type InstallManager } from '../../install/manager.js';
+import { installPlanFor, installSpecOf, type InstallManager } from '../../install/manager.js';
 import { writeServerProperties } from '../../install/minecraft.js';
 import { registerFileRoutes } from './files.js';
 import { getServerMeta, registerSettingsRoutes } from './settings.js';
@@ -142,6 +142,27 @@ export function registerApiV1Routes(
       propertiesTemplate[key] = String(value);
     }
     return { variables, propertiesTemplate };
+  };
+
+  /** Ports eines Eggs (Spiel, Abfrage, ...) als freie Ports des Cores; der erste ist der schon vergebene Spielport. */
+  const eggPorts = async (raw: unknown, firstPort: number): Promise<ServerInstanceConfig['ports']> => {
+    const spec = (raw ?? {}) as {
+      primary?: { ref?: string; protocol?: string };
+      secondary?: Array<{ ref?: string; protocol?: string }>;
+    };
+    const toProtocol = (p?: string): 'tcp' | 'udp' => (p === 'tcp' ? 'tcp' : 'udp');
+    const wanted = [spec.primary, ...(spec.secondary ?? [])].filter((p): p is { ref?: string; protocol?: string } => Boolean(p));
+    const result: ServerInstanceConfig['ports'] = [];
+    for (const [index, p] of wanted.entries()) {
+      const name = (p.ref ?? (index === 0 ? 'game' : `port${index}`)).toLowerCase();
+      // Die schon belegten Ports und die eben gewaehlten zaehlen als vergeben
+      const hostPort =
+        index === 0
+          ? firstPort
+          : await allocatePort([...registry.list(), { ports: result.concat({ name: 'x', hostPort: firstPort, protocol: 'udp' }) } as ServerInstanceConfig]);
+      result.push({ name, hostPort, protocol: toProtocol(p.protocol) });
+    }
+    return result.length ? result : [{ name: 'game', hostPort: firstPort, protocol: 'tcp' }];
   };
 
   const toActiveTask = (task: ReturnType<ServerRegistry['listTasks']>[number]) => {
@@ -546,8 +567,18 @@ export function registerApiV1Routes(
 
     // Block B2: echte Installation statt Attrappe, wenn der Core dieses Egg kann.
     const installData = await eggInstallData(eggId, variables);
-    const installKind = installs ? installKindFor(eggId, installData.variables) : null;
-    if (installs && installKind) {
+    const egg = (await loadEggs()).find((e) => e.id === eggId);
+    const plan = installs ? installPlanFor(eggId, egg?.raw, installData.variables) : null;
+    if (installs && plan) {
+      // Steam-Spiele brauchen mehr als einen Port (Spiel, Abfrage ...): jeden aus dem Bereich des Cores
+      let ports: ServerInstanceConfig['ports'] = [{ name: 'game', hostPort: port, protocol: 'tcp' }];
+      if (plan.kind === 'steamcmd') {
+        try {
+          ports = await eggPorts(egg?.raw.ports, port);
+        } catch (err) {
+          return reply.status(409).send({ error: (err as Error).message });
+        }
+      }
       const installing: ServerInstanceConfig = {
         id,
         name,
@@ -557,12 +588,12 @@ export function registerApiV1Routes(
         workingDir: serverDir,
         maxMemoryMb: ramMb ?? 2048,
         maxCpuPercent: cpuPercent ?? 100,
-        ports: [{ name: 'game', hostPort: port, protocol: 'tcp' }],
-        install: { state: 'installing', kind: installKind, ...installData },
+        ports,
+        install: { state: 'installing', kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData },
       };
       await registry.add(installing);
-      registry.audit('server.create', id, 'standalone', { name, game: eggId, port, install: installKind });
-      const task = installs.start(id, { kind: installKind, ...installData });
+      registry.audit('server.create', id, 'standalone', { name, game: eggId, port, install: plan.kind });
+      const task = installs.start(id, { kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData });
       return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
     }
 
@@ -832,11 +863,7 @@ export function registerApiV1Routes(
     if (state && state.status !== 'offline' && state.status !== 'error') {
       return reply.status(409).send({ error: 'Bitte den Server zuerst stoppen.', code: 'running' });
     }
-    const spec = {
-      kind: c.install.kind,
-      variables: c.install.variables ?? {},
-      propertiesTemplate: c.install.propertiesTemplate ?? {},
-    };
+    const spec = installSpecOf(c.install);
     await registry.update({ ...c, install: { ...c.install, state: 'installing' } });
     registry.audit('server.reinstall', c.id, 'standalone');
     const task = installs.start(c.id, spec);

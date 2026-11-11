@@ -204,7 +204,8 @@ Endlosschleife läuft. Nichts wird installiert.
 > 14 s bereit, Spielport erreichbar, `stop` speichert die Welt und endet mit Code 0.
 > **Bewusst kopiert statt geteilt:** Platzhalter und `.properties`-Patcher sind klein nachgebaut,
 > weil der Core `src/` des Panels nicht importieren darf. Ein gemeinsames Paket steht aus.
-> **Noch offen in B2:** SteamCMD (Palworld, Enshrouded), die anderen Minecraft-Typen (Fabric,
+> **SteamCMD (11.11.2026, Code fertig und getestet, live noch offen):** `src/install/{steamcmd,steam-game}.ts`; Egg-Schlüssel `windows` (siehe `docs/EGG-VORLAGE.md`); Palworld und Enshrouded haben ihn. Fehlt noch: Abnahme auf dem Windows-PC mit echter Steam-Verbindung, sauberes Beenden, Startmuster.
+> **Noch offen in B2:** Live-Abnahme der Steam-Spiele, weitere Spiele mit `windows`-Block, die anderen Minecraft-Typen (Fabric,
 > Forge, Vanilla …), INI/YAML/JSON/XML-Konfiguration, und das Startmuster („Done“) für den
 > Zustand „läuft“ – der Treiber meldet „läuft“, sobald der Prozess gestartet ist.
 
