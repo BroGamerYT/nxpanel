@@ -45,6 +45,27 @@ export interface ServerInstanceConfig {
   maxCpuPercent?: number;
   ports: ServerPort[];
   env?: Record<string, string>;
+  /**
+   * Befehl, der den Server sauber beendet (z. B. "stop" bei Minecraft). Er
+   * geht an stdin; erst wenn er nicht wirkt, wird der Prozess beendet.
+   */
+  stopCommand?: string;
+  /** Wie lange auf das saubere Ende gewartet wird. Standard 30 Sekunden. */
+  stopTimeoutSeconds?: number;
+  /** Stand der Installation - fehlt bei Instanzen, die der Core nicht selbst installiert hat. */
+  install?: ServerInstallInfo;
+}
+
+export interface ServerInstallInfo {
+  state: 'installing' | 'done' | 'failed';
+  kind: 'minecraft-paper';
+  version?: string;
+  build?: number;
+  java?: string;
+  error?: string;
+  /** Variablen und Vorlage der Installation - fuer Neuinstallation und das Schreiben der Konfiguration vor dem Start. */
+  variables?: Record<string, string>;
+  propertiesTemplate?: Record<string, string>;
 }
 
 export type ServerStatus = 'offline' | 'starting' | 'running' | 'stopping' | 'error';

@@ -40,6 +40,9 @@ export interface About {
   todo: Array<{ title: string; items: Array<{ text: string; done: boolean; version: string | null }> }>;
   devlog?: DevlogEntry[];
   docs?: DocMeta[];
+  /** Nur der eigenstaendige NexusCore: er kann nicht alles. Fehlt die Angabe (Panel), ist alles verfuegbar. */
+  standalone?: boolean;
+  features?: string[];
 }
 
 const KEY = 'nxp.seenVersion';

@@ -190,7 +190,23 @@ Endlosschleife läuft. Nichts wird installiert.
 * Umzug aus einer vorhandenen `servers.json` beim ersten Start, Altdatei als `.migriert` behalten.
 * Entscheidung zur Bibliothek steht noch offen → Abschnitt 5.
 
-### B2 – Echte Spielinstallation
+### B2 – Echte Spielinstallation – Teil 1 (Minecraft Paper) erledigt 11.11.2026
+
+> **Umgesetzt** unter `src/install/`: Download mit Pflicht-Prüfsumme und Host-Liste
+> (`download.ts`), Java-Laufzeiten des Cores (`java.ts`, Eclipse Temurin nach
+> `<Datenverzeichnis>/runtimes/java-<version>`), Paper über die PaperMC-Schnittstelle Fill v3
+> (`paper.ts` – die alte `api.papermc.io/v2` ist abgeschaltet), `server.properties` aus der
+> Zuordnung im Egg (`properties.ts`), Ablauf (`minecraft.ts`) und Aufgaben mit Fortschritt
+> (`manager.ts`). `POST /api/v1/servers` installiert jetzt wirklich, wenn das Egg
+> `minecraft-paper` mit `TYPE=PAPER` ist und der native Treiber läuft; `/reinstall` wiederholt
+> es. Stoppen geht zuerst über den Stopp-Befehl an stdin.
+> **Abnahme auf Dominiks Windows-PC am 11.11.:** Paper 26.3 mit Java 25 in 15 s installiert, nach
+> 14 s bereit, Spielport erreichbar, `stop` speichert die Welt und endet mit Code 0.
+> **Bewusst kopiert statt geteilt:** Platzhalter und `.properties`-Patcher sind klein nachgebaut,
+> weil der Core `src/` des Panels nicht importieren darf. Ein gemeinsames Paket steht aus.
+> **Noch offen in B2:** SteamCMD (Palworld, Enshrouded), die anderen Minecraft-Typen (Fabric,
+> Forge, Vanilla …), INI/YAML/JSON/XML-Konfiguration, und das Startmuster („Done“) für den
+> Zustand „läuft“ – der Treiber meldet „läuft“, sobald der Prozess gestartet ist.
 
 * SteamCMD besorgen und ausführen (Download, Entpacken, `app_update`, Fortschritt in den Event-Bus).
 * Java-Server (Paper, Fabric, Vanilla): Java prüfen oder mitliefern, Jar herunterladen, EULA.
@@ -215,7 +231,41 @@ Endlosschleife läuft. Nichts wird installiert.
   (Entscheidung 11.11.2026, Abschnitt 5). Keine native Anbindung im Node-Prozess.
 * Erst danach: eigener Dienstbenutzer `nxp-<id>` und NTFS-Rechte (Konzept Abschnitt 6, „Isolierung“).
 
-### B4 – Dateimanager und Backups lokal
+### B4 – Dateimanager und Backups lokal – Teil 1 (Dateien) erledigt 11.11.2026
+
+> **Umgesetzt:** `src/files/files.ts` und `src/http/routes/files.ts` mit denselben Routen und Antworten wie im
+> Panel: auflisten, lesen, speichern, Ordner anlegen, umbenennen, löschen, herunterladen, hochladen.
+> Jeder Pfad läuft durch `resolveInsideRoot` aus A3 (vor und nach dem Auflösen von Symlinks). Darüber hinaus:
+> Ein Server bekommt nur Dateizugriff, wenn sein Ordner **unter** dem Server-Verzeichnis liegt (nicht gleich
+> diesem und nicht außerhalb) – die Testinstanz im Projektordner bleibt damit gesperrt. Unter Windows werden
+> Gerätenamen (`nul`, `con` …), `:` (Datenströme) und Punkt/Leerzeichen am Ende abgelehnt. Uploads laufen über
+> eine Temp-Datei, haben eine Obergrenze (`NEXUSCORE_MAX_UPLOAD_MB`) und nehmen aus dem Dateinamen nur den Namen.
+> **Weg für die Dateilogik:** bewusst nachgebaut statt geteilt (der Core darf `src/` des Panels nicht importieren).
+> **Noch offen in B4:** Packen und Entpacken (das Recht `file.archive` wird deshalb nicht gemeldet, die Knöpfe fehlen),
+> Versionsverlauf der Dateien (die Liste ist leer), Backups, Zeitpläne, Aufbewahrungsregel.
+>
+> **Funktionsliste und Oberfläche:** `GET /api/v1/about` meldet `standalone: true` und `features`
+> (heute `files` und `settings`). Die Oberfläche (`web/src/lib/features.ts`) blendet Menüpunkte, Server-Tabs, Einträge der
+> Befehlspalette und ganze Seiten aus, die der Core nicht kann, und zeigt bei einer direkt aufgerufenen Adresse
+> „Hier nicht verfügbar“. Fehlt die Angabe (Panel), bleibt alles wie bisher. Die Rechte je Server (`SERVER_PERMISSIONS`)
+> enthalten nur noch, wofür es Routen gibt. **Wer eine Funktion baut, trägt sie in `CORE_FEATURES` ein** und nimmt die
+> passenden Rechte auf; Bereiche: `backups`, `schedules`, `players`, `subusers`, `logfiles`, `settings`,
+> `timeline`, `updates`, `sftp` (je Server) sowie `admin`, `help`, `account` (ganze Seiten). Benutzer, Audit,
+> Netzwerk, Integrationen und Hosts: **auch diese sollen in den Core** (Wunsch Dominik, 11.11.2026). Die
+> Ausblendung ist nur der Zwischenstand, nicht der Plan – gebaut wird Funktion für Funktion, und jede erscheint in
+> der Oberfläche, sobald sie in `CORE_FEATURES` steht. Ziel ist, dass die Standalone-Oberfläche alles kann, was das
+> Panel kann; bei den Benutzern ist offen, wie weit (Abschnitt 5, Punkt 6).
+> **Einstellungen (11.11.2026, erledigt):** `src/http/routes/settings.ts` mit denselben Routen wie im Panel:
+> umbenennen, Tags und Favorit, Server löschen (mit `?force=true` für laufende; Dateien nur unter dem Server-Verzeichnis,
+> Verknüpfungen werden nicht verfolgt), Ressourcen, Spiel-Einstellungen als Formular aus dem Egg (`src/eggs/loader.ts`,
+> `src/eggs/rules.ts`, bei geänderter Paper-Version automatische Neuinstallation) und Ports (hinzufügen, ändern, löschen,
+> neu vergeben, TCP und UDP). Änderungen an Ports, RAM und Spiel-Einstellungen gehen nur im gestoppten Zustand und kommen
+> beim nächsten Start beim Treiber an. Zusatzdaten (Tags, Favorit, Speicher, Bandbreite) liegen in `core.db`
+> (Einstellung `server.<id>.meta`). **Der Core nimmt nur an, was er auswertet:** Auto-Neustart und Auto-Sleep werden mit
+> klarer Meldung abgelehnt; **RAM wirkt über den Java-Heap, CPU, Speicher und Bandbreite werden gespeichert, aber noch nicht
+> durchgesetzt (B3).** Neu im Treiber: `unregisterServer` (Mock und Windows; der Docker-Treiber meldet noch nicht ab).
+> Die Oberfläche blendet in „Einstellungen“ Konfigurationsdateien, Subdomain, Import, Modpacks, MOTD, Auto-Neustart und
+> Auto-Sleep aus (Bereiche `configs`, `domain`, `import`, `modpacks`, `motd`, `autorestart`, `autosleep`).
 
 * Dateiendpunkte: auflisten, lesen, schreiben, umbenennen, löschen, hochladen, Archiv entpacken –
   alles unter der Pfadbeschränkung aus A3, ohne Ausnahme.
@@ -317,6 +367,9 @@ Zuletzt, und erst wenn Windows und der Tunnel stehen.
    auch dann, wenn der Core im LAN erreichbar ist.
 5. **Tunnel-Master:** läuft der Ingress auf der VM 10.0.0.120 hinter Caddy, oder braucht das einen
    eigenen VPS mit eigener IPv4?
+6. **Benutzerverwaltung im Standalone-Core:** Der Core kennt bisher bewusst nur ein Konto. Benutzer, Rollen und
+   Mitnutzer (Tab „Mitnutzer“, Admin-Seiten) im Core bräuchten eine eigene Benutzer- und Rechtetabelle in `core.db`
+   und widersprechen „Der Core kennt keine Nutzer“ aus Abschnitt 0. Entscheidung offen, bevor dort gebaut wird.
 
 ---
 

@@ -27,6 +27,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { ServerListItem } from '../lib/types';
 import type { About } from '../lib/version';
+import { useFeatures } from '../lib/features';
 import { t } from '../lib/i18n';
 
 interface CommandItem {
@@ -37,6 +38,8 @@ interface CommandItem {
   icon: typeof Server;
   action: () => void;
   keywords?: string[];
+  /** Funktionsbereich: fehlt er bei der Gegenstelle, gibt es den Eintrag nicht. */
+  feature?: string;
 }
 
 export function CommandPalette({
@@ -68,6 +71,7 @@ export function CommandPalette({
   });
 
   const servers = serversData?.servers ?? [];
+  const features = useFeatures();
 
   // Fokus auf das Suchfeld setzen, wenn geöffnet
   useEffect(() => {
@@ -135,6 +139,7 @@ export function CommandPalette({
       // Direkt zu Dateien
       items.push({
         id: `server-${s.id}-files`,
+        feature: 'files',
         title: `${s.name} › Dateimanager`,
         subtitle: `Dateien bearbeiten, hochladen & verwalten`,
         category: 'server',
@@ -149,6 +154,7 @@ export function CommandPalette({
       // Direkt zu Backups
       items.push({
         id: `server-${s.id}-backups`,
+        feature: 'backups',
         title: `${s.name} › Backups & Wiederherstellen`,
         subtitle: `tar.zst Sicherungen erstellen, laden & sperren`,
         category: 'server',
@@ -163,6 +169,7 @@ export function CommandPalette({
       // Direkt zu Konfigurationsdateien
       items.push({
         id: `server-${s.id}-configs`,
+        feature: 'settings',
         title: `${s.name} › Konfigurationsdateien`,
         subtitle: `server.properties, INI, JSON im Formular bearbeiten`,
         category: 'settings',
@@ -177,6 +184,7 @@ export function CommandPalette({
       // Direkt zu Einstellungen
       items.push({
         id: `server-${s.id}-settings`,
+        feature: 'settings',
         title: `${s.name} › Einstellungen & Ports`,
         subtitle: `RAM, CPU, Ports und Start-Parameter`,
         category: 'settings',
@@ -192,6 +200,7 @@ export function CommandPalette({
     // 2. Rechte, Benutzer & Sicherheit
     items.push({
       id: 'sec-2fa',
+      feature: 'admin',
       title: 'Zwei-Faktor-Authentifizierung (2FA / TOTP)',
       subtitle: 'Sicherheit mit Authenticator-App (TOTP) einrichten',
       category: 'permissions',
@@ -205,6 +214,7 @@ export function CommandPalette({
 
     items.push({
       id: 'sec-steam',
+      feature: 'admin',
       title: 'Steam-Konten & Steam-Guard-Verwaltung',
       subtitle: 'Zentrale SteamCMD-Konten und Guard-Codes hinterlegen',
       category: 'permissions',
@@ -218,6 +228,7 @@ export function CommandPalette({
 
     items.push({
       id: 'sec-users',
+      feature: 'admin',
       title: 'Benutzerverwaltung & Berechtigungen (Admin)',
       subtitle: 'Rollen (Admin, Operator, Verwalter) und Zugriffsrechte',
       category: 'permissions',
@@ -261,6 +272,7 @@ export function CommandPalette({
     if (me?.permissions['admin.nodes']) {
       items.push({
         id: 'nav-network',
+        feature: 'admin',
         title: 'Netzwerk & Portbereich',
         subtitle: 'Port-Bereich (28000-28999) und öffentliche Adresse',
         category: 'settings',
@@ -288,6 +300,7 @@ export function CommandPalette({
 
     items.push({
       id: 'nav-info',
+      feature: 'help',
       title: 'Was ist neu & Versions-Changelog',
       subtitle: 'Versionshistorie, Geplante Aufgaben (TODO) & Updates',
       category: 'actions',
@@ -304,6 +317,7 @@ export function CommandPalette({
       for (const doc of aboutData.docs) {
         items.push({
           id: `doc-${doc.slug}`,
+          feature: 'help',
           title: `Doku: ${doc.title}`,
           subtitle: `${doc.filename} · ${doc.categoryLabel} (${doc.sizeFormatted})`,
           category: 'docs',
@@ -363,8 +377,8 @@ export function CommandPalette({
       },
     });
 
-    return items;
-  }, [servers, me, navigate, onClose, logout]);
+    return items.filter((item) => !item.feature || features.has(item.feature));
+  }, [servers, me, navigate, onClose, logout, features]);
 
   // Treffer filtern
   const filteredItems = useMemo(() => {

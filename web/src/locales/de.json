@@ -307,6 +307,11 @@
     "reload": "Neu laden",
     "truncated": "Zeigt die letzten {count} Zeilen. Die ganze Datei: Herunterladen."
   },
+  "standalone": {
+    "backToServers": "Zurück zur Serverliste",
+    "unavailableText": "Diese Funktion gehört zum NexusPanel und ist im eigenständigen NexusCore nicht enthalten.",
+    "unavailableTitle": "Hier nicht verfügbar"
+  },
   "nav": {
     "community": "Community",
     "create": "Neuer Server",

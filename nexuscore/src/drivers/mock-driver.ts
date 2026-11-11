@@ -35,6 +35,23 @@ export class MockDriver implements HostDriver {
     return state;
   }
 
+  async unregisterServer(serverId: string): Promise<void> {
+    const entry = this.instances.get(serverId);
+    if (!entry) return;
+    for (const timer of entry.timers) clearTimeout(timer);
+    this.instances.delete(serverId);
+  }
+
+  async updateServer(config: ServerInstanceConfig): Promise<ServerState> {
+    const entry = this.instances.get(config.id);
+    if (!entry) return this.registerServer(config);
+    if (entry.state.status === 'running' || entry.state.status === 'starting') {
+      throw new Error(`Server "${config.id}" laeuft noch.`);
+    }
+    entry.config = config;
+    return entry.state;
+  }
+
   async startServer(serverId: string): Promise<ServerState> {
     const entry = this.require(serverId);
     if (entry.state.status === 'running' || entry.state.status === 'starting') {

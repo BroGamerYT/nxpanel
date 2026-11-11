@@ -8,6 +8,7 @@ import { formatMb } from '../lib/status';
 import type { EggVariable, ServerDetail, ServerStatus, DnsConfig } from '../lib/types';
 import { Button, ErrorBox, Field, Input, Select, Spinner } from './ui';
 import { VariableField, visible } from './VariableField';
+import { useFeatures } from '../lib/features';
 import { ImportSection } from './ImportSection';
 import { MotdEditor } from './MotdEditor';
 import { ModpackCard } from './ModpackCard';
@@ -39,6 +40,8 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
   const isOwnerOrAdmin = me?.user.role === 'admin' || me?.user.id === server.ownerId;
   const stopped = STOPPED.includes(status);
   const [section, setSection] = useState<SettingsSection>('spiel');
+  // Was die Gegenstelle kann (der eigenstaendige Core nicht alles)
+  const features = useFeatures();
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -57,7 +60,8 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
           Spiel-Optionen
         </button>
 
-        <button
+        {features.has('configs') && (
+<button
           type="button"
           onClick={() => setSection('configs')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition ${
@@ -69,6 +73,7 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
           <Sliders className="size-4" />
           Konfigurationsdateien
         </button>
+)}
 
         <button
           type="button"
@@ -83,7 +88,8 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
           Leistung & Ports
         </button>
 
-        <button
+        {features.has('domain') && (
+<button
           type="button"
           onClick={() => setSection('domain')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition ${
@@ -95,6 +101,7 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
           <Globe className="size-4" />
           Subdomain & SRV
         </button>
+)}
 
         {isOwnerOrAdmin && (
           <button
@@ -122,8 +129,8 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
       {section === 'spiel' && (
         <div className="space-y-8 max-w-2xl">
           <General detail={detail} />
-          {server.egg?.gameKind === 'minecraft' && has('startup.read') && <ModpackCard serverId={server.id} canUpdate={has('startup.update') && has('backup.create')} />}
-          {server.egg?.gameKind === 'minecraft' && has('startup.read') && <MotdEditor serverId={server.id} serverName={server.name} stopped={stopped} canEdit={has('startup.update')} />}
+          {server.egg?.gameKind === 'minecraft' && has('startup.read') && features.has('modpacks') && <ModpackCard serverId={server.id} canUpdate={has('startup.update') && has('backup.create')} />}
+          {server.egg?.gameKind === 'minecraft' && has('startup.read') && features.has('motd') && <MotdEditor serverId={server.id} serverName={server.name} stopped={stopped} canEdit={has('startup.update')} />}
           {has('startup.read') && <Startup serverId={server.id} stopped={stopped} canImage={has('startup.image')} />}
         </div>
       )}
@@ -149,7 +156,7 @@ export function ServerSettings({ detail, status }: { detail: ServerDetail; statu
       {/* Sektion 5: Erweitert / Gefahrenzone */}
       {section === 'danger' && isOwnerOrAdmin && (
         <div className="space-y-8 max-w-2xl">
-          <ImportSection serverId={server.id} stopped={stopped} />
+          {features.has('import') && <ImportSection serverId={server.id} stopped={stopped} />}
           <Danger detail={detail} status={status} />
         </div>
       )}
@@ -273,6 +280,7 @@ function General({ detail }: { detail: ServerDetail }) {
   const has = (f: string) => permissions.includes(f);
   const invalidate = useInvalidate(server);
   const [name, setName] = useState(server.name);
+  const features = useFeatures();
   const save = useMutation({ mutationFn: (body: Record<string, unknown>) => api(`/servers/${server.id}`, { method: 'PATCH', body }), onSuccess: invalidate });
 
   return (
@@ -285,7 +293,8 @@ function General({ detail }: { detail: ServerDetail }) {
       </Field>
 
       <div className="space-y-4 pt-2">
-        <label className="flex items-start gap-3 text-sm">
+        {features.has('autorestart') && (
+<label className="flex items-start gap-3 text-sm">
           <input type="checkbox" className="mt-1 accent-amber size-4" checked={server.autoRestart} disabled={!has('startup.update') || save.isPending}
             onChange={(e) => save.mutate({ autoRestart: e.target.checked })} />
           <span>
@@ -293,8 +302,10 @@ function General({ detail }: { detail: ServerDetail }) {
             <span className="block text-dim">{t('settings.autoRestartHint')}</span>
           </span>
         </label>
+)}
 
-        <div className="rounded-lg border border-seam bg-rack/40 p-3.5 space-y-2">
+        {features.has('autosleep') && (
+<div className="rounded-lg border border-seam bg-rack/40 p-3.5 space-y-2">
           <div className="flex items-center gap-2">
             <Moon className="size-4 text-sky-400" />
             <span className="text-sm font-medium text-ink">Auto-Sleep (Ruhemodus bei Leerlauf)</span>
@@ -318,6 +329,7 @@ function General({ detail }: { detail: ServerDetail }) {
             <Saved show={save.isSuccess} />
           </div>
         </div>
+)}
 
         <RconCard detail={detail} />
       </div>

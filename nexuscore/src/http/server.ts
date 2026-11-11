@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
+import multipart from '@fastify/multipart';
 import cors from '@fastify/cors';
 import { config } from '../config/index.js';
 import { logger } from '../logger.js';
@@ -28,11 +29,14 @@ import { registerStandaloneRoutes } from './routes/standalone.js';
 import { registerApiV1Routes } from './routes/api-v1.js';
 import { registerWebRoutes } from './routes/web.js';
 import { LocalAccount } from '../store/account.js';
+import { InstallManager, runtimesDirFor } from '../install/manager.js';
+import type { Fetcher } from './covers.js';
 
 export async function createCoreServer(
   driver: HostDriver,
   bus: EventBus,
   registry: ServerRegistry,
+  options: { installs?: InstallManager | null; fetchImpl?: Fetcher } = {},
 ): Promise<FastifyInstance> {
   // Fastify loggt nicht selbst: der Core bringt seinen eigenen pino-Logger
   // mit, damit Request-Log und Anwendungslog dasselbe Format und dieselbe
@@ -59,6 +63,10 @@ export async function createCoreServer(
   }
 
   await server.register(websocket);
+  // Datei-Uploads des Dateimanagers: eine Datei je Anfrage, mit Obergrenze.
+  await server.register(multipart, {
+    limits: { fileSize: config.maxUploadMb * 1024 * 1024, files: 1, fields: 8, parts: 12 },
+  });
 
   /**
    * Nur JSON wird als Body angenommen (Block A2).
@@ -203,7 +211,18 @@ export async function createCoreServer(
   const account = config.role === 'standalone' ? await LocalAccount.open(registry.dir) : null;
 
   registerStandaloneRoutes(server, driver, bus, registry);
-  registerApiV1Routes(server, driver, bus, registry, account);
+  // Echte Installation gibt es fuer den nativen Treiber. Docker installiert
+  // ueber das Image, der Mock-Treiber startet nichts.
+  const installs =
+    options.installs !== undefined
+      ? options.installs
+      : driver.name === 'windows-native'
+        ? new InstallManager(registry, driver, bus, { runtimesDir: runtimesDirFor(registry.dir) })
+        : null;
+
+  registerApiV1Routes(server, driver, bus, registry, account, installs, {
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  });
   registerInfoRoutes(server);
   registerPairRoutes(server);
   registerServerRoutes(server, driver, registry);

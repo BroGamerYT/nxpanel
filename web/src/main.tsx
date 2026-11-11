@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import { AuthProvider, useAuth } from './lib/auth';
 import { Shell } from './components/Shell';
+import { FeatureGate } from './components/FeatureGate';
 import { Login } from './pages/Login';
 import { ServerList } from './pages/ServerList';
 // Seiten erst laden, wenn man sie oeffnet. Die Startseite (Serverliste)
@@ -45,21 +46,21 @@ function App() {
       <Route element={<Shell />}>
         <Route index element={<ServerList />} />
         <Route path="neu" element={<CreateServer />} />
-        <Route path="info" element={<About />} />
-        <Route path="hilfe" element={<About />} />
-        <Route path="docs" element={<About />} />
+        <Route path="info" element={<FeatureGate feature="help"><About /></FeatureGate>} />
+        <Route path="hilfe" element={<FeatureGate feature="help"><About /></FeatureGate>} />
+        <Route path="docs" element={<FeatureGate feature="help"><About /></FeatureGate>} />
         <Route path="community" element={<Community />} />
-        <Route path="account" element={<Account />} />
+        <Route path="account" element={<FeatureGate feature="account"><Account /></FeatureGate>} />
         <Route path="server/:id" element={<ServerPage />} />
-        {me.user.role === 'admin' && <Route path="admin" element={<AdminHub />} />}
-        {me.permissions['admin.nodes'] && <Route path="netzwerk" element={<Network />} />}
-        {me.permissions['admin.nodes'] && <Route path="admin/hosts" element={<Hosts />} />}
-        {me.permissions['admin.users'] && <Route path="admin/users" element={<AdminUsers />} />}
-        {me.permissions['admin.audit'] && <Route path="admin/audit" element={<AdminAudit />} />}
-        {me.user.role === 'admin' && <Route path="admin/host-logs" element={<AdminHostLogs />} />}
-        {me.user.role === 'admin' && <Route path="admin/testbericht" element={<GameTestReport />} />}
-        {me.user.role === 'admin' && <Route path="admin/integrationen" element={<Integrations />} />}
-        {me.user.role === 'admin' && <Route path="admin/dateien" element={<AdminFiles />} />}
+        {me.user.role === 'admin' && <Route path="admin" element={<FeatureGate feature="admin"><AdminHub /></FeatureGate>} />}
+        {me.permissions['admin.nodes'] && <Route path="netzwerk" element={<FeatureGate feature="admin"><Network /></FeatureGate>} />}
+        {me.permissions['admin.nodes'] && <Route path="admin/hosts" element={<FeatureGate feature="admin"><Hosts /></FeatureGate>} />}
+        {me.permissions['admin.users'] && <Route path="admin/users" element={<FeatureGate feature="admin"><AdminUsers /></FeatureGate>} />}
+        {me.permissions['admin.audit'] && <Route path="admin/audit" element={<FeatureGate feature="admin"><AdminAudit /></FeatureGate>} />}
+        {me.user.role === 'admin' && <Route path="admin/host-logs" element={<FeatureGate feature="admin"><AdminHostLogs /></FeatureGate>} />}
+        {me.user.role === 'admin' && <Route path="admin/testbericht" element={<FeatureGate feature="admin"><GameTestReport /></FeatureGate>} />}
+        {me.user.role === 'admin' && <Route path="admin/integrationen" element={<FeatureGate feature="admin"><Integrations /></FeatureGate>} />}
+        {me.user.role === 'admin' && <Route path="admin/dateien" element={<FeatureGate feature="admin"><AdminFiles /></FeatureGate>} />}
         <Route path="*" element={<p className="text-dim">{t('common.notFound')}</p>} />
       </Route>
     </Routes>

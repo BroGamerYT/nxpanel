@@ -82,6 +82,18 @@ async function main(): Promise<void> {
   }
   registry.audit('core.start', null, 'core', { runtime: config.runtime, mode: config.mode });
   for (const server of registry.list()) {
+    // Nicht fertig installierte Instanzen kann der Treiber nicht starten. Eine
+    // Installation, die beim letzten Lauf mittendrin war, gilt als fehlgeschlagen.
+    if (server.install && server.install.state !== 'done') {
+      if (server.install.state === 'installing') {
+        await registry.update({
+          ...server,
+          install: { ...server.install, state: 'failed', error: 'Durch Neustart des Cores unterbrochen' },
+        });
+        logger.warn({ serverId: server.id }, 'Installation war unterbrochen - bitte neu installieren');
+      }
+      continue;
+    }
     try {
       await driver.registerServer(server);
       logger.info({ serverId: server.id }, 'Instanz aus Registry uebernommen');

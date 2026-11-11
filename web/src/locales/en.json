@@ -307,6 +307,11 @@
     "reload": "Reload",
     "truncated": "Showing the last {count} lines. Full file: download."
   },
+  "standalone": {
+    "backToServers": "Back to servers",
+    "unavailableText": "This feature belongs to NexusPanel and is not part of the standalone NexusCore.",
+    "unavailableTitle": "Not available here"
+  },
   "nav": {
     "community": "Community",
     "create": "New server",

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
+import { useFeatures } from '../lib/features';
 import { seenVersion, type About } from '../lib/version';
 import { t, fmtDateTime } from '../lib/i18n';
 import { LanguagePicker } from './LanguagePicker';
@@ -140,6 +141,7 @@ function NotificationBell() {
 /** Versionsnummer unten links; Punkt, solange "Was ist neu" fuer diese Version noch nicht geoeffnet wurde. */
 function VersionLink({ mobile = false }: { mobile?: boolean }) {
   const { data } = useQuery({ queryKey: ['about'], queryFn: () => api<About>('/about'), staleTime: 5 * 60_000 });
+  const features = useFeatures();
   const [seen, setSeen] = useState(seenVersion());
   useEffect(() => {
     const f = () => setSeen(seenVersion());
@@ -147,12 +149,16 @@ function VersionLink({ mobile = false }: { mobile?: boolean }) {
     return () => window.removeEventListener('nxp-version-seen', f);
   }, []);
   if (!data) return null;
-  const fresh = seen !== data.version;
+  // "Was ist neu" liegt auf der Hilfe-Seite. Gibt es sie nicht, ist die Version nur Text,
+  // und der Punkt "neu" liesse sich nie wegklicken.
+  const canOpen = features.has('help');
+  const fresh = canOpen && seen !== data.version;
   const hasUpdate = Boolean(data.update?.hasUpdate);
   const built = data.builtAt ? fmtDateTime(data.builtAt, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : null;
-  return (
-    <Link to="/hilfe?tab=neu" title={built ? t('version.builtTitle', { date: built }) : t('version.whatsNew')}
-      className={`${mobile ? 'flex' : 'hidden lg:flex'} items-center gap-2 px-3 py-1 text-xs text-dim hover:text-ink`}>
+  const className = `${mobile ? 'flex' : 'hidden lg:flex'} items-center gap-2 px-3 py-1 text-xs text-dim hover:text-ink`;
+  const title = built ? t('version.builtTitle', { date: built }) : t('version.whatsNew');
+  const content = (
+    <>
       <span className="font-mono">v{data.version}</span>
       <span>{data.dev ? 'dev' : t('version.build', { build: data.build ?? '' })}</span>
       {hasUpdate ? (
@@ -163,7 +169,12 @@ function VersionLink({ mobile = false }: { mobile?: boolean }) {
       ) : fresh ? (
         <span className="ml-auto inline-flex items-center gap-1 text-amber"><span className="size-1.5 rounded-full bg-amber" aria-hidden />{t('version.new')}</span>
       ) : null}
-    </Link>
+    </>
+  );
+  return canOpen ? (
+    <Link to="/hilfe?tab=neu" title={title} className={className}>{content}</Link>
+  ) : (
+    <div title={title} className={className}>{content}</div>
   );
 }
 
@@ -175,6 +186,7 @@ export function Shell() {
   const loc = useLocation();
   const { me, logout, impersonatorAdmin, stopImpersonation } = useAuth();
   const canCreate = me?.permissions['server.create'];
+  const features = useFeatures();
   const hasAdminAccess = Boolean(
     me?.user.role === 'admin' || Object.keys(me?.permissions ?? {}).some((k) => k.startsWith('admin.'))
   );
@@ -289,7 +301,7 @@ export function Shell() {
           <NavLink to="/community" className={link} title={t('nav.community')}>
             <Users className="size-4 shrink-0" /> <span className="hidden lg:inline">{t('nav.community')}</span>
           </NavLink>
-          {hasAdminAccess && (
+          {hasAdminAccess && features.has('admin') && (
             <NavLink
               to="/admin"
               className={({ isActive }) =>
@@ -303,9 +315,9 @@ export function Shell() {
               <span className="hidden lg:inline font-semibold text-amber">Admin-Hub</span>
             </NavLink>
           )}
-          <NavLink to="/hilfe" className={link} title={t('nav.help')}>
+          {features.has('help') && (<NavLink to="/hilfe" className={link} title={t('nav.help')}>
             <HelpCircle className="size-4 text-amber shrink-0" /> <span className="hidden lg:inline">{t('nav.help')}</span>
-          </NavLink>
+          </NavLink>)}
         </nav>
 
         <div className="flex flex-col gap-1 border-t border-seam pt-3">
@@ -401,7 +413,7 @@ export function Shell() {
                 <NavLink to="/community" onClick={closeMobile} className={link}>
                   <Users className="size-4 shrink-0" /> <span>{t('nav.community')}</span>
                 </NavLink>
-                {hasAdminAccess && (
+                {hasAdminAccess && features.has('admin') && (
                   <NavLink
                     to="/admin"
                     onClick={closeMobile}
@@ -415,9 +427,9 @@ export function Shell() {
                     <span className="font-semibold text-amber">Admin-Hub</span>
                   </NavLink>
                 )}
-                <NavLink to="/hilfe" onClick={closeMobile} className={link}>
+                {features.has('help') && (<NavLink to="/hilfe" onClick={closeMobile} className={link}>
                   <HelpCircle className="size-4 text-amber shrink-0" /> <span>{t('nav.help')}</span>
-                </NavLink>
+                </NavLink>)}
               </nav>
             </div>
 

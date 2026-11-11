@@ -5,6 +5,7 @@ import { ChevronLeft, Play, Square, RotateCcw, Zap, ArrowUpCircle, Package, Chec
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLive } from '../lib/live';
+import { useFeatures } from '../lib/features';
 import { usePower, POWER_LABEL, type PowerAction } from '../lib/power';
 import { POWER_ALLOWED, STATUS, formatMb, formatUptime } from '../lib/status';
 import type { ServerDetail, ServerStatus, TimelineEvent, ServerActivityItem, ActiveTask } from '../lib/types';
@@ -62,6 +63,8 @@ function Loaded({ detail }: { detail: ServerDetail }) {
   const { me } = useAuth();
   const { server, permissions } = detail;
   const has = (f: string) => permissions.includes(f);
+  // Was die Gegenstelle ueberhaupt kann (der eigenstaendige Core nicht alles)
+  const features = useFeatures();
   const [tab, setTab] = useState<Tab>(has('control.console') ? 'konsole' : 'zeitachse');
   const consoleRef = useRef<ConsoleHandle>(null);
 
@@ -160,7 +163,7 @@ function Loaded({ detail }: { detail: ServerDetail }) {
   const serverTypeDisplay = server.serverType && !server.serverType.includes('AUTO_CURSEFORGE') ? server.serverType : null;
 
   const isUpdatingPack = !!modpackInfo?.job && modpackInfo.job.step !== 'done' && modpackInfo.job.step !== 'failed';
-  const canUpdate = (has('startup.update') && has('backup.create')) || has('settings.reinstall');
+  const canUpdate = features.has('updates') && ((has('startup.update') && has('backup.create')) || has('settings.reinstall'));
 
   const primary = server.ports?.find((p) => p.is_primary) ?? server.ports?.[0];
   const last = live.stats.at(-1);
@@ -657,17 +660,17 @@ function Loaded({ detail }: { detail: ServerDetail }) {
 
       <nav className="flex gap-1 border-b border-seam overflow-x-auto whitespace-nowrap scrollbar-none px-1" role="tablist">
         {([
-          ['konsole', 'server.tab.console', 'control.console'],
-          ...(server.egg?.gameKind ? [['spieler', 'server.tab.players', 'control.console'] as const] : []),
-          ['dateien', 'server.tab.files', 'file.read'],
-          ['backups', 'server.tab.backups', 'backup.read'],
-          ['zeitplaene', 'server.tab.schedules', 'schedule.read'],
-          ['mitnutzer', 'server.tab.subusers', 'subuser.read'],
-          ['logs', 'server.tab.logs', 'control.console'],
-          ['zeitachse', 'server.tab.timeline', null],
-          ['einstellungen', 'server.tab.settings', null],
+          ['konsole', 'server.tab.console', 'control.console', null],
+          ...(server.egg?.gameKind ? [['spieler', 'server.tab.players', 'control.console', 'players'] as const] : []),
+          ['dateien', 'server.tab.files', 'file.read', 'files'],
+          ['backups', 'server.tab.backups', 'backup.read', 'backups'],
+          ['zeitplaene', 'server.tab.schedules', 'schedule.read', 'schedules'],
+          ['mitnutzer', 'server.tab.subusers', 'subuser.read', 'subusers'],
+          ['logs', 'server.tab.logs', 'control.console', 'logfiles'],
+          ['zeitachse', 'server.tab.timeline', null, 'timeline'],
+          ['einstellungen', 'server.tab.settings', null, 'settings'],
         ] as const)
-          .filter(([, , flag]) => !flag || has(flag))
+          .filter(([, , flag, feature]) => (!flag || has(flag)) && (!feature || features.has(feature)))
           .map(([key, label]) => (
             <button
               key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}

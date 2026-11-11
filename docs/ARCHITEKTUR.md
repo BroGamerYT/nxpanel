@@ -131,7 +131,7 @@ nexuscored (Node 22, als einzelne .exe über Node SEA)
 ├── protocol   Ereignisstrom, Kopplung per PIN und Token (vorhanden)
 ├── store      SQLite core.db: Instanzen, Einstellungen, Audit, Aufgaben (vorhanden)
 ├── system     CPU, RAM und Platte des Hosts (vorhanden)
-├── jobs       Warteschlange für lange Aufgaben (Install, Backup, Update), mit Fortschritt
+├── install    Installation als Aufgabe mit Fortschritt: Paper + Java (vorhanden), SteamCMD (geplant)
 ├── steam      SteamCMD verwalten (laden, aktualisieren, Login-Sitzungen)
 ├── fs         sichere Dateizugriffe (Wurzel je Server, keine Ausbrüche über ".." oder Links)
 ├── backup     tar + zstd, SHA-256, Ziele: lokal, SMB/NAS, S3, SFTP

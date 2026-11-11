@@ -72,10 +72,18 @@ gelesen; Vorlage ist `.env.example` (**nur leere Werte**).
 | `NEXUSCORE_CORS_ORIGINS` | leer | erlaubte CORS-Herkünfte |
 | `NEXUSCORE_ALLOWED_HOSTS` | leer | zusätzliche Hostnamen, unter denen der Core erreichbar sein darf (IP-Adressen und `localhost` gehen immer) |
 | `NEXUSCORE_SERVER_ROOT` | `<Datenverzeichnis>/servers` | hier müssen alle Server liegen; Pfade außerhalb werden abgelehnt |
+| `NEXUSCORE_MAX_UPLOAD_MB` | `2048` | größte Datei, die der Dateimanager hochladen darf |
 | `NEXUSCORE_PORT_RANGE` | `25565-25664` | Bereich, aus dem der Core Spielports vergibt |
 | `NEXUSCORE_ADMIN_USER` | `admin` | Name des lokalen Kontos der Standalone-Oberfläche |
 | `NEXUSCORE_ADMIN_PASSWORD` | leer | festes Passwort des lokalen Kontos (mindestens 10 Zeichen) |
 | `NEXUSCORE_LOG_LEVEL` | `info` | Log-Level |
+
+**Minecraft Paper installieren:** Legt man in der Standalone-Oberfläche einen Server mit dem
+Egg „Minecraft Java“ (Typ `PAPER`) an, lädt der Core Paper und das passende Java selbst –
+Java nach `<Datenverzeichnis>/runtimes`, den Server nach `<Datenverzeichnis>/servers/<id>`.
+Alle Downloads kommen über HTTPS von PaperMC und Eclipse Temurin und werden gegen ihre
+SHA-256-Prüfsumme geprüft. Andere Spiele und Minecraft-Typen legt der Core noch als
+Platzhalter an.
 
 **Anmeldung an der Standalone-Oberfläche:** Ohne `NEXUSCORE_ADMIN_PASSWORD` erzeugt
 der Core beim ersten Start ein Passwort, zeigt es einmal im Fenster und schreibt es

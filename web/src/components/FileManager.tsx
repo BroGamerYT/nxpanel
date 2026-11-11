@@ -32,6 +32,7 @@ import { FileRevisionsModal } from './FileRevisionsModal';
 import { MarkdownViewer } from './MarkdownViewer';
 import { ConfigFormEditor } from './ConfigFormEditor';
 import { api, currentToken, refreshSession } from '../lib/api';
+import { useFeatures } from '../lib/features';
 import { t } from '../lib/i18n';
 import type { FileEntry, DirectoryListing } from '../lib/types';
 import type { About } from '../lib/version';
@@ -110,6 +111,8 @@ export function FileManager({
   const filesBase = apiBase ?? `/servers/${serverId}/files`;
   const about = useQuery({ queryKey: ['about'], queryFn: () => api<About>('/about'), staleTime: 5 * 60_000 });
   const sftpPort = about.data?.sftp?.port ?? 2022;
+  // Der eigenstaendige Core hat keinen SFTP-Zugang - dann auch keinen Knopf dafuer
+  const features = useFeatures();
   const qc = useQueryClient();
   const [currentPath, setCurrentPath] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
@@ -391,7 +394,7 @@ export function FileManager({
 
         {/* Aktionsleiste */}
         <div className="flex items-center gap-2 shrink-0">
-          {!apiBase && (
+          {!apiBase && features.has('sftp') && (
             <Button
               variant="quiet"
               className="h-8 text-xs px-2.5 text-amber hover:text-amber"

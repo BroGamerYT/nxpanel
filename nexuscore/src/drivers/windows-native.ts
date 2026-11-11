@@ -88,6 +88,23 @@ export class WindowsNativeDriver implements HostDriver {
     return state;
   }
 
+  async unregisterServer(serverId: string): Promise<void> {
+    const entry = this.instances.get(serverId);
+    if (!entry) return;
+    if (entry.process) throw new Error(`Server "${serverId}" laeuft noch.`);
+    this.instances.delete(serverId);
+  }
+
+  async updateServer(config: ServerInstanceConfig): Promise<ServerState> {
+    const entry = this.instances.get(config.id);
+    if (!entry) return this.registerServer(config);
+    if (entry.process) {
+      throw new Error(`Server "${config.id}" laeuft noch.`);
+    }
+    entry.config = config;
+    return entry.state;
+  }
+
   async startServer(serverId: string): Promise<ServerState> {
     const entry = this.require(serverId);
 
@@ -186,10 +203,39 @@ export class WindowsNativeDriver implements HostDriver {
     }
 
     entry.state.status = 'stopping';
+
+    // 1) Sauber: der Stopp-Befehl des Spiels an stdin. Ein Minecraft-Server
+    //    speichert dabei die Welt - ein Abbruch wuerde die letzten Aenderungen kosten.
+    const stopCommand = entry.config.stopCommand?.trim();
+    const stdin = entry.process?.stdin;
+    if (stopCommand && stdin && !stdin.destroyed) {
+      const seconds = Math.min(Math.max(entry.config.stopTimeoutSeconds ?? 30, 1), 300);
+      this.emit(serverId, `[WindowsNative] Sende Stopp-Befehl "${stopCommand}" und warte bis zu ${seconds} s...`);
+      stdin.write(`${stopCommand}\n`);
+      if (await this.waitForExit(entry, seconds * 1000)) return entry.state;
+      this.emit(serverId, '[WindowsNative] Stopp-Befehl blieb wirkungslos.');
+    }
+
+    // 2) Fenster schliessen lassen, 3) hart beenden.
     this.emit(serverId, `[WindowsNative] Beende Prozessbaum ${pid} (taskkill /T)...`);
     await this.taskkill(pid, false);
+    if (!(await this.waitForExit(entry, 5000))) {
+      this.emit(serverId, `[WindowsNative] Prozess reagiert nicht - breche ab (taskkill /T /F)...`);
+      await this.taskkill(pid, true);
+      await this.waitForExit(entry, 3000);
+    }
 
     return entry.state;
+  }
+
+  /** Wartet, bis der Prozess der Instanz beendet ist. false = Frist abgelaufen. */
+  private async waitForExit(entry: ProcessEntry, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (entry.process) {
+      if (Date.now() >= deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    return true;
   }
 
   async killServer(serverId: string): Promise<ServerState> {

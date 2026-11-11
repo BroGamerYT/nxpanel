@@ -3,7 +3,6 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import type { HostDriver } from '../../drivers/interface.js';
 import type { EventBus } from '../../protocol/events.js';
 import type { ServerRegistry } from '../../store/registry.js';
@@ -21,8 +20,32 @@ import {
 import { serverRootFor, resolveInsideRoot, PathOutsideRootError } from '../../protocol/paths.js';
 import { allocatePort } from '../../protocol/ports.js';
 import type { LocalAccount } from '../../store/account.js';
+import { installKindFor, type InstallManager } from '../../install/manager.js';
+import { writeServerProperties } from '../../install/minecraft.js';
+import { registerFileRoutes } from './files.js';
+import { getServerMeta, registerSettingsRoutes } from './settings.js';
+import { loadEggs, type LoadedEgg } from '../../eggs/loader.js';
+import {
+  coverDirFor,
+  coverFor,
+  isValidChoice,
+  readCustomCover,
+  saveCustomCover,
+  steamAppId,
+  steamCover,
+  type CoverChoice,
+  type Fetcher,
+} from '../covers.js';
 
-export const ALL_SERVER_PERMISSIONS = [
+/**
+ * Was der Core fuer einen Server wirklich kann. Die Oberflaeche blendet Tabs und
+ * Schaltflaechen nach diesen Rechten aus - ein Recht, das hier fehlt, versteckt die
+ * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
+ */
+/** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
+export const CORE_FEATURES: string[] = ['files', 'settings'];
+
+export const SERVER_PERMISSIONS = [
   'control.console',
   'control.command',
   'control.start',
@@ -32,159 +55,13 @@ export const ALL_SERVER_PERMISSIONS = [
   'file.read',
   'file.write',
   'file.delete',
-  'file.archive',
-  'file.sftp',
-  'backup.read',
-  'backup.create',
-  'backup.restore',
-  'backup.delete',
-  'backup.download',
-  'allocation.read',
-  'allocation.assign',
+  'settings.reinstall',
+  'settings.rename',
   'startup.read',
   'startup.update',
-  'startup.image',
-  'schedule.read',
-  'schedule.update',
-  'schedule.run',
-  'player.read',
-  'player.kick',
-  'player.ban',
-  'player.whitelist',
-  'subuser.read',
-  'subuser.create',
-  'subuser.update',
-  'subuser.delete',
-  'settings.rename',
-  'settings.reinstall',
-  'activity.read',
-  'player.ip_read',
+  'allocation.read',
+  'allocation.assign',
 ];
-
-const KNOWN_STEAM: Record<string, number> = {
-  '7 Days to Die': 251570,
-  'ARK: Survival Ascended': 2399830,
-  'Core Keeper': 1621690,
-  'Counter-Strike 2': 730,
-  'Enshrouded': 1203620,
-  'Factorio': 427520,
-  'Farming Simulator 25': 2300320,
-  'Palworld': 1623730,
-  'Rust': 252490,
-  'Satisfactory': 526870,
-  'Sons of the Forest': 1326470,
-  'V Rising': 1604030,
-  'Valheim': 892970,
-};
-
-function coverForEgg(name: string, id: string): { src: string; fit: 'banner' | 'icon'; source: 'steam' | 'branding' } {
-  const appId = KNOWN_STEAM[name] || KNOWN_STEAM[id];
-  if (appId) {
-    return {
-      src: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-      fit: 'banner',
-      source: 'steam',
-    };
-  }
-  return {
-    src: '/branding/themes/amber-classic/banner.png',
-    fit: 'banner',
-    source: 'branding',
-  };
-}
-
-interface RawEggFile {
-  name: string;
-  author?: string;
-  nest?: string;
-  docker_images?: Record<string, string>;
-  startup?: string;
-  console?: string;
-  ports?: unknown;
-  resources?: {
-    base_ram_mb?: number;
-    ram_per_player_mb?: number;
-    min_cpu_percent?: number;
-  };
-  variables?: Array<{
-    name: string;
-    description?: string;
-    env_variable: string;
-    default_value?: string;
-    user_viewable?: boolean;
-    user_editable?: boolean;
-    rules?: string;
-  }>;
-}
-
-/**
- * Sucht das 'eggs'-Verzeichnis auf dem System.
- */
-function resolveEggsDir(): string | null {
-  let base = process.cwd();
-  try {
-    base = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
-  } catch {
-    // Fallback
-  }
-
-  const candidates = [
-    path.resolve(process.cwd(), 'eggs'),
-    path.resolve(process.cwd(), '..', 'eggs'),
-    path.resolve(path.dirname(process.execPath), 'eggs'),
-    path.resolve(path.dirname(process.execPath), '..', 'eggs'),
-    path.resolve(path.dirname(process.execPath), '..', '..', 'eggs'),
-    path.resolve(base, '..', '..', '..', '..', 'eggs'),
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
-  }
-  return null;
-}
-
-/**
- * Liest alle Game-Eggs aus dem 'eggs'-Ordner ein.
- */
-async function loadEggs() {
-  const dir = resolveEggsDir();
-  if (!dir) return [];
-
-  try {
-    const files = await fs.readdir(dir);
-    const eggs = [];
-    for (const file of files) {
-      if (!file.endsWith('.json') || file.startsWith('_')) continue;
-      try {
-        const content = await fs.readFile(path.join(dir, file), 'utf-8');
-        const raw = JSON.parse(content) as RawEggFile;
-        const id = file.replace(/\.json$/, '');
-        const images = Object.entries(raw.docker_images ?? {}).map(([label, image], idx) => ({
-          key: label,
-          label,
-          image,
-          default: idx === 0,
-        }));
-
-        eggs.push({
-          id,
-          name: raw.name || id,
-          category: raw.nest || 'Allgemein',
-          author: raw.author || 'NexusPanel',
-          images,
-          consoleMode: raw.console || 'full',
-          resources: raw.resources ?? { base_ram_mb: 1024, min_cpu_percent: 100 },
-          servers: 0,
-          raw,
-        });
-      } catch {
-        // Einzelne fehlerhafte Egg-Datei überspringen
-      }
-    }
-    return eggs;
-  } catch {
-    return [];
-  }
-}
 
 export function registerApiV1Routes(
   server: FastifyInstance,
@@ -192,7 +69,72 @@ export function registerApiV1Routes(
   bus: EventBus,
   registry: ServerRegistry,
   account: LocalAccount | null = null,
+  installs: InstallManager | null = null,
+  options: { fetchImpl?: Fetcher } = {},
 ): void {
+  const coverDir = coverDirFor(registry.dir);
+  const storedCover = (eggId: string) => registry.getSetting<CoverChoice>(`cover.${eggId}`);
+  const coverOf = (egg: LoadedEgg) => coverFor(egg, storedCover(egg.id));
+  /** Titelbild eines Servers: das seines Spiels, sonst ein Panel-Motiv. */
+  const coverForServer = (c: ServerInstanceConfig, eggs: LoadedEgg[]) => {
+    const egg = eggs.find((e) => e.id === c.game);
+    return egg ? coverOf(egg) : coverFor({ id: c.game || c.id, name: c.game || c.name, raw: null });
+  };
+
+  /** Status fuer die Oberflaeche: die Installation geht vor dem Zustand des Treibers. */
+  const statusOf = (c: ServerInstanceConfig, driverStatus: ServerStatus | undefined): string => {
+    if (c.install?.state === 'installing') return 'installing';
+    if (c.install?.state === 'failed') return 'install_failed';
+    // Die Oberflaeche kennt den Wert "error" des Treibers nicht (ServerStatus in
+    // web/src/lib/types.ts) - ein Prozess, der nicht starten konnte, gilt dort als abgestuerzt.
+    if (driverStatus === 'error') return 'crashed';
+    return driverStatus ?? 'offline';
+  };
+
+  /** Zustand vom Treiber - eine noch nicht installierte Instanz kennt er nicht. */
+  const stateOf = async (id: string) => {
+    try {
+      return await driver.getServerState(id);
+    } catch {
+      return undefined;
+    }
+  };
+
+  /** Variablen (Vorgaben aus dem Egg + Eingaben) und die Vorlage fuer server.properties. */
+  const eggInstallData = async (
+    eggId: string,
+    given: Record<string, unknown> | undefined,
+  ): Promise<{ variables: Record<string, string>; propertiesTemplate: Record<string, string> }> => {
+    const egg = (await loadEggs()).find((e) => e.id === eggId);
+    const variables: Record<string, string> = {};
+    for (const v of egg?.raw.variables ?? []) variables[v.env_variable] = v.default_value ?? '';
+    for (const [key, value] of Object.entries(given ?? {})) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        variables[key] = String(value);
+      }
+    }
+    const propertiesTemplate: Record<string, string> = {};
+    for (const [key, value] of Object.entries(egg?.raw.config_files?.['server.properties']?.find ?? {})) {
+      propertiesTemplate[key] = String(value);
+    }
+    return { variables, propertiesTemplate };
+  };
+
+  const toActiveTask = (task: ReturnType<ServerRegistry['listTasks']>[number]) => {
+    const c = task.serverId ? registry.get(task.serverId) : undefined;
+    return {
+      id: task.id,
+      type: task.kind === 'install' ? 'install' : task.kind,
+      serverId: task.serverId ?? '',
+      serverName: c?.name ?? task.serverId ?? '',
+      shortId: (task.serverId ?? '').slice(0, 8),
+      title: task.kind === 'install' ? 'Installation' : task.kind,
+      subtitle: task.message,
+      step: task.message,
+      progressPercent: Math.round(task.progress * 100),
+      startedAt: task.createdAt,
+    };
+  };
   /** Cookie der Sitzung: nur fuer den Server lesbar, nie an fremde Seiten. */
   const sessionCookie = (token: string): string =>
     `nxp_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`;
@@ -207,6 +149,9 @@ export function registerApiV1Routes(
     }
     return undefined;
   }
+
+  registerFileRoutes(server, { registry, find: findServer });
+  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs });
 
   // 1. Authentifizierung & Sitzung
   // Block A4: refresh gibt nur dann ein Token heraus, wenn es schon eine
@@ -320,12 +265,21 @@ export function registerApiV1Routes(
   });
 
   // 2. Info & Systemstatus
+  // Bereiche der Oberflaeche, die der Core kann. Alles andere blendet die Oberflaeche aus,
+  // statt "Nicht gefunden" zu zeigen. Kommt eine Funktion dazu, steht sie hier.
   server.get('/api/v1/about', async () => {
     return {
       name: 'NexusPanel Standalone (NexusCore)',
       version: '0.2.0',
       build: 'standalone-native',
       sftp: { enabled: false, port: 2022 },
+      standalone: true,
+      features: CORE_FEATURES,
+      // Leere Listen, damit Seiten, die sie lesen, nicht abstuerzen.
+      changelog: [],
+      todo: [],
+      devlog: [],
+      docs: [],
     };
   });
 
@@ -407,9 +361,11 @@ export function registerApiV1Routes(
     const states = await driver.listServers();
     const stateMap = new Map(states.map((s) => [s.id, s]));
 
+    const eggs = await loadEggs();
     const servers = configs.map((c) => {
       const state = stateMap.get(c.id);
-      const status: ServerStatus = state ? state.status : 'offline';
+      const status = statusOf(c, state?.status);
+      const meta = getServerMeta(registry, c.id);
       return {
         id: c.id,
         shortId: c.id.slice(0, 8),
@@ -420,16 +376,16 @@ export function registerApiV1Routes(
         eggId: c.game || 'custom',
         ramMb: c.maxMemoryMb ?? 2048,
         cpuPercent: c.maxCpuPercent ?? 100,
-        diskMb: 10240,
+        diskMb: meta.diskMb ?? 10240,
         suspended: false,
         primaryPort: c.ports[0]?.hostPort ?? 25565,
         publicHost: '127.0.0.1',
         isOwner: true,
-        permissions: ALL_SERVER_PERMISSIONS,
+        permissions: SERVER_PERMISSIONS,
         startedAt: state?.startedAt ?? null,
-        tags: [c.game || 'game'],
-        isFavorite: false,
-        cover: coverForEgg(c.game || c.name, c.game || c.id),
+        tags: meta.tags ?? [c.game || 'game'],
+        isFavorite: meta.isFavorite ?? false,
+        cover: coverForServer(c, eggs),
         ports: c.ports.map((p, idx) => ({
           port: p.hostPort,
           protocol: p.protocol,
@@ -449,14 +405,15 @@ export function registerApiV1Routes(
       return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
     }
 
-    const state = await driver.getServerState(c.id);
+    const state = await stateOf(c.id);
+    const meta = getServerMeta(registry, c.id);
 
     return {
       server: {
         id: c.id,
         shortId: c.id.slice(0, 8),
         name: c.name,
-        status: state?.status ?? 'offline',
+        status: statusOf(c, state?.status),
         ownerId: 'standalone-admin',
         startedAt: state?.startedAt ?? null,
         egg: {
@@ -471,15 +428,18 @@ export function registerApiV1Routes(
           ramMb: c.maxMemoryMb ?? 2048,
           swapMb: 0,
           cpuPercent: c.maxCpuPercent ?? 100,
-          diskMb: 10240,
-          bandwidthDownloadKbps: null,
-          bandwidthUploadKbps: null,
+          diskMb: meta.diskMb ?? 10240,
+          bandwidthDownloadKbps: meta.bandwidthDownloadKbps ?? null,
+          bandwidthUploadKbps: meta.bandwidthUploadKbps ?? null,
         },
         diskUsedMb: 1024,
         autoRestart: false,
+        autoSleepMinutes: 0,
+        tags: meta.tags ?? [],
+        isFavorite: meta.isFavorite ?? false,
         suspended: false,
         publicHost: '127.0.0.1',
-        cover: coverForEgg(c.game || c.name, c.game || c.id),
+        cover: coverForServer(c, await loadEggs()),
         ports: c.ports.map((p, idx) => ({
           port: p.hostPort,
           protocol: p.protocol,
@@ -487,9 +447,9 @@ export function registerApiV1Routes(
           is_primary: idx === 0,
         })),
         startup: `${c.executable} ${c.args.join(' ')}`,
-        variables: c.env || {},
+        variables: { ...(c.env ?? {}), ...(c.install?.variables ?? {}) },
       },
-      permissions: ALL_SERVER_PERMISSIONS,
+      permissions: SERVER_PERMISSIONS,
     };
   });
 
@@ -531,6 +491,28 @@ export function registerApiV1Routes(
       port = await allocatePort(registry.list());
     } catch (err) {
       return reply.status(409).send({ error: (err as Error).message });
+    }
+
+    // Block B2: echte Installation statt Attrappe, wenn der Core dieses Egg kann.
+    const installData = await eggInstallData(eggId, variables);
+    const installKind = installs ? installKindFor(eggId, installData.variables) : null;
+    if (installs && installKind) {
+      const installing: ServerInstanceConfig = {
+        id,
+        name,
+        game: eggId,
+        executable: '',
+        args: [],
+        workingDir: serverDir,
+        maxMemoryMb: ramMb ?? 2048,
+        maxCpuPercent: cpuPercent ?? 100,
+        ports: [{ name: 'game', hostPort: port, protocol: 'tcp' }],
+        install: { state: 'installing', kind: installKind, ...installData },
+      };
+      await registry.add(installing);
+      registry.audit('server.create', id, 'standalone', { name, game: eggId, port, install: installKind });
+      const task = installs.start(id, { kind: installKind, ...installData });
+      return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
     }
 
     // Erstelle Standardausführung oder Script
@@ -588,8 +570,36 @@ export function registerApiV1Routes(
       const id = c.id;
       const { action } = req.body;
 
+      if (c.install && c.install.state !== 'done') {
+        return reply.status(409).send({
+          error:
+            c.install.state === 'installing'
+              ? 'Der Server wird noch installiert.'
+              : `Die Installation ist fehlgeschlagen: ${c.install.error ?? 'unbekannter Fehler'}. Bitte neu installieren.`,
+          code: 'not_installed',
+        });
+      }
+      // Port und Einstellungen koennen sich seit der Installation geaendert haben.
+      if ((action === 'start' || action === 'restart') && c.install?.kind === 'minecraft-paper') {
+        await writeServerProperties({
+          serverDir: c.workingDir,
+          variables: c.install.variables ?? {},
+          propertiesTemplate: c.install.propertiesTemplate ?? {},
+          ramMb: c.maxMemoryMb ?? 2048,
+          port: c.ports[0]?.hostPort ?? 25565,
+          serverName: c.name,
+        }).catch((err: unknown) => logger.warn({ err, serverId: id }, 'server.properties konnte nicht geschrieben werden'));
+      }
+
+      // Was in den Einstellungen geaendert wurde, gilt ab hier auch beim Treiber.
+      const syncConfig = async (): Promise<void> => {
+        const fresh = registry.get(id);
+        if (fresh) await driver.updateServer?.(fresh).catch(() => {});
+      };
+
       try {
         if (action === 'start') {
+          await syncConfig();
           await driver.startServer(id);
         } else if (action === 'stop') {
           await driver.stopServer(id);
@@ -597,6 +607,7 @@ export function registerApiV1Routes(
           await driver.killServer(id);
         } else if (action === 'restart') {
           await driver.stopServer(id).catch(() => {});
+          await syncConfig();
           await driver.startServer(id);
         } else {
           return reply.status(400).send({ error: 'Unbekannte Aktion', code: 'invalid_action' });
@@ -647,11 +658,11 @@ export function registerApiV1Routes(
     const id = c.id;
 
     void (async () => {
-      const state = await driver.getServerState(id);
+      const state = await stateOf(id);
       socket.send(
         JSON.stringify({
           type: 'hello',
-          status: state?.status ?? 'offline',
+          status: statusOf(c, state?.status),
           consoleMode: 'full',
           canCommand: true,
           name: c.name,
@@ -670,7 +681,10 @@ export function registerApiV1Routes(
     const unsubscribe = bus.on((event) => {
       if ('serverId' in event && event.serverId === id) {
         if (event.type === 'state') {
-          socket.send(JSON.stringify({ type: 'status', status: event.state.status }));
+          // Wie in Liste und Detail: Installation und Fehlerzustand in Werte uebersetzen,
+          // die die Oberflaeche kennt. Der Stand der Installation steht in der Registry.
+          const status = statusOf(registry.get(id) ?? c, event.state.status);
+          socket.send(JSON.stringify({ type: 'status', status }));
         } else if (event.type === 'console') {
           socket.send(JSON.stringify({ type: 'log', lines: [event.line] }));
         }
@@ -684,12 +698,15 @@ export function registerApiV1Routes(
         socket.send(
           JSON.stringify({
             type: 'stats',
+            // Genau die Felder, die die Oberflaeche liest (ContainerStats im Panel,
+            // `Stats` in web/src/lib/types.ts). Mit anderen Namen steht dort
+            // "undefined MB". Der Netzwerkverkehr je Prozess wird nicht gemessen.
             stats: {
               cpuPercent: stats.cpuPercent,
-              ramMb: stats.memoryMb,
-              diskMb: 1024,
-              rxBytes: 0,
-              txBytes: 0,
+              memMb: stats.memoryMb,
+              memLimitMb: c.maxMemoryMb ?? 2048,
+              netRxBytes: 0,
+              netTxBytes: 0,
             },
             ts: Date.now(),
           }),
@@ -750,6 +767,12 @@ export function registerApiV1Routes(
     });
   });
 
+  // Die Oberflaeche fragt das alle paar Sekunden ab - leer statt 404.
+  server.get('/api/v1/notifications', async () => ({ items: [] }));
+  server.post('/api/v1/presence/ping', async () => ({ ok: true }));
+  // Netzwerkverlauf: der Core zeichnet ihn nicht auf. Ohne Punkte zeigt die Oberflaeche nichts an.
+  server.get('/api/v1/servers/:id/history', async () => ({ step: 10_000, points: [] }));
+
   // Dummy-Zusatz-Routen für ServerPage
   server.get<{ Params: { id: string } }>('/api/v1/servers/:id/presence', async () => {
     return { online: false, players: [] };
@@ -761,7 +784,38 @@ export function registerApiV1Routes(
     return { activity: [] };
   });
   server.get('/api/v1/tasks/active', async () => {
-    return { tasks: [] };
+    return { tasks: registry.listTasks({ active: true }).map(toActiveTask) };
+  });
+
+  server.get<{ Params: { id: string } }>('/api/v1/servers/:id/tasks/active', async (req, reply) => {
+    const c = findServer(req.params.id);
+    if (!c) return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
+    return { tasks: registry.listTasks({ active: true, serverId: c.id }).map(toActiveTask) };
+  });
+
+  // Neuinstallation: laedt Spiel und Java erneut, Welt und Einstellungen bleiben liegen.
+  server.post<{ Params: { id: string } }>('/api/v1/servers/:id/reinstall', async (req, reply) => {
+    const c = findServer(req.params.id);
+    if (!c) return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
+    if (!installs || !c.install) {
+      return reply.status(400).send({ error: 'Dieser Server wurde nicht vom Core installiert.', code: 'not_installable' });
+    }
+    if (installs.isInstalling(c.id)) {
+      return reply.status(409).send({ error: 'Der Server wird bereits installiert.', code: 'installing' });
+    }
+    const state = await stateOf(c.id);
+    if (state && state.status !== 'offline' && state.status !== 'error') {
+      return reply.status(409).send({ error: 'Bitte den Server zuerst stoppen.', code: 'running' });
+    }
+    const spec = {
+      kind: c.install.kind,
+      variables: c.install.variables ?? {},
+      propertiesTemplate: c.install.propertiesTemplate ?? {},
+    };
+    await registry.update({ ...c, install: { ...c.install, state: 'installing' } });
+    registry.audit('server.reinstall', c.id, 'standalone');
+    const task = installs.start(c.id, spec);
+    return { ok: true, taskId: task.id };
   });
 
   // 4. Spielekatalog (Eggs)
@@ -777,9 +831,72 @@ export function registerApiV1Routes(
         consoleMode: e.consoleMode,
         resources: e.resources,
         servers: 0,
+        cover: coverOf(e),
+        coverChoice: storedCover(e.id)?.choice ?? 'auto',
+        hasSteamCover: steamAppId(e.name, e.raw) !== null,
       })),
     };
   });
+
+  // Titelbild eines Spiels. Der Browser schickt das Cookie der Sitzung mit,
+  // ein <img> braucht keinen Bearer-Token.
+  server.get<{ Params: { id: string } }>('/api/v1/eggs/:id/cover', async (req, reply) => {
+    const egg = (await loadEggs()).find((e) => e.id === req.params.id);
+    if (!egg) return reply.status(404).send({ error: 'Egg nicht gefunden' });
+
+    const choice = storedCover(egg.id)?.choice ?? 'auto';
+
+    if (choice === 'custom') {
+      const custom = await readCustomCover(coverDir, egg.id);
+      if (!custom) return reply.status(404).send({ error: 'Kein eigenes Bild vorhanden' });
+      return reply.header('Cache-Control', 'private, max-age=86400').type(custom.type).send(custom.data);
+    }
+
+    const appId = choice === 'random' || choice.startsWith('branding:') ? null : steamAppId(egg.name, egg.raw);
+    if (appId === null) return reply.status(404).send({ error: 'Dieses Spiel hat kein Steam-Bild' });
+    const image = await steamCover(appId, coverDir, options.fetchImpl);
+    if (!image) {
+      // Nicht zwischenspeichern: beim naechsten Versuch ist Steam vielleicht wieder da.
+      reply.header('Cache-Control', 'no-store');
+      return reply.status(404).send({ error: 'Steam-Bild nicht erreichbar' });
+    }
+    return reply.header('Cache-Control', 'private, max-age=86400').type('image/jpeg').send(image);
+  });
+
+  // Admin: Titelbild waehlen (automatisch, Steam, Panel-Motiv) oder eigenes Bild hochladen.
+  server.put<{ Params: { id: string }; Body: { choice?: unknown; upload?: unknown } | undefined }>(
+    '/api/v1/admin/eggs/:id/cover',
+    { bodyLimit: 3 * 1024 * 1024 },
+    async (req, reply) => {
+      const egg = (await loadEggs()).find((e) => e.id === req.params.id);
+      if (!egg) return reply.status(404).send({ error: 'Egg nicht gefunden' });
+
+      const body = req.body ?? {};
+      const stamp = String(Date.now());
+      try {
+        if (typeof body.upload === 'string') {
+          await saveCustomCover(coverDir, egg.id, body.upload);
+          registry.setSetting(`cover.${egg.id}`, { choice: 'custom', v: stamp });
+          registry.audit('egg.cover', null, 'standalone', { egg: egg.id, choice: 'custom' });
+        } else if (typeof body.choice === 'string' && isValidChoice(body.choice)) {
+          if (body.choice === 'steam' && steamAppId(egg.name, egg.raw) === null) {
+            return reply.status(400).send({ error: 'Dieses Spiel hat kein Steam-Bild.' });
+          }
+          if (body.choice === 'custom' && !(await readCustomCover(coverDir, egg.id))) {
+            return reply.status(400).send({ error: 'Es gibt noch kein eigenes Bild.' });
+          }
+          if (body.choice === 'auto') registry.deleteSetting(`cover.${egg.id}`);
+          else registry.setSetting(`cover.${egg.id}`, { choice: body.choice, v: stamp });
+          registry.audit('egg.cover', null, 'standalone', { egg: egg.id, choice: body.choice });
+        } else {
+          return reply.status(400).send({ error: 'Ungueltige Angabe' });
+        }
+      } catch (err) {
+        return reply.status(400).send({ error: (err as Error).message });
+      }
+      return { ok: true };
+    },
+  );
 
   server.get<{ Params: { id: string } }>('/api/v1/eggs/:id', async (req, reply) => {
     const eggs = await loadEggs();

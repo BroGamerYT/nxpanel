@@ -37,6 +37,7 @@ const schema = z
     NEXUSCORE_CORS_ORIGINS: z.string().default(''),
     NEXUSCORE_ALLOWED_HOSTS: z.string().default(''),
     NEXUSCORE_SERVER_ROOT: z.string().default(''),
+    NEXUSCORE_MAX_UPLOAD_MB: z.coerce.number().int().min(1).max(102400).default(2048),
     NEXUSCORE_PORT_RANGE: z
       .string()
       .regex(/^\d+-\d+$/, 'NEXUSCORE_PORT_RANGE muss z. B. 25565-25664 sein')
@@ -113,6 +114,8 @@ export const config = {
     .filter(Boolean),
   /** Verzeichnis, in dem alle Instanzen liegen muessen. Leer = `<dataDir>/servers`. */
   serverRoot: env.NEXUSCORE_SERVER_ROOT.trim(),
+  /** Groesste Datei, die der Dateimanager hochladen darf (MB). */
+  maxUploadMb: env.NEXUSCORE_MAX_UPLOAD_MB,
   /** Bereich, aus dem der Core Spielports vergibt. */
   portRange: {
     from: Number(env.NEXUSCORE_PORT_RANGE.split('-')[0]),

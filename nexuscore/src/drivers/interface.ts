@@ -13,6 +13,10 @@ export interface HostDriver {
   readonly name: string;
   initialize(): Promise<void>;
   registerServer(config: ServerInstanceConfig): Promise<ServerState>;
+  /** Ersetzt die Konfiguration einer angemeldeten, nicht laufenden Instanz (z. B. nach einer Neuinstallation). */
+  updateServer?(config: ServerInstanceConfig): Promise<ServerState>;
+  /** Meldet eine nicht laufende Instanz ab (nach dem Loeschen eines Servers). */
+  unregisterServer?(serverId: string): Promise<void>;
   startServer(serverId: string): Promise<ServerState>;
   stopServer(serverId: string): Promise<ServerState>;
   killServer(serverId: string): Promise<ServerState>;
