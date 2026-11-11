@@ -245,7 +245,7 @@ Endlosschleife läuft. Nichts wird installiert.
 > **Noch offen in B4:** SFTP, Zip64 (über 4 GB), .tar.zst.
 >
 > **Funktionsliste und Oberfläche:** `GET /api/v1/about` meldet `standalone: true` und `features`
-> (heute `files`, `settings`, `logfiles`, `schedules`, `backups`, `players`, `admin`, `audit` und `account`). Die Oberfläche (`web/src/lib/features.ts`) blendet Menüpunkte, Server-Tabs, Einträge der
+> (heute `files`, `settings`, `logfiles`, `schedules`, `backups`, `players`, `admin`, `audit` und `account`, `configs` und `motd`). Die Oberfläche (`web/src/lib/features.ts`) blendet Menüpunkte, Server-Tabs, Einträge der
 > Befehlspalette und ganze Seiten aus, die der Core nicht kann, und zeigt bei einer direkt aufgerufenen Adresse
 > „Hier nicht verfügbar“. Fehlt die Angabe (Panel), bleibt alles wie bisher. Die Rechte je Server (`SERVER_PERMISSIONS`)
 > enthalten nur noch, wofür es Routen gibt. **Wer eine Funktion baut, trägt sie in `CORE_FEATURES` ein** und nimmt die

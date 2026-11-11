@@ -33,6 +33,7 @@ import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
 import { registerAccountRoutes } from './account.js';
+import { registerExtraRoutes } from './extras.js';
 import type { SlpResult } from '../../games/minecraft.js';
 import { PlayerManager } from '../../players/manager.js';
 import { registerPlayerRoutes } from './players.js';
@@ -55,7 +56,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -222,6 +223,7 @@ export function registerApiV1Routes(
   registerBackupRoutes(server, { find: findServer, backups });
   registerAdminRoutes(server, { registry, driver });
   registerAccountRoutes(server, { registry, account });
+  registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
   registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: (id) => backups.purgeServer(id) });
