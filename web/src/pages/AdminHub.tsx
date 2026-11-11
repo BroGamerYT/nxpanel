@@ -20,6 +20,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useFeatures } from '../lib/features';
 import { useAuth } from '../lib/auth';
 import { Spinner } from '../components/ui';
 
@@ -39,6 +40,7 @@ interface AdminOverviewData {
 
 export function AdminHub() {
   const { me } = useAuth();
+  const features = useFeatures();
   const isAdmin = me?.user.role === 'admin';
 
   const { data, isLoading } = useQuery<AdminOverviewData>({
@@ -63,6 +65,7 @@ export function AdminHub() {
     {
       title: 'Benutzer & Rechte',
       path: '/admin/users',
+      feature: 'users',
       perm: 'admin.users',
       icon: Users,
       color: 'text-amber',
@@ -74,6 +77,7 @@ export function AdminHub() {
     {
       title: 'Audit- & Sicherheits-Log',
       path: '/admin/audit',
+      feature: 'audit',
       perm: 'admin.audit',
       icon: History,
       color: 'text-sky-400',
@@ -85,6 +89,7 @@ export function AdminHub() {
     {
       title: 'Host-Logs & NexusLogs',
       path: '/admin/host-logs',
+      feature: 'hostlogs',
       perm: 'admin.audit',
       icon: Terminal,
       color: 'text-emerald-400',
@@ -96,6 +101,7 @@ export function AdminHub() {
     {
       title: 'Spiele-Testbericht',
       path: '/admin/testbericht',
+      feature: 'testreport',
       perm: 'admin.test_report',
       icon: FlaskConical,
       color: 'text-purple-400',
@@ -107,6 +113,7 @@ export function AdminHub() {
     {
       title: 'Dateien (VM-Instanz)',
       path: '/admin/dateien',
+      feature: 'adminfiles',
       perm: 'admin.files',
       icon: FolderTree,
       color: 'text-amber-400',
@@ -118,6 +125,7 @@ export function AdminHub() {
     {
       title: 'Netzwerk & Allokationen',
       path: '/netzwerk',
+      feature: 'network',
       perm: 'admin.nodes',
       icon: Network,
       color: 'text-cyan-400',
@@ -129,6 +137,7 @@ export function AdminHub() {
     {
       title: 'Hosts & Server-Nodes',
       path: '/admin/hosts',
+      feature: 'hosts',
       perm: 'admin.nodes',
       icon: Server,
       color: 'text-blue-400',
@@ -140,6 +149,7 @@ export function AdminHub() {
     {
       title: 'Integrationen & Dienste',
       path: '/admin/integrationen',
+      feature: 'integrations',
       perm: 'admin.integrations',
       icon: Blocks,
       color: 'text-rose-400',
@@ -150,8 +160,9 @@ export function AdminHub() {
     },
   ];
 
+  // Der Core bietet nur einen Teil der Bereiche an (Funktionsliste unter /about)
   const visibleModules = modules.filter(
-    (m) => isAdmin || !m.perm || Boolean(me?.permissions[m.perm])
+    (m) => features.has(m.feature) && (isAdmin || !m.perm || Boolean(me?.permissions[m.perm])),
   );
 
   return (

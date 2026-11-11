@@ -31,6 +31,7 @@ import { PowerError, createPowerOps } from '../../ops/power.js';
 import { findInstance } from '../../store/find.js';
 import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
+import { registerAdminRoutes } from './admin.js';
 import type { SlpResult } from '../../games/minecraft.js';
 import { PlayerManager } from '../../players/manager.js';
 import { registerPlayerRoutes } from './players.js';
@@ -53,7 +54,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -197,6 +198,7 @@ export function registerApiV1Routes(
 
   registerScheduleRoutes(server, { registry, find: findServer, scheduler });
   registerBackupRoutes(server, { find: findServer, backups });
+  registerAdminRoutes(server, { registry, driver });
   registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
   registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: (id) => backups.purgeServer(id) });

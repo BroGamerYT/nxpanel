@@ -404,6 +404,54 @@ export class ServerRegistry {
       .run(new Date().toISOString(), action, serverId, actor, detail ? JSON.stringify(withoutSecrets(detail)) : null);
   }
 
+  /** Gefiltert und seitenweise (`before` = Eintrag, ab dem es weitergeht), neueste zuerst. */
+  queryAudit(options: { limit: number; before?: number; actionPrefix?: string; search?: string; serverId?: string }): AuditEntry[] {
+    // % und _ sind in LIKE Platzhalter - als Text suchen, mit "!" als Schutzzeichen
+    const like = (s: string) => s.replace(/[!%_]/g, (c) => `!${c}`);
+    const where: string[] = [];
+    const params: (string | number)[] = [];
+    if (options.before) {
+      where.push('id < ?');
+      params.push(options.before);
+    }
+    if (options.actionPrefix) {
+      where.push("action LIKE ? ESCAPE '!'");
+      params.push(like(options.actionPrefix) + '%');
+    }
+    if (options.serverId) {
+      where.push('server_id = ?');
+      params.push(options.serverId);
+    }
+    if (options.search) {
+      where.push("(action LIKE ? ESCAPE '!' OR actor LIKE ? ESCAPE '!' OR COALESCE(detail, '') LIKE ? ESCAPE '!')");
+      const s = '%' + like(options.search) + '%';
+      params.push(s, s, s);
+    }
+    const sql = `SELECT * FROM audit ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ?`;
+    const rows = this.db.prepare(sql).all(...params, Math.min(Math.max(1, Math.floor(options.limit)), 2000)) as {
+      id: number; ts: string; action: string; server_id: string | null; actor: AuditActor; detail: string | null;
+    }[];
+    return rows.map((row) => ({
+      id: Number(row.id),
+      ts: row.ts,
+      action: row.action,
+      serverId: row.server_id,
+      actor: row.actor,
+      detail: parseJson<Record<string, unknown>>(row.detail),
+    }));
+  }
+
+  /** Zahlen fuer die Kopfzeile der Audit-Seite; "heute" ab Mitternacht Ortszeit. */
+  auditStats(now: Date = new Date()): { totalToday: number; totalAll: number; uniqueActorsToday: number; uniqueServersToday: number } {
+    const midnight = new Date(now);
+    midnight.setHours(0, 0, 0, 0);
+    const today = this.db
+      .prepare('SELECT COUNT(*) AS n, COUNT(DISTINCT actor) AS a, COUNT(DISTINCT server_id) AS s FROM audit WHERE ts >= ?')
+      .get(midnight.toISOString()) as { n: number; a: number; s: number };
+    const all = this.db.prepare('SELECT COUNT(*) AS n FROM audit').get() as { n: number };
+    return { totalToday: Number(today.n), totalAll: Number(all.n), uniqueActorsToday: Number(today.a), uniqueServersToday: Number(today.s) };
+  }
+
   /** Neueste Eintraege zuerst. */
   recentAudit(options: { serverId?: string; limit?: number } = {}): AuditEntry[] {
     const limit = Math.min(Math.max(1, Math.floor(options.limit ?? 100)), 1000);

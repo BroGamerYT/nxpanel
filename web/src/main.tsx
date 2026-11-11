@@ -56,7 +56,7 @@ function App() {
         {me.permissions['admin.nodes'] && <Route path="netzwerk" element={<FeatureGate feature="admin"><Network /></FeatureGate>} />}
         {me.permissions['admin.nodes'] && <Route path="admin/hosts" element={<FeatureGate feature="admin"><Hosts /></FeatureGate>} />}
         {me.permissions['admin.users'] && <Route path="admin/users" element={<FeatureGate feature="admin"><AdminUsers /></FeatureGate>} />}
-        {me.permissions['admin.audit'] && <Route path="admin/audit" element={<FeatureGate feature="admin"><AdminAudit /></FeatureGate>} />}
+        {me.permissions['admin.audit'] && <Route path="admin/audit" element={<FeatureGate feature="audit"><AdminAudit /></FeatureGate>} />}
         {me.user.role === 'admin' && <Route path="admin/host-logs" element={<FeatureGate feature="admin"><AdminHostLogs /></FeatureGate>} />}
         {me.user.role === 'admin' && <Route path="admin/testbericht" element={<FeatureGate feature="admin"><GameTestReport /></FeatureGate>} />}
         {me.user.role === 'admin' && <Route path="admin/integrationen" element={<FeatureGate feature="admin"><Integrations /></FeatureGate>} />}

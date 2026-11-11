@@ -15,7 +15,8 @@ import type { About } from './version';
  * sich nichts.
  *
  * Bereiche: files, backups, schedules, players, subusers, logfiles, settings,
- * timeline, updates (je Server) sowie admin, help, account (ganze Seiten).
+ * timeline, updates (je Server) sowie admin (Uebersicht), audit, help, account (ganze Seiten);
+ * Kacheln der Admin-Uebersicht: users, hostlogs, testreport, adminfiles, network, hosts, integrations.
  */
 export function useFeatures(): { standalone: boolean; has: (feature: string) => boolean } {
   const { data } = useQuery({ queryKey: ['about'], queryFn: () => api<About>('/about'), staleTime: 5 * 60_000 });
