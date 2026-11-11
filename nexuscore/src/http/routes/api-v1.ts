@@ -32,6 +32,8 @@ import { findInstance } from '../../store/find.js';
 import { BackupManager } from '../../backups/manager.js';
 import { registerBackupRoutes } from './backups.js';
 import { registerAdminRoutes } from './admin.js';
+import { registerNetworkRoutes } from './network.js';
+import { getNetwork, publicHostOf } from '../../network.js';
 import { GameTester } from '../../testing/game-tester.js';
 import { registerAccountRoutes } from './account.js';
 import { registerExtraRoutes } from './extras.js';
@@ -57,7 +59,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -148,6 +150,11 @@ export function registerApiV1Routes(
   };
 
   /** Ports eines Eggs (Spiel, Abfrage, ...) als freie Ports des Cores; der erste ist der schon vergebene Spielport. */
+  const portRangeNow = () => {
+    const n = getNetwork(registry);
+    return { from: n.portFrom, to: n.portTo };
+  };
+
   const eggPorts = async (raw: unknown, firstPort: number): Promise<ServerInstanceConfig['ports']> => {
     const spec = (raw ?? {}) as {
       primary?: { ref?: string; protocol?: string };
@@ -162,7 +169,7 @@ export function registerApiV1Routes(
       const hostPort =
         index === 0
           ? firstPort
-          : await allocatePort([...registry.list(), { ports: result.concat({ name: 'x', hostPort: firstPort, protocol: 'udp' }) } as ServerInstanceConfig]);
+          : await allocatePort([...registry.list(), { ports: result.concat({ name: 'x', hostPort: firstPort, protocol: 'udp' }) } as ServerInstanceConfig], undefined, portRangeNow());
       result.push({ name, hostPort, protocol: toProtocol(p.protocol) });
     }
     return result.length ? result : [{ name: 'game', hostPort: firstPort, protocol: 'tcp' }];
@@ -231,10 +238,11 @@ export function registerApiV1Routes(
     eggs: loadEggs,
     variablesFor: (eggId, given) => eggInstallData(eggId, given),
     portsFor: eggPorts,
-    allocatePort: (existing) => allocatePort(existing),
+    allocatePort: (existing) => allocatePort(existing, undefined, portRangeNow()),
     ...(options.ping ? { ping: options.ping } : {}),
   });
   registerAdminRoutes(server, { registry, driver, tester });
+  registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
   registerAccountRoutes(server, { registry, account });
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });
@@ -457,7 +465,7 @@ export function registerApiV1Routes(
         diskMb: meta.diskMb ?? 10240,
         suspended: false,
         primaryPort: c.ports[0]?.hostPort ?? 25565,
-        publicHost: '127.0.0.1',
+        publicHost: publicHostOf(registry),
         isOwner: true,
         permissions: SERVER_PERMISSIONS,
         startedAt: state?.startedAt ?? null,
@@ -516,7 +524,7 @@ export function registerApiV1Routes(
         tags: meta.tags ?? [],
         isFavorite: meta.isFavorite ?? false,
         suspended: false,
-        publicHost: '127.0.0.1',
+        publicHost: publicHostOf(registry),
         cover: coverForServer(c, await loadEggs()),
         ports: c.ports.map((p, idx) => ({
           port: p.hostPort,
@@ -566,7 +574,7 @@ export function registerApiV1Routes(
     // Freien Port im konfigurierten Bereich suchen (Block A5)
     let port: number;
     try {
-      port = await allocatePort(registry.list());
+      port = await allocatePort(registry.list(), undefined, portRangeNow());
     } catch (err) {
       return reply.status(409).send({ error: (err as Error).message });
     }

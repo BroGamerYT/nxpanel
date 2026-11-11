@@ -7,6 +7,7 @@ import { copyText } from '../lib/clipboard';
 import type { AllocationRow, NodeInfo, DnsConfig, ServerSyncTarget } from '../lib/types';
 import { Button, ErrorBox, Field, Input, Led, Spinner } from '../components/ui';
 import { t, tn, fmtDateTime } from '../lib/i18n';
+import { useFeatures } from '../lib/features';
 
 /**
  * Netzwerk (nur Admins): oeffentliche Adresse und Port-Bereich festlegen,
@@ -17,6 +18,8 @@ export function Network() {
   const nodes = useQuery({ queryKey: ['nodes'], queryFn: () => api<{ nodes: NodeInfo[] }>('/admin/nodes') });
   const allocs = useQuery({ queryKey: ['allocations'], queryFn: () => api<{ allocations: AllocationRow[] }>('/admin/allocations'), refetchInterval: 10_000 });
   const node = nodes.data?.nodes[0];
+  // Der Core hat weder DDNS-Anbieter noch einen Proxmox-Host davor
+  const { has } = useFeatures();
 
   return (
     <div className="max-w-5xl space-y-10">
@@ -34,8 +37,8 @@ export function Network() {
       </header>
       {nodes.isLoading && <Spinner />}
       {node && <NodeSettings node={node} />}
-      <DnsSettingsCard />
-      {node && <ProxmoxRules node={node} />}
+      {has('dns') && <DnsSettingsCard />}
+      {node && has('proxmox') && <ProxmoxRules node={node} />}
       <NetCheck />
       <section className="space-y-3">
         <h2 className="font-medium">{t('network.allocated')}</h2>

@@ -25,13 +25,14 @@ export function isPortFree(port: number, host = '0.0.0.0'): Promise<boolean> {
 export async function allocatePort(
   servers: ServerInstanceConfig[],
   probe: (port: number) => Promise<boolean> = isPortFree,
+  range: { from: number; to: number } = config.portRange,
 ): Promise<number> {
   const taken = new Set<number>();
   for (const server of servers) {
     for (const port of server.ports) taken.add(port.hostPort);
   }
 
-  const { from, to } = config.portRange;
+  const { from, to } = range;
   for (let port = from; port <= to; port++) {
     if (taken.has(port)) continue;
     if (await probe(port)) return port;
