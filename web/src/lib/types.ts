@@ -96,6 +96,8 @@ export interface EggSummary {
   cover?: CoverInfo; coverChoice?: string; hasSteamCover?: boolean;
   images: Array<{ key: string; label: string; image: string; default: boolean }>;
   consoleMode: string; resources: { base_ram_mb?: number; ram_per_player_mb?: number; min_cpu_percent?: number } | null;
+  /** false: der Core (ohne Docker) kann dieses Spiel noch nicht selbst installieren. Fehlt die Angabe (Panel), gilt es als installierbar. */
+  installable?: boolean;
 }
 
 export interface EggVariable {

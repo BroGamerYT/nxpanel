@@ -117,6 +117,7 @@
     "bannerText": "Nach der Installation übernimmt das Panel die Daten. Bis das fertig ist, steht der Server auf „{status}“ und lässt sich nicht starten.",
     "changedFromBackup": "geändert – im Backup stand: {value}",
     "consoleReadonly": "Konsole nur lesend",
+    "notAvailable": "Im Core noch nicht verfügbar",
     "cpuHint": "100 % entspricht einem Kern.",
     "diskMin": "Das Backup braucht mindestens etwa {gb} GB.",
     "diskTooSmall": "Zu klein für die Daten aus dem Backup",

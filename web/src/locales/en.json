@@ -117,6 +117,7 @@
     "bannerText": "After installation the panel imports the data. Until then the server shows “{status}” and cannot be started.",
     "changedFromBackup": "changed – the backup had: {value}",
     "consoleReadonly": "console read-only",
+    "notAvailable": "Not available in the core yet",
     "cpuHint": "100 % equals one core.",
     "diskMin": "The backup needs at least about {gb} GB.",
     "diskTooSmall": "Too small for the backup data",

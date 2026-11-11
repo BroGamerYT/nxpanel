@@ -94,8 +94,14 @@ function PickGame({ selected, onPick }: { selected: string | null; onPick: (id: 
   const groups = [...byCat.entries()];
   const meta = (e: EggSummary) => (
     <>
-      {e.resources?.base_ram_mb ? t('create.ramFrom', { ram: formatMb(e.resources.base_ram_mb) }) : t('create.ramAsNeeded')}
-      {e.consoleMode !== 'full' && ` · ${t('create.consoleReadonly')}`}
+      {e.installable === false
+        ? t('create.notAvailable')
+        : (
+          <>
+            {e.resources?.base_ram_mb ? t('create.ramFrom', { ram: formatMb(e.resources.base_ram_mb) }) : t('create.ramAsNeeded')}
+            {e.consoleMode !== 'full' && ` · ${t('create.consoleReadonly')}`}
+          </>
+        )}
     </>
   );
   const coverButton = (e: EggSummary, className: string) => isAdmin && (
@@ -130,8 +136,8 @@ function PickGame({ selected, onPick }: { selected: string | null; onPick: (id: 
             <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {list.map((e) => (
                 <li key={e.id} className="relative group">
-                  <button onClick={() => onPick(e.id)}
-                    className={`block w-full text-left rounded-lg border overflow-hidden bg-rack hover:border-amber/60 ${selected === e.id ? 'border-amber' : 'border-seam'}`}>
+                  <button onClick={() => onPick(e.id)} disabled={e.installable === false}
+                    className={`block w-full text-left rounded-lg border overflow-hidden bg-rack hover:border-amber/60 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:border-seam ${selected === e.id ? 'border-amber' : 'border-seam'}`}>
                     <GameCover cover={e.cover} seed={e.id} />
                     <span className="block px-3 py-2">
                       <span className="block font-medium truncate group-hover:text-amber">{e.name}</span>
@@ -148,14 +154,15 @@ function PickGame({ selected, onPick }: { selected: string | null; onPick: (id: 
                 <li key={e.id} className="flex items-center">
                   <button
                     onClick={() => onPick(e.id)}
-                    className={`flex-1 min-w-0 text-left px-3 py-2.5 hover:bg-rack flex items-center gap-4 ${selected === e.id ? 'bg-rack' : ''}`}
+                    disabled={e.installable === false}
+                    className={`flex-1 min-w-0 text-left px-3 py-2.5 hover:bg-rack flex items-center gap-4 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-transparent ${selected === e.id ? 'bg-rack' : ''}`}
                   >
                     <GameCover cover={e.cover} seed={e.id} className="w-24 rounded shrink-0" />
                     <span className="flex-1 min-w-0">
                       <span className="block font-medium truncate">{e.name}</span>
                       <span className="block text-sm text-dim truncate">{meta(e)}</span>
                     </span>
-                    <span className="text-sm text-amber shrink-0">{t('common.choose')}</span>
+                    {e.installable !== false && <span className="text-sm text-amber shrink-0">{t('common.choose')}</span>}
                   </button>
                   {coverButton(e, 'size-9 mr-2 bg-transparent text-dim hover:bg-rack-2')}
                 </li>
