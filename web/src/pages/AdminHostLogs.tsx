@@ -48,7 +48,7 @@ interface HostLogsResponse {
 }
 
 export function AdminHostLogs() {
-  const [selectedContainer, setSelectedContainer] = useState('nxp-panel');
+  const [chosenContainer, setSelectedContainer] = useState('nxp-panel');
   const [lineLimit, setLineLimit] = useState(300);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState<'all' | 'error' | 'warn' | 'info'>('all');
@@ -58,10 +58,10 @@ export function AdminHostLogs() {
   const [autoScroll, setAutoScroll] = useState(true);
 
   const { data, isLoading, refetch, isFetching } = useQuery<HostLogsResponse>({
-    queryKey: ['adminHostLogs', selectedContainer, lineLimit, search],
+    queryKey: ['adminHostLogs', chosenContainer, lineLimit, search],
     queryFn: () => {
       const p = new URLSearchParams({
-        container: selectedContainer,
+        container: chosenContainer,
         lines: String(lineLimit),
       });
       if (search.trim()) p.set('search', search.trim());
@@ -70,6 +70,8 @@ export function AdminHostLogs() {
     refetchInterval: autoRefresh ? 3500 : false,
   });
 
+  // Der Core kennt andere Quellen als das Panel: die Antwort sagt, welche gezeigt wird
+  const selectedContainer = data?.container ?? chosenContainer;
   const logs = data?.logs ?? [];
   const containers = data?.containers ?? [];
 

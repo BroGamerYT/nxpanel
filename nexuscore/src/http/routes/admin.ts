@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { HostDriver } from '../../drivers/interface.js';
 import type { ServerRegistry } from '../../store/registry.js';
+import { recentLogLines } from '../../logger.js';
 import { TesterError, type GameTester } from '../../testing/game-tester.js';
 
 /**
@@ -63,6 +64,45 @@ export function registerAdminRoutes(server: FastifyInstance, deps: { registry: S
         containersRunning: 0,
         auditToday: registry.auditStats().totalToday,
       },
+    };
+  });
+
+  // ---------------------------------------------------------- Host-Logs
+
+  const hostLogsQuery = z.object({
+    container: z.string().max(64).optional(),
+    lines: z.coerce.number().int().min(10).max(2000).default(300),
+    search: z.string().max(100).optional(),
+  });
+
+  /** Im Core gibt es nur eine Quelle: das eigene Protokoll (die Oberflaeche nennt sie "Container"). */
+  server.get('/api/v1/admin/host-logs', async (req, reply) => {
+    const q = hostLogsQuery.safeParse(req.query);
+    if (!q.success) return reply.status(400).send({ error: q.error.issues[0]?.message ?? 'Ungültige Anfrage', code: 'invalid_request' });
+    const raw = recentLogLines(q.data.lines);
+    const parsed = raw.map((line, idx) => {
+      let timestamp = '';
+      let message = line;
+      let level: 'info' | 'warn' | 'error' | 'debug' = 'info';
+      try {
+        const j = JSON.parse(line) as { level?: number; time?: number; msg?: string; err?: { message?: string } };
+        if (typeof j.msg === 'string') message = j.msg;
+        if (j.err?.message) message += ` - Fehler: ${j.err.message}`;
+        if (typeof j.time === 'number') timestamp = new Date(j.time).toISOString();
+        if (typeof j.level === 'number') level = j.level >= 50 ? 'error' : j.level >= 40 ? 'warn' : j.level >= 30 ? 'info' : 'debug';
+      } catch {
+        // Klartextzeile
+      }
+      return { id: idx + 1, timestamp, level, message, raw: line };
+    });
+    const needle = q.data.search?.toLowerCase();
+    const logs = needle ? parsed.filter((e) => e.message.toLowerCase().includes(needle)) : parsed;
+    return {
+      container: 'nexuscore',
+      containers: [{ id: 'nexuscore', name: 'nexuscore', image: `NexusCore ${CORE_VERSION}`, state: 'running', status: 'Up', isPanel: false }],
+      logs,
+      count: logs.length,
+      total: parsed.length,
     };
   });
 

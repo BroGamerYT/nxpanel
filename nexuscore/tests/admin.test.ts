@@ -127,4 +127,18 @@ describe('Audit-Log', () => {
     expect((await get('/api/v1/admin/audit?limit=99999')).statusCode).toBe(400);
     expect((await get('/api/v1/admin/audit?before=abc')).statusCode).toBe(400);
   });
+
+  it('liefert das Core-Protokoll als Host-Log, ohne Zugangsdaten', async () => {
+    const { logger } = await import('../src/logger.js');
+    logger.warn({ token: 'geheim-abc' }, 'Host-Log-Probe');
+    const res = await get('/api/v1/admin/host-logs?lines=50&search=Host-Log-Probe');
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.container).toBe('nexuscore');
+    expect(body.logs.length).toBeGreaterThan(0);
+    expect(body.logs[0].level).toBe('warn');
+    expect(JSON.stringify(body)).not.toContain('geheim-abc');
+    expect((await get('/api/v1/admin/host-logs?lines=5')).statusCode).toBe(400);
+    expect((await get('/api/v1/admin/host-logs', {})).statusCode).toBe(401);
+  });
 });
