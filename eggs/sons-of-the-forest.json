@@ -115,5 +115,37 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 2465200,
+    "executable": "SonsOfTheForestDS.exe",
+    "args": [
+      "-batchmode",
+      "-nographics",
+      "-userdatapath",
+      "userdata",
+      "-dedicatedserver.IpAddress",
+      "0.0.0.0",
+      "-dedicatedserver.GamePort",
+      "{{PORT_GAME}}",
+      "-dedicatedserver.QueryPort",
+      "{{PORT_QUERY}}",
+      "-dedicatedserver.BlobSyncPort",
+      "{{PORT_STEAM}}",
+      "-dedicatedserver.ServerName",
+      "{{SERVER_NAME}}",
+      "-dedicatedserver.MaxPlayers",
+      "{{MAX_PLAYERS}}",
+      {
+        "when": "SERVER_PASSWORD",
+        "args": [
+          "-dedicatedserver.Password",
+          "{{SERVER_PASSWORD}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    }
   }
 }

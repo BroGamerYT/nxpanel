@@ -510,7 +510,7 @@ describe('Block B2 - Installation als Aufgabe', () => {
         method: 'POST',
         url: '/api/v1/servers',
         headers: ctx.headers,
-        payload: { name: 'Fehler', eggId: 'rust' },
+        payload: { name: 'Fehler', eggId: 'terraria' },
       });
       const id = created.json().server.id as string;
       // Der Treiber meldet "error", etwa wenn der Prozess nicht starten konnte.
@@ -577,7 +577,7 @@ describe('Block B2 - Installation als Aufgabe', () => {
         method: 'POST',
         url: '/api/v1/servers',
         headers: ctx.headers,
-        payload: { name: 'Pal', eggId: 'rust' },
+        payload: { name: 'Pal', eggId: 'terraria' },
       });
       expect(created.statusCode).toBe(201);
       expect(created.json().taskId).toBeUndefined();

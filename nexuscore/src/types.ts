@@ -70,6 +70,12 @@ export interface SteamFile {
   set: Record<string, string | { $number?: string; $boolean?: string }>;
 }
 
+/**
+ * Ein Startargument: Text mit Platzhaltern, oder eine Gruppe, die nur gilt, wenn eine Bedingung stimmt
+ * (`VAR` = gesetzt, `VAR=wert`, `VAR!=wert`) - fuer Paare wie `+sv_password <Wert>`, die ohne Wert wegfallen sollen.
+ */
+export type SteamArg = string | { when: string; args: string[] };
+
 /** Wie ein Steam-Spiel installiert und gestartet wird (Egg: windows). */
 export interface SteamLaunch {
   appId: number;
@@ -77,7 +83,7 @@ export interface SteamLaunch {
   /** Relativ zum Server-Ordner. */
   executable: string;
   /** Vorlagen mit Platzhaltern wie {{PORT_GAME}} und {{SERVER_NAME}}. */
-  args: string[];
+  args: SteamArg[];
   stopTimeoutSeconds?: number | undefined;
   files?: SteamFile[] | undefined;
 }

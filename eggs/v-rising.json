@@ -171,5 +171,37 @@
         "en": "Disk full: the host does not have enough free space for the game files. Check with \"df -h\" and free up space or enlarge the disk."
       }
     }
-  ]
+  ],
+  "windows": {
+    "steam_app_id": 1829350,
+    "executable": "VRisingServer.exe",
+    "args": [
+      "-persistentDataPath",
+      "save-data",
+      "-serverName",
+      "{{SERVERNAME}}",
+      "-saveName",
+      "{{WORLDNAME}}",
+      "-logFile",
+      "logs/VRisingServer.log"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    },
+    "files": [
+      {
+        "path": "save-data/Settings/ServerHostSettings.json",
+        "format": "json",
+        "set": {
+          "Name": "{{SERVERNAME}}",
+          "Port": {
+            "$number": "{{PORT_GAME}}"
+          },
+          "QueryPort": {
+            "$number": "{{PORT_QUERY}}"
+          }
+        }
+      }
+    ]
+  }
 }

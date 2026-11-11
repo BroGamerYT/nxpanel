@@ -141,5 +141,59 @@
       "default_value": "",
       "rules": "nullable|string|max:256"
     }
-  ]
+  ],
+  "windows": {
+    "steam_app_id": 258550,
+    "executable": "RustDedicated.exe",
+    "args": [
+      "-batchmode",
+      "-nographics",
+      "+server.port",
+      "{{PORT_GAME}}",
+      "+server.identity",
+      "default",
+      "+server.level",
+      "Procedural Map",
+      "+server.seed",
+      "{{RUST_SERVER_SEED}}",
+      "+server.worldsize",
+      "{{RUST_SERVER_WORLDSIZE}}",
+      "+server.maxplayers",
+      "{{RUST_MAXPLAYERS}}",
+      "+server.hostname",
+      "{{RUST_SERVER_NAME}}",
+      {
+        "when": "RUST_SERVER_DESCRIPTION",
+        "args": [
+          "+server.description",
+          "{{RUST_SERVER_DESCRIPTION}}"
+        ]
+      },
+      {
+        "when": "RUST_SERVER_URL",
+        "args": [
+          "+server.url",
+          "{{RUST_SERVER_URL}}"
+        ]
+      },
+      {
+        "when": "RUST_SERVER_BANNER_URL",
+        "args": [
+          "+server.headerimage",
+          "{{RUST_SERVER_BANNER_URL}}"
+        ]
+      },
+      "+rcon.port",
+      "{{PORT_RCON}}",
+      "+rcon.password",
+      "{{RUST_RCON_PASSWORD}}",
+      "+rcon.web",
+      "1",
+      "+app.port",
+      "{{PORT_APP}}"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    }
+  }
 }

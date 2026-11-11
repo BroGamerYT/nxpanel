@@ -425,5 +425,35 @@
       "password_var": "ADMIN_PASSWORD"
     },
     "_comment": "Spielerliste und Kicken/Bannen ueber RCON (ListPlayers, KickPlayer/BanPlayer mit EOS-ID)."
+  },
+  "windows": {
+    "steam_app_id": 2430930,
+    "executable": "ShooterGame/Binaries/Win64/ArkAscendedServer.exe",
+    "args": [
+      {
+        "when": "SERVER_PASSWORD",
+        "args": [
+          "{{MAP}}?listen?SessionName={{SESSION_NAME}}?Port={{PORT_GAME}}?QueryPort=27015?MaxPlayers={{MAX_PLAYERS}}?ServerAdminPassword={{ADMIN_PASSWORD}}?ServerPassword={{SERVER_PASSWORD}}?RCONEnabled=True?RCONPort={{PORT_RCON}}"
+        ]
+      },
+      {
+        "when": "SERVER_PASSWORD=",
+        "args": [
+          "{{MAP}}?listen?SessionName={{SESSION_NAME}}?Port={{PORT_GAME}}?QueryPort=27015?MaxPlayers={{MAX_PLAYERS}}?ServerAdminPassword={{ADMIN_PASSWORD}}?RCONEnabled=True?RCONPort={{PORT_RCON}}"
+        ]
+      },
+      "-server",
+      "-log",
+      "-NoBattlEye",
+      {
+        "when": "ACTIVE_MODS",
+        "args": [
+          "-mods={{ACTIVE_MODS}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 90
+    }
   }
 }

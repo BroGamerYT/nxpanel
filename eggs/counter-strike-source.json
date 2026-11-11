@@ -114,5 +114,32 @@
   "query": {
     "kind": "source",
     "port_ref": "game"
+  },
+  "windows": {
+    "steam_app_id": 232330,
+    "executable": "srcds.exe",
+    "args": [
+      "-console",
+      "-game",
+      "cstrike",
+      "-port",
+      "{{SERVER_PORT}}",
+      "+map",
+      "{{SRCDS_MAP}}",
+      "+ip",
+      "0.0.0.0",
+      "-strictportbind",
+      "-norestart",
+      {
+        "when": "STEAM_TOKEN",
+        "args": [
+          "+sv_setsteamaccount",
+          "{{STEAM_TOKEN}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
   }
 }

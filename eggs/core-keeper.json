@@ -133,5 +133,39 @@
       ],
       "vars": []
     }
+  },
+  "windows": {
+    "steam_app_id": 1963720,
+    "executable": "CoreKeeperServer.exe",
+    "args": [
+      "-batchmode",
+      "-logfile",
+      "CoreKeeperServerLog.txt",
+      "-world",
+      "{{WORLD_INDEX}}",
+      "-worldname",
+      "{{WORLD_NAME}}",
+      {
+        "when": "WORLD_SEED",
+        "args": [
+          "-worldseed",
+          "{{WORLD_SEED}}"
+        ]
+      },
+      "-worldmode",
+      "{{WORLD_MODE}}",
+      "-maxplayers",
+      "{{MAX_PLAYERS}}",
+      {
+        "when": "GAME_ID",
+        "args": [
+          "-gameid",
+          "{{GAME_ID}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
   }
 }

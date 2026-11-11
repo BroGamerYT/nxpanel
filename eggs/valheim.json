@@ -123,5 +123,51 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 896660,
+    "executable": "valheim_server.exe",
+    "args": [
+      "-nographics",
+      "-batchmode",
+      "-name",
+      "{{SERVER_NAME}}",
+      "-port",
+      "{{PORT_GAME}}",
+      "-world",
+      "{{WORLD_NAME}}",
+      {
+        "when": "SERVER_PASS",
+        "args": [
+          "-password",
+          "{{SERVER_PASS}}"
+        ]
+      },
+      {
+        "when": "SERVER_PUBLIC=true",
+        "args": [
+          "-public",
+          "1"
+        ]
+      },
+      {
+        "when": "SERVER_PUBLIC!=true",
+        "args": [
+          "-public",
+          "0"
+        ]
+      },
+      {
+        "when": "CROSSPLAY=true",
+        "args": [
+          "-crossplay"
+        ]
+      },
+      "-savedir",
+      "saves"
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
   }
 }

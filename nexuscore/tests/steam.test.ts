@@ -233,7 +233,7 @@ describe('Egg-Angaben', () => {
     expect(plan!.steam!.files![0]!.set['ServerName']).toBe('"{{SERVER_NAME}}"');
     expect(installPlanFor('enshrouded', eggs.find((e) => e.id === 'enshrouded')!.raw, {})).toMatchObject({ kind: 'steamcmd', steam: { appId: 2278520 } });
     expect(installPlanFor('minecraft-paper', undefined, {})).toEqual({ kind: 'minecraft-paper' });
-    expect(installPlanFor('rust', eggs.find((e) => e.id === 'rust')!.raw, {})).toBeNull(); // noch kein windows-Block
+    expect(installPlanFor('terraria', eggs.find((e) => e.id === 'terraria')!.raw, {})).toBeNull(); // noch kein windows-Block
   });
 });
 

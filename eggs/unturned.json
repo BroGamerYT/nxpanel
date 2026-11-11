@@ -184,5 +184,37 @@
   "resources": {
     "base_ram_mb": 2048,
     "min_cpu_percent": 100
+  },
+  "windows": {
+    "steam_app_id": 1110390,
+    "executable": "Unturned.exe",
+    "args": [
+      "-batchmode",
+      "-nographics",
+      "-bind",
+      "0.0.0.0",
+      "-port",
+      "{{SERVER_PORT}}",
+      {
+        "when": "GSLT",
+        "args": [
+          "-GSLT",
+          "{{GSLT}}"
+        ]
+      },
+      "-Name",
+      "{{SRV_NAME}}",
+      {
+        "when": "SRV_PW",
+        "args": [
+          "-Password",
+          "{{SRV_PW}}"
+        ]
+      },
+      "+InternetServer/{{SRV_ID}}"
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
   }
 }

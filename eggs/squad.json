@@ -293,5 +293,19 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 403240,
+    "executable": "SquadGame/Binaries/Win64/SquadGameServer.exe",
+    "args": [
+      "SquadGame",
+      "Port={{SERVER_PORT}}",
+      "QueryPort={{QUERY_PORT}}",
+      "-beaconport={{BEACON_PORT}}",
+      "-log"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    }
   }
 }

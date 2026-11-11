@@ -303,10 +303,6 @@
           "ExpRate": "{{EXP_RATE}}",
           "PalCaptureRate": "{{PAL_CAPTURE_RATE}}",
           "PalSpawnNumRate": "{{PAL_SPAWN_NUM_RATE}}",
-          "PalDamageRateAttack": "{{PAL_DAMAGE_ATTACK}}",
-          "PalDamageRateDefense": "{{PAL_DAMAGE_DEFENSE}}",
-          "PlayerDamageRateAttack": "{{PLAYER_DAMAGE_ATTACK}}",
-          "PlayerDamageRateDefense": "{{PLAYER_DAMAGE_DEFENSE}}",
           "DeathPenalty": "{{DEATH_PENALTY}}",
           "bIsPvP": "{{PVP_ENABLED}}"
         }

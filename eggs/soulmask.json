@@ -254,5 +254,42 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 3017300,
+    "executable": "WS/Binaries/Win64/WSServer-Win64-Shipping.exe",
+    "args": [
+      "WS",
+      "{{MAP}}",
+      "-server",
+      "-SILENT",
+      "-SteamServerName={{SERVER_NAME}}",
+      "-saving={{SAVE_TIME}}",
+      "-Port={{SERVER_PORT}}",
+      "-QueryPort={{QUERY_PORT}}",
+      "-EchoPort={{ECHO_PORT}}",
+      "-forcepassthrough",
+      "-MaxPlayers={{MAX_PLAYERS}}",
+      "-backup={{BACKUP_TIME}}",
+      "-log",
+      "-UTF8Output",
+      "-MULTIHOME=0.0.0.0",
+      "-online=Steam",
+      {
+        "when": "ADMIN_PASSWORD",
+        "args": [
+          "-adminpsw={{ADMIN_PASSWORD}}"
+        ]
+      },
+      {
+        "when": "SERVER_PASSWORD",
+        "args": [
+          "-PSW={{SERVER_PASSWORD}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    }
   }
 }

@@ -182,5 +182,27 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 2857200,
+    "executable": "AbioticFactor/Binaries/Win64/AbioticFactorServer-Win64-Shipping.exe",
+    "args": [
+      "-log",
+      "-useperfthreads",
+      "-NoAsyncLoadingThread",
+      "-MaxServerPlayers={{NUM_PLAYERS}}",
+      "-Port={{SERVER_PORT}}",
+      "-QueryPort={{QUERY_PORT}}",
+      {
+        "when": "SERVER_PASSWORD",
+        "args": [
+          "-ServerPassword={{SERVER_PASSWORD}}"
+        ]
+      },
+      "-SteamServerName={{SERVER_NAME}}"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    }
   }
 }

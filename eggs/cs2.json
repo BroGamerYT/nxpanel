@@ -199,5 +199,42 @@
         "en": "Disk full: the host does not have enough free space for the game files. Check with \"df -h\" and free up space or enlarge the disk."
       }
     }
-  ]
+  ],
+  "windows": {
+    "steam_app_id": 730,
+    "executable": "game/bin/win64/cs2.exe",
+    "args": [
+      "-dedicated",
+      "-usercon",
+      "-port",
+      "{{PORT_GAME}}",
+      "+map",
+      "{{CS2_STARTMAP}}",
+      "-maxplayers",
+      "{{CS2_MAXPLAYERS}}",
+      "+hostname",
+      "{{CS2_HOSTNAME}}",
+      "+rcon_password",
+      "{{CS2_RCON_PASSWORD}}",
+      {
+        "when": "CS2_PASSWORD",
+        "args": [
+          "+sv_password",
+          "{{CS2_PASSWORD}}"
+        ]
+      },
+      {
+        "when": "CS2_GSLT",
+        "args": [
+          "+sv_setsteamaccount",
+          "{{CS2_GSLT}}"
+        ]
+      },
+      "+sv_cheats",
+      "{{CS2_CHEATS}}"
+    ],
+    "stop": {
+      "timeout_seconds": 45
+    }
+  }
 }

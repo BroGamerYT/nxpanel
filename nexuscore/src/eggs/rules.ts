@@ -1,3 +1,4 @@
+import { generatePassword } from '../store/account.js';
 import { z, type ZodTypeAny } from 'zod';
 import type { RawEggVariable } from './loader.js';
 
@@ -141,6 +142,18 @@ function extractRegex(v: string | undefined): string | undefined {
 // ------------------------------------------------------------ Pruefung
 
 /** Ist die Variable fuer den Nutzer sichtbar und aenderbar? Fehlt die Angabe im Egg, gilt "ja". */
+/** So steht ein zufaelliges Passwort als Vorgabe in den Vorlagen. */
+export const GENERATE_PASSWORD = '{{GENERATE_PASSWORD}}';
+
+/**
+ * Startwert einer Variablen beim Anlegen eines Servers. Eine Vorgabe `{{GENERATE_PASSWORD}}` wird zu einem
+ * echten Zufallspasswort - sonst laege das Passwort buchstaeblich so im Klartext in der Konfiguration.
+ */
+export function initialValue(v: { default_value?: string | undefined }): string {
+  const d = v.default_value ?? '';
+  return d.trim() === GENERATE_PASSWORD ? generatePassword() : d;
+}
+
 export function isUserVariable(v: RawEggVariable): boolean {
   return v.user_viewable !== false && v.user_editable !== false;
 }

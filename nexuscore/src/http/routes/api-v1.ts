@@ -42,7 +42,7 @@ import { getNetwork, publicHostOf } from '../../network.js';
 import { runAs } from '../../store/identity.js';
 import { accessPolicyFor, canSeeServer, flagsFor, type AccessPolicy } from '../authz.js';
 import { getAccess, removeServerAccess, setOwner } from '../../store/access.js';
-import { isUserVariable, validateVariables } from '../../eggs/rules.js';
+import { initialValue, isUserVariable, validateVariables } from '../../eggs/rules.js';
 import { GameTester } from '../../testing/game-tester.js';
 import { registerAccountRoutes } from './account.js';
 import { registerExtraRoutes } from './extras.js';
@@ -147,7 +147,7 @@ export function registerApiV1Routes(
   ): Promise<{ variables: Record<string, string>; propertiesTemplate: Record<string, string> }> => {
     const egg = (await loadEggs()).find((e) => e.id === eggId);
     const variables: Record<string, string> = {};
-    for (const v of egg?.raw.variables ?? []) variables[v.env_variable] = v.default_value ?? '';
+    for (const v of egg?.raw.variables ?? []) variables[v.env_variable] = initialValue(v);
     for (const [key, value] of Object.entries(given ?? {})) {
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
         variables[key] = String(value);
@@ -670,7 +670,7 @@ export function registerApiV1Routes(
           .filter(([key, value]) => allowed.has(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'))
           .map(([key, value]) => [key, String(value)]),
       );
-      const start = Object.fromEntries(defs.map((d) => [d.env_variable, d.default_value ?? '']));
+      const start = Object.fromEntries(defs.map((d) => [d.env_variable, initialValue(d)]));
       const checked = validateVariables(defs, { ...start, ...picked });
       if (checked.errors.length > 0) {
         return reply.status(400).send({ error: 'Ungültige Werte', message: 'Ungültige Werte', code: 'invalid_variables', issues: checked.errors });

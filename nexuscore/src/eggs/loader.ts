@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { SteamArg } from '../types.js';
 
 /**
  * Die mitgelieferten Spielvorlagen (Eggs) aus dem Ordner `eggs/`.
@@ -44,7 +45,7 @@ export interface RawEggFile {
     steam_app_id: number;
     branch?: string;
     executable: string;
-    args?: string[];
+    args?: SteamArg[];
     stop?: { timeout_seconds?: number };
     files?: Array<{
       path: string;

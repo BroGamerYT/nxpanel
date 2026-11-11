@@ -179,5 +179,20 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 405100,
+    "executable": "Hurtworld.exe",
+    "args": [
+      "-batchmode",
+      "-nographics",
+      "-exec",
+      "host {{SERVER_PORT}};queryport {{QUERY_PORT}};maxplayers {{MAX_PLAYERS}};servername {{HOSTNAME}};creativemode {{CREATIVE_MODE}}",
+      "-logfile",
+      "hurtworld.log"
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
   }
 }

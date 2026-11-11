@@ -219,5 +219,25 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 581330,
+    "executable": "Insurgency/Binaries/Win64/InsurgencyServer-Win64-Shipping.exe",
+    "args": [
+      "{{MAP_NAME}}?Scenario={{SCENARIO}}?MaxPlayers={{MAX_PLAYERS}}",
+      "-Port={{SERVER_PORT}}",
+      "-QueryPort={{QUERY_PORT}}",
+      "-log",
+      "-hostname={{HOSTNAME}}",
+      {
+        "when": "GSLTT",
+        "args": [
+          "-GSLTToken={{GSLTT}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    }
   }
 }

@@ -209,5 +209,20 @@
   "query": {
     "kind": "source",
     "port_ref": "query"
+  },
+  "windows": {
+    "steam_app_id": 629800,
+    "executable": "Mordhau/Binaries/Win64/MordhauServer-Win64-Shipping.exe",
+    "args": [
+      "/Game/Mordhau/Maps/{{DEFAULT_MAP}}",
+      "-MaxSlots={{MAX_PLAYERS}}",
+      "-Port={{SERVER_PORT}}",
+      "-queryport={{QUERY_PORT}}",
+      "-beaconport={{BEACON_PORT}}",
+      "-log"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    }
   }
 }

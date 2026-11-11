@@ -94,5 +94,34 @@
   "query": {
     "kind": "source",
     "port_ref": "game"
+  },
+  "windows": {
+    "steam_app_id": 4020,
+    "executable": "srcds.exe",
+    "args": [
+      "-console",
+      "-game",
+      "garrysmod",
+      "-maxplayers",
+      "{{MAX_PLAYERS}}",
+      "-port",
+      "{{SERVER_PORT}}",
+      "+ip",
+      "0.0.0.0",
+      "+map",
+      "{{SRCDS_MAP}}",
+      "-strictportbind",
+      "-norestart",
+      {
+        "when": "STEAM_ACC",
+        "args": [
+          "+sv_setsteamaccount",
+          "{{STEAM_ACC}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
   }
 }

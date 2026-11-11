@@ -177,5 +177,39 @@
   "query": {
     "kind": "source",
     "port_ref": "game"
+  },
+  "windows": {
+    "steam_app_id": 276060,
+    "executable": "svends.exe",
+    "args": [
+      "-console",
+      "-port",
+      "{{SERVER_PORT}}",
+      "+maxplayers",
+      "{{SC_PLAYERS}}",
+      "+map",
+      "{{SC_MAP}}",
+      "+ip",
+      "0.0.0.0",
+      "-strictportbind",
+      "-norestart",
+      {
+        "when": "SC_NAME",
+        "args": [
+          "+hostname",
+          "{{SC_NAME}}"
+        ]
+      },
+      {
+        "when": "SC_PASSWORD",
+        "args": [
+          "+sv_password",
+          "{{SC_PASSWORD}}"
+        ]
+      }
+    ],
+    "stop": {
+      "timeout_seconds": 30
+    }
   }
 }

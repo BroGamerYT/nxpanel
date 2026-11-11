@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isInside } from '../protocol/paths.js';
-import type { ServerInstanceConfig, SteamFile, SteamLaunch } from '../types.js';
+import type { ServerInstanceConfig, SteamArg, SteamFile, SteamLaunch } from '../types.js';
 import { substitute } from './properties.js';
 import { ensureSteamCmd, installSteamApp, type SteamCmdHooks, type SteamRunner } from './steamcmd.js';
 
@@ -36,9 +36,27 @@ export function steamValues(
   return values;
 }
 
-/** Startargumente aus den Vorlagen. Leere Ergebnisse (nicht gesetzte Variable) fallen weg. */
-export function resolveArgs(templates: string[], values: Record<string, string>): string[] {
-  return templates.map((a) => substitute(a, values)).filter((a) => a !== '');
+/** `VAR` (gesetzt), `VAR=wert` oder `VAR!=wert` - Gross-/Kleinschreibung egal. */
+export function conditionHolds(expr: string, values: Record<string, string>): boolean {
+  const m = /^\s*([A-Za-z0-9_]+)\s*(!=|=)?\s*(.*?)\s*$/.exec(expr);
+  if (!m) return false;
+  const actual = (values[m[1]!.toUpperCase()] ?? '').trim();
+  if (m[2] === undefined) return actual !== '';
+  const same = actual.toLowerCase() === m[3]!.toLowerCase();
+  return m[2] === '=' ? same : !same;
+}
+
+/**
+ * Startargumente aus den Vorlagen. Leere Ergebnisse (nicht gesetzte Variable) fallen weg;
+ * eine Gruppe mit `when` gilt nur, wenn ihre Bedingung stimmt.
+ */
+export function resolveArgs(templates: SteamArg[], values: Record<string, string>): string[] {
+  const out: string[] = [];
+  for (const a of templates) {
+    if (typeof a === 'string') out.push(substitute(a, values));
+    else if (conditionHolds(a.when, values)) out.push(...a.args.map((x) => substitute(x, values)));
+  }
+  return out.filter((a) => a !== '');
 }
 
 // ------------------------------------------------------------------ Dateien schreiben
@@ -64,6 +82,24 @@ function resolveValue(raw: SteamFile['set'][string], values: Record<string, stri
   const n = Number(text);
   if (text === '' || !Number.isFinite(n)) throw new Error(`„${text}“ ist keine Zahl (Vorlage ${raw.$number}).`);
   return n;
+}
+
+/** Programme (.exe) bis vier Ebenen tief - fuer die Fehlermeldung bei falschem Programmnamen. */
+export async function listPrograms(dir: string, max = 15): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (current: string, depth: number): Promise<void> => {
+    if (out.length >= max || depth > 4) return;
+    for (const entry of await fs.readdir(current, { withFileTypes: true }).catch(() => [])) {
+      if (out.length >= max) return;
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory() && !entry.isSymbolicLink()) await walk(full, depth + 1);
+      else if (entry.isFile() && /\.exe$/i.test(entry.name) && !/^(unins|vc_redist|vcredist|dxsetup|crashreport|ue4prereq)/i.test(entry.name)) {
+        out.push(path.relative(dir, full).split(path.sep).join('/'));
+      }
+    }
+  };
+  await walk(dir, 0);
+  return out;
 }
 
 /** Setzt Schluessel in einer JSON-Datei; andere Schluessel bleiben, eine kaputte Datei wird neu angelegt. */
@@ -226,8 +262,13 @@ export async function installSteamGame(input: SteamInstallInput, hooks: SteamIns
 
   const executable = path.resolve(input.serverDir, launch.executable);
   if (!isInside(path.resolve(input.serverDir), executable)) throw new Error('Programm außerhalb des Server-Ordners.');
-  await fs.access(executable).catch(() => {
-    throw new Error(`Nach der Installation fehlt ${launch.executable} - das Spiel hat dort keinen Windows-Server.`);
+  await fs.access(executable).catch(async () => {
+    // Hilfe fuer die Vorlage: welche Programme liegen denn da?
+    const found = await listPrograms(input.serverDir).catch(() => [] as string[]);
+    throw new Error(
+      `Nach der Installation fehlt ${launch.executable} - das Spiel hat dort keinen Windows-Server.` +
+        (found.length ? ` Gefundene Programme: ${found.join(', ')}` : ' Es wurden keine Programme (.exe) gefunden.'),
+    );
   });
 
   hooks.onProgress?.(0.97, 'Schreibe Einstellungen');
