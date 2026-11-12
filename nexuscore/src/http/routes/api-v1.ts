@@ -62,6 +62,7 @@ import { registerDocsRoutes } from './docs.js';
 import { registerEggAdminRoutes } from './egg-admin.js';
 import { registerImportRoutes } from './imports.js';
 import { registerModpackRoutes } from './modpacks.js';
+import { SecretStore } from '../../store/secrets.js';
 import { createModpackUpdater } from '../../servers/modpack-update.js';
 import { ImportService } from '../../servers/import-service.js';
 import { registerDockerRoutes } from './docker.js';
@@ -181,6 +182,9 @@ export function registerApiV1Routes(
   const firewall = options.firewall ?? new FirewallManager(path.join(registry.dir, 'firewall-rules.json'));
   // Freigabe in der Windows-Firewall automatisch halten - nur fuer Spiele, die als Prozess dieses Rechners laufen (nicht in Docker)
   const firewallAuto = new FirewallAuto({ registry, firewall, bus, enabled: config.firewallAuto && driver.name === 'windows-native' });
+  // Zugangsdaten (API-Schluessel ...) verschluesselt ablegen; Klartext aus aelteren Staenden wird umgezogen
+  const secrets = new SecretStore(registry, { envKey: config.secretKey });
+  if (secrets.migrateFromPlain('modpacks.curseforgeKey', 'curseforge')) logger.info('CurseForge-Schlüssel verschlüsselt');
   const imports = new ImportService({ registry, bus, installs });
   const power = createPowerOps({
     registry,
@@ -308,6 +312,7 @@ export function registerApiV1Routes(
     firewall,
     backups,
     imports,
+    secrets,
     findServer,
     stateOf,
     statusOf,
@@ -339,7 +344,7 @@ export function registerApiV1Routes(
   registerEggAdminRoutes(server, { registry, fetchImpl: options.fetchImpl });
   registerImportRoutes(server, { registry, imports, policy, find: findServer, stateOf, isOwnerOf });
   const modpacks = createModpackUpdater({ registry, driver, power, backups, bus });
-  registerModpackRoutes(server, { registry, updater: modpacks, policy, find: findServer });
+  registerModpackRoutes(server, { registry, secrets, updater: modpacks, policy, find: findServer });
   registerDockerRoutes(server, { registry, driver });
   if (account) {
     registerImpersonateRoutes(server, { registry, account, sessionCookie });

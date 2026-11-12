@@ -52,6 +52,7 @@ const schema = z
     NEXUSCORE_FIREWALL_AUTO: envBool(true),
     NEXUSCORE_SFTP_PORT: z.coerce.number().int().min(1).max(65535).default(2022),
     NEXUSCORE_SFTP_HOST: z.string().default(''),
+    NEXUSCORE_SECRET_KEY: z.string().default(''),
   })
   .superRefine((env, ctx) => {
     const [rangeFrom, rangeTo] = env.NEXUSCORE_PORT_RANGE.split('-').map(Number);
@@ -140,6 +141,8 @@ export const config = {
   allowUserFileWrite: env.NEXUSCORE_ALLOW_USER_FILE_WRITE,
   /** Windows-Firewall-Freigabe fuer Spielprogramme automatisch anlegen und entfernen (nur Windows, nur direkte Prozesse). */
   firewallAuto: env.NEXUSCORE_FIREWALL_AUTO,
+  /** Hauptschluessel fuer gespeicherte Zugangsdaten (leer = Datei `secret.key` im Datenordner). */
+  secretKey: env.NEXUSCORE_SECRET_KEY.trim() || undefined,
   /** SFTP-Zugang (Port 2022): standardmaessig aus. */
   sftpEnabled: env.NEXUSCORE_SFTP_ENABLED,
   sftpPort: env.NEXUSCORE_SFTP_PORT,

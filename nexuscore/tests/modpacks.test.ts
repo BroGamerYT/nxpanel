@@ -153,6 +153,9 @@ describe('Suche und Schlüssel', () => {
     const audit = (await call('GET', '/api/v1/admin/audit?limit=100')).body;
     expect(audit).toContain('settings.curseforge');
     expect(audit).not.toContain(KEY);
+    // Verschlüsselt abgelegt: kein Klartext in den Einstellungen, der alte Klartext-Eintrag gibt es nicht
+    expect(JSON.stringify(registry.getSetting('secret.curseforge'))).not.toContain(KEY);
+    expect(registry.getSetting('modpacks.curseforgeKey')).toBeUndefined();
     // Mit Schlüssel fragt die Suche CurseForge mit
     urls.length = 0;
     await call('GET', '/api/v1/modpacks/search?q=cool&source=curseforge');

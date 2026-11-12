@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { checkCurseForgeKey, packOf, packStatus, presetFor, searchPacks, type PackSource } from '../../games/modpacks.js';
 import type { ModpackUpdater } from '../../servers/modpack-update.js';
 import type { ServerRegistry } from '../../store/registry.js';
+import type { SecretStore } from '../../store/secrets.js';
 import type { ServerInstanceConfig } from '../../types.js';
 import { flagsFor, type AccessPolicy } from '../authz.js';
 
@@ -14,7 +15,7 @@ import { flagsFor, type AccessPolicy } from '../authz.js';
  * wie die Einzelschritte (Einstellungen aendern und Backups anlegen) und laeuft nur mit fertigem Backup.
  */
 
-const CURSEFORGE_KEY = 'modpacks.curseforgeKey';
+const CURSEFORGE_SECRET = 'curseforge';
 
 const searchQuery = z.object({
   q: z.string().trim().min(2).max(80),
@@ -23,16 +24,17 @@ const searchQuery = z.object({
 
 export interface ModpackRouteDeps {
   registry: ServerRegistry;
+  secrets: SecretStore;
   updater: ModpackUpdater;
   policy: AccessPolicy;
   find: (id: string) => ServerInstanceConfig | undefined;
 }
 
 export function registerModpackRoutes(server: FastifyInstance, deps: ModpackRouteDeps): void {
-  const { registry, updater, policy, find } = deps;
+  const { registry, secrets, updater, policy, find } = deps;
 
   const fail = (reply: FastifyReply, status: number, message: string, code: string): FastifyReply => reply.status(status).send({ error: message, message, code });
-  const key = (): string | null => registry.getSetting<string>(CURSEFORGE_KEY) ?? null;
+  const key = (): string | null => secrets.get(CURSEFORGE_SECRET);
   /** Die Pack-Variablen eines Servers: Umgebung des Containers und Installationsvariablen. */
   const varsOf = (c: ServerInstanceConfig): Record<string, string> => ({ ...(c.env ?? {}), ...(c.install?.variables ?? {}) });
 
@@ -45,7 +47,11 @@ export function registerModpackRoutes(server: FastifyInstance, deps: ModpackRout
   });
 
   /** Ist ein CurseForge-Schluessel hinterlegt? (Der Schluessel selbst geht nie raus.) */
-  server.get('/api/v1/modpacks/curseforge', async () => ({ configured: key() !== null }));
+  server.get('/api/v1/modpacks/curseforge', async () => {
+    const status = secrets.status(CURSEFORGE_SECRET);
+    // "unreadable": gespeichert, aber mit dem jetzigen Hauptschluessel nicht lesbar - der Schluessel muss neu eingegeben werden
+    return { configured: status === 'ok', ...(status === 'unreadable' ? { unreadable: true } : {}) };
+  });
 
   server.put<{ Body: unknown }>('/api/v1/admin/modpacks/curseforge', async (req, reply) => {
     const body = z.object({ apiKey: z.string().trim().min(20).max(200) }).safeParse(req.body);
@@ -54,13 +60,13 @@ export function registerModpackRoutes(server: FastifyInstance, deps: ModpackRout
       return fail(reply, 400, 'Dies ist ein Profile-Token (cfc_pat_...). Bitte unter „API keys“ den Core-Schlüssel kopieren (beginnt mit $2a$10$...).', 'invalid_input');
     }
     if (!(await checkCurseForgeKey(body.data.apiKey))) return fail(reply, 400, 'CurseForge lehnt den Schlüssel ab', 'invalid_input');
-    registry.setSetting(CURSEFORGE_KEY, body.data.apiKey);
+    secrets.set(CURSEFORGE_SECRET, body.data.apiKey);
     registry.audit('settings.curseforge', null, 'standalone', { set: true });
     return { ok: true };
   });
 
   server.delete('/api/v1/admin/modpacks/curseforge', async () => {
-    registry.deleteSetting(CURSEFORGE_KEY);
+    secrets.delete(CURSEFORGE_SECRET);
     registry.audit('settings.curseforge', null, 'standalone', { set: false });
     return { ok: true };
   });
