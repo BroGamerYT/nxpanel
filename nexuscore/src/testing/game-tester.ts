@@ -5,7 +5,8 @@ import type { LoadedEgg } from '../eggs/loader.js';
 import { resolveInsideRoot, serverRootFor } from '../protocol/paths.js';
 import type { EventBus } from '../protocol/events.js';
 import { serverListPing, type SlpResult } from '../games/minecraft.js';
-import { installPlanFor, type InstallManager } from '../install/manager.js';
+import { buildDockerInstance, EggContainerError } from '../docker/egg-container.js';
+import { containerInstallPlan, installPlanFor, type InstallManager } from '../install/manager.js';
 import { logger } from '../logger.js';
 import type { PowerOps } from '../ops/power.js';
 import type { ServerRegistry } from '../store/registry.js';
@@ -140,7 +141,9 @@ export class GameTester {
         out.push({ id: 'minecraft-vanilla', name: 'Minecraft Vanilla', eggId: egg.id, variables: { TYPE: 'VANILLA', EULA: 'TRUE' }, ready: 'minecraft-ping' });
         continue;
       }
-      if (installPlanFor(egg.id, egg.raw, {})) out.push({ id: egg.id, name: egg.name, eggId: egg.id, variables: {}, ready: 'stays-running' });
+      // Docker: jedes Spiel mit Image laeuft als Container (mit Installer-Container, wenn das Egg ein Skript hat); sonst die Windows-Wege
+      const testable = this.deps.driver.name === 'docker' ? egg.images.length > 0 : Boolean(installPlanFor(egg.id, egg.raw, {}));
+      if (testable) out.push({ id: egg.id, name: egg.name, eggId: egg.id, variables: {}, ready: 'stays-running' });
     }
     return out;
   }
@@ -330,35 +333,64 @@ export class GameTester {
       await this.discard(id); // falls etwas uebrig ist
       const egg = (await this.deps.eggs()).find((e) => e.id === testCase.eggId);
       const data = await this.deps.variablesFor(testCase.eggId, testCase.variables);
-      const plan = installPlanFor(testCase.eggId, egg?.raw, data.variables);
-      if (!plan || !installs) return fail('INSTALL_FAILED', 'Der Core kann dieses Spiel nicht installieren.', 0, 0);
+      const docker = driver.name === 'docker';
+      const plan = docker ? null : installPlanFor(testCase.eggId, egg?.raw, data.variables);
+      if (!installs || (docker ? !egg : !plan)) return fail('INSTALL_FAILED', 'Der Core kann dieses Spiel nicht installieren.', 0, 0);
 
       const serverDir = await resolveInsideRoot(serverRootFor(registry.dir), id, 'id');
       await fs.mkdir(serverDir, { recursive: true });
       const firstPort = await this.deps.allocatePort(registry.list());
-      const ports = plan.kind === 'steamcmd' || plan.kind === 'download' ? await this.deps.portsFor(egg?.raw.ports, firstPort) : [{ name: 'game', hostPort: firstPort, protocol: 'tcp' as const }];
-      await registry.add({
-        id,
-        name: `Test ${testCase.name}`,
-        game: testCase.eggId,
-        executable: '',
-        args: [],
-        workingDir: serverDir,
-        maxMemoryMb: options.ramMb ?? 4096,
-        maxCpuPercent: options.cpuPercent ?? 100,
-        ports,
-        install: { state: 'installing', kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...data },
-      });
-
-      // 1) Installation
       const t0 = Date.now();
-      installs.start(id, { kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...data });
-      await installs.whenIdle(id);
-      installSec = Math.round((Date.now() - t0) / 1000);
-      const installed = registry.get(id);
-      if (installed?.install?.state !== 'done') {
-        return fail('INSTALL_FAILED', installed?.install?.error ?? 'Installation fehlgeschlagen', installSec, 0);
+      let installed: ServerInstanceConfig | undefined;
+
+      if (docker) {
+        // Wie beim Anlegen eines Servers: Container aus dem Egg, bei einem Installationsskript erst der Installer-Container
+        const ports = await this.deps.portsFor(egg!.raw.ports, firstPort);
+        let instance: ServerInstanceConfig;
+        try {
+          instance = buildDockerInstance({ id, name: `Test ${testCase.name}`, egg: egg!, serverDir, ramMb: options.ramMb ?? egg!.resources.base_ram_mb ?? 4096, cpuPercent: options.cpuPercent ?? egg!.resources.min_cpu_percent ?? 100, variables: data.variables, ports });
+        } catch (err) {
+          if (err instanceof EggContainerError) return fail('INSTALL_FAILED', err.message, 0, 0);
+          throw err;
+        }
+        if (containerInstallPlan(egg!.raw)) {
+          await registry.add({ ...instance, install: { state: 'installing', kind: 'container', ...data } });
+          // 1) Installation im Installer-Container
+          installs.start(id, { kind: 'container', ...data });
+          await installs.whenIdle(id);
+          installSec = Math.round((Date.now() - t0) / 1000);
+          installed = registry.get(id);
+          if (installed?.install?.state !== 'done') return fail('INSTALL_FAILED', installed?.install?.error ?? 'Installation fehlgeschlagen', installSec, 0);
+        } else {
+          // Das Image richtet sich beim ersten Start selbst ein (Minecraft, TeamSpeak ...)
+          await driver.registerServer(instance);
+          await registry.add(instance);
+          installed = instance;
+        }
+      } else {
+        const ports = plan!.kind === 'steamcmd' || plan!.kind === 'download' ? await this.deps.portsFor(egg?.raw.ports, firstPort) : [{ name: 'game', hostPort: firstPort, protocol: 'tcp' as const }];
+        await registry.add({
+          id,
+          name: `Test ${testCase.name}`,
+          game: testCase.eggId,
+          executable: '',
+          args: [],
+          workingDir: serverDir,
+          maxMemoryMb: options.ramMb ?? 4096,
+          maxCpuPercent: options.cpuPercent ?? 100,
+          ports,
+          install: { state: 'installing', kind: plan!.kind, ...(plan!.steam ? { steam: plan!.steam } : {}), ...data },
+        });
+        // 1) Installation
+        installs.start(id, { kind: plan!.kind, ...(plan!.steam ? { steam: plan!.steam } : {}), ...data });
+        await installs.whenIdle(id);
+        installSec = Math.round((Date.now() - t0) / 1000);
+        installed = registry.get(id);
+        if (installed?.install?.state !== 'done') {
+          return fail('INSTALL_FAILED', installed?.install?.error ?? 'Installation fehlgeschlagen', installSec, 0);
+        }
       }
+      if (!installed) return fail('INSTALL_FAILED', 'Installation fehlgeschlagen', installSec, 0);
       if (this.stopRequested) return fail('INSTALL_FAILED', 'Angehalten', installSec, 0);
 
       // 2) Start und Bereitschaft

@@ -69,6 +69,9 @@ export interface DockerLike {
 
 // ------------------------------------------------------------------ Container bauen
 
+/** Grobe Pruefung eines Image-Namens (Registry/Pfad:Tag@sha256:...). */
+const IMAGE_REF = /^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]{0,254}$/;
+
 export function containerName(serverId: string): string {
   return `nxc-${serverId.replace(/[^a-zA-Z0-9_.-]/g, '-')}`;
 }
@@ -296,6 +299,8 @@ export class DockerDriver implements HostDriver {
   // ---------------------------------------------------------------- Start
 
   private async ensureImage(image: string, serverId: string): Promise<void> {
+    // Ein leerer oder unmoeglicher Image-Name wuerde sonst als Anfrage an einen falschen Rechner enden (und den Core mitreissen)
+    if (!IMAGE_REF.test(image)) throw new Error(`Ungültiger Image-Name "${image}" - dieser Server hat kein Docker-Image.`);
     try {
       await this.docker.getImage(image).inspect();
       return;
