@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>de.nexuscore.core</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@RUNNER@</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>@WORKDIR@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- Neustart nach einem Absturz; ein sauberes Beenden bleibt beendet -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <!-- Beim Beenden bekommt der Core Zeit, die Spiele sauber zu stoppen (Sekunden), bevor launchd ihn hart beendet -->
+  <key>ExitTimeOut</key>
+  <integer>180</integer>
+  <key>StandardOutPath</key>
+  <string>@LOG@</string>
+  <key>StandardErrorPath</key>
+  <string>@LOG@</string>
+</dict>
+</plist>

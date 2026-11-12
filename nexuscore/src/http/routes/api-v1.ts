@@ -20,6 +20,7 @@ import {
 import { serverRootFor, resolveInsideRoot, PathOutsideRootError } from '../../protocol/paths.js';
 import { allocatePort } from '../../protocol/ports.js';
 import type { AccountUser, LocalAccount } from '../../store/account.js';
+import { describePlatform, placeholderScript, platformFor } from '../../platform/index.js';
 import { containerInstallPlan, installPlanFor, installSpecOf, type InstallManager } from '../../install/manager.js';
 import { writeServerProperties } from '../../install/minecraft.js';
 import { registerFileRoutes } from './files.js';
@@ -413,8 +414,10 @@ export function registerApiV1Routes(
       version: '0.2.0',
       build: 'standalone-native',
       sftp: { enabled: config.sftpEnabled && account !== null, port: config.sftpPort },
+      // Welches System, welche Treiber, was es hier gibt (Firewall, Dienst) - die Oberflaeche blendet Unmoegliches aus
+      platform: describePlatform(config.runtime),
       standalone: true,
-      features: CORE_FEATURES,
+      features: CORE_FEATURES.filter((f) => f !== 'firewall' || firewall.available),
       // Leere Listen, damit Seiten, die sie lesen, nicht abstuerzen.
       changelog: [],
       todo: [],
@@ -771,15 +774,11 @@ export function registerApiV1Routes(
     }
 
     // Erstelle Standardausführung oder Script
-    const isWindows = process.platform === 'win32';
-    const scriptName = isWindows ? 'start.bat' : 'start.sh';
-    const scriptPath = path.join(serverDir, scriptName);
+    const here = platformFor();
+    const scriptPath = path.join(serverDir, here.scriptName);
 
     if (!existsSync(scriptPath)) {
-      const scriptContent = isWindows
-        ? `@echo off\necho [NexusPanel] Starte Server '${name}' (Egg: ${eggId})...\necho [NexusPanel] Server bereit auf Port ${port}!\n:loop\nping -n 5 127.0.0.1 >nul\ngoto loop\n`
-        : `#!/bin/sh\necho "[NexusPanel] Starte Server '${name}' (Egg: ${eggId})..."\necho "[NexusPanel] Server bereit auf Port ${port}!"\nwhile true; do sleep 5; done\n`;
-      await fs.writeFile(scriptPath, scriptContent, { mode: 0o755 });
+      await fs.writeFile(scriptPath, placeholderScript(here, name, eggId, port), { mode: 0o755 });
     }
 
     const serverConfig: ServerInstanceConfig = {

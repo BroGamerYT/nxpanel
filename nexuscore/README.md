@@ -67,6 +67,10 @@ zeigt den Status und kopiert die Kopplungs-PIN. Entfernen: `scripts\uninstall-se
 Auf Debian/Ubuntu mit Docker und Node.js ≥ 22.13: `sudo bash nexuscore/deploy/linux/install-core.sh` (vorher bauen, mit `--dry-run` nur ansehen).
 Schritt für Schritt, Selbsttest und Fehlerbilder: [docs/LINUX-VM-TEST.md](docs/LINUX-VM-TEST.md).
 
+## Windows, Linux, macOS
+
+Ein Core für alle Systeme: [docs/INSTALLATION.md](docs/INSTALLATION.md) (Tabelle mit Treiber, Dienst und Einrichten je System).
+
 ## Voraussetzungen
 
 * Node.js 22 oder neuer (`node --version`)

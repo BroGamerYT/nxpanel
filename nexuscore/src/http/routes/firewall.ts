@@ -45,7 +45,7 @@ export function registerFirewallRoutes(server: FastifyInstance, deps: FirewallRo
         rule: rec ? { name: rec.name, program: rec.program, createdAt: rec.createdAt, active: await firewall.exists(rec.name) } : null,
       });
     }
-    return { available: firewall.available, servers };
+    return { available: firewall.available, ...(firewall.reason ? { reason: firewall.reason } : {}), servers };
   });
 
   server.post<{ Params: { id: string } }>('/api/v1/admin/firewall/:id', async (req, reply) => {

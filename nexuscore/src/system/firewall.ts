@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { platformFor } from '../platform/index.js';
 
 /**
  * Windows-Firewall: eine Freigabe je Spiel-Programm (eingehend, genau diese Datei).
@@ -70,8 +71,14 @@ export class FirewallManager {
     private readonly platform: NodeJS.Platform = process.platform,
   ) {}
 
+  /** Gibt es Firewall-Freigaben je Programm auf diesem System? (nur Windows, siehe platform/index.ts) */
   get available(): boolean {
-    return this.platform === 'win32';
+    return platformFor(this.platform).firewall.available;
+  }
+
+  /** Warum es sie hier nicht gibt (leer, wenn doch). */
+  get reason(): string | undefined {
+    return platformFor(this.platform).firewall.reason;
   }
 
   async records(): Promise<RuleRecord[]> {

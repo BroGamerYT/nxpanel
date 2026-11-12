@@ -13,11 +13,14 @@ import { ServerRegistry, RegistryCorruptError } from './store/registry.js';
 import { DatabaseCorruptError } from './store/database.js';
 import type { ServerInstanceConfig } from './types.js';
 import { getSystemMetrics } from './system/monitor.js';
+import { assertRuntimeSupported } from './platform/index.js';
 
 const STATE_POLL_MS = 2000;
 const METRICS_PUSH_MS = 5000;
 
 function pickDriver(): HostDriver {
+  // Spiele direkt als Prozess gibt es nur unter Windows; Docker geht ueberall (siehe platform/index.ts)
+  assertRuntimeSupported(config.runtime);
   if (config.runtime === 'windows-native') return new WindowsNativeDriver();
   if (config.runtime === 'docker') return new DockerDriver();
   return new MockDriver();

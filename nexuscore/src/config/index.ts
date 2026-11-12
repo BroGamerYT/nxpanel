@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import { platformFor } from '../platform/index.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -103,9 +104,7 @@ export const config = {
   role: env.NEXUSCORE_ROLE,
   host: env.NEXUSCORE_HOST,
   port: env.NEXUSCORE_PORT,
-  runtime:
-    env.NEXUSCORE_RUNTIME ??
-    (process.platform === 'win32' ? ('windows-native' as const) : ('docker' as const)),
+  runtime: env.NEXUSCORE_RUNTIME ?? platformFor().defaultRuntime,
   dataDir: path.resolve(process.cwd(), env.NEXUSCORE_DATA_DIR),
   token: env.NEXUSCORE_TOKEN,
   pairingPin: env.NEXUSCORE_PAIRING_PIN,
