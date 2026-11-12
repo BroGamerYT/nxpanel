@@ -12,6 +12,7 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
+    "import:panel": "node dist/cli/import-panel.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "build:helper": "cargo build --release --manifest-path helper/nxjob/Cargo.toml",

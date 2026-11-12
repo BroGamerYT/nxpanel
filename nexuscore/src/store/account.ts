@@ -156,7 +156,34 @@ export async function hashPassword(password: string): Promise<string> {
   return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${key.toString('hex')}`;
 }
 
+/**
+ * Hashes aus dem Panel (argon2id, PHC-Format) pruefen die Anmeldung weiter - ohne zusaetzliche Bibliothek,
+ * Node bringt argon2 selbst mit. Nach einer erfolgreichen Anmeldung gilt weiter der Hash des Panels; er wird nicht veraendert.
+ */
+function verifyArgon2(password: string, stored: string): boolean {
+  const m = /^\$(argon2id|argon2i|argon2d)\$v=19\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/.exec(stored);
+  if (!m) return false;
+  const expected = Buffer.from(m[6]!, 'base64');
+  if (expected.length < 16) return false;
+  try {
+    // Die Typen von Node kennen argon2Sync noch nicht (ab Node 24.7 vorhanden)
+    const argon2Sync = (crypto as unknown as { argon2Sync: (alg: string, o: Record<string, unknown>) => Buffer }).argon2Sync;
+    const actual = argon2Sync(m[1]!, {
+      message: Buffer.from(password),
+      nonce: Buffer.from(m[5]!, 'base64'),
+      memory: Number(m[2]),
+      passes: Number(m[3]),
+      parallelism: Number(m[4]),
+      tagLength: expected.length,
+    });
+    return crypto.timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (stored.startsWith('$argon2')) return verifyArgon2(password, stored);
   const parts = stored.split('$');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
   const n = Number(parts[1]);
@@ -852,6 +879,38 @@ export class LocalAccount {
   }
 
   // --------------------------------------------------------------- Speichern
+
+  /**
+   * Uebernimmt Benutzer aus einem anderen System (Panel-Datenuebernahme): Kennungen, Passwort-Hashes, Passkeys bleiben erhalten.
+   * Wer schon da ist (Name, E-Mail oder Steam-Konto), wird nicht ueberschrieben, sondern uebersprungen und gemeldet.
+   * `dryRun`: nur pruefen und melden, nichts schreiben.
+   */
+  async importUsers(records: unknown[], dryRun = false): Promise<{ imported: string[]; skipped: Array<{ username: string; reason: string }> }> {
+    const imported: string[] = [];
+    const skipped: Array<{ username: string; reason: string }> = [];
+    const added: UserRecord[] = [];
+    for (const raw of records) {
+      const rec = normalize(raw as Partial<UserRecord>);
+      if (!rec) {
+        skipped.push({ username: String((raw as { username?: unknown })?.username ?? '?'), reason: 'Unvollständiger Eintrag' });
+        continue;
+      }
+      const all = [...this.users, ...added];
+      if (all.some((u) => u.id === rec.id)) skipped.push({ username: rec.username, reason: 'Kennung schon vorhanden' });
+      else if (all.some((u) => u.username.toLowerCase() === rec.username.toLowerCase())) skipped.push({ username: rec.username, reason: 'Benutzername schon vergeben' });
+      else if (rec.email && all.some((u) => u.email?.toLowerCase() === rec.email!.toLowerCase())) skipped.push({ username: rec.username, reason: 'E-Mail-Adresse schon vergeben' });
+      else if (rec.steamId && all.some((u) => u.steamId === rec.steamId)) skipped.push({ username: rec.username, reason: 'Steam-Konto schon zugewiesen' });
+      else {
+        added.push(rec);
+        imported.push(rec.username);
+      }
+    }
+    if (!dryRun && added.length) {
+      this.users.push(...added);
+      await this.save();
+    }
+    return { imported, skipped };
+  }
 
   private save(): Promise<void> {
     const snapshot: UsersFile = { version: 2, users: this.users };

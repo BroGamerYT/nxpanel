@@ -246,6 +246,23 @@ export class SteamAccounts {
     return { account: this.view(rec, actor), created: true };
   }
 
+  /**
+   * Uebernahme aus dem Panel: Konto mit Kennung und Passwort. Die Anmeldung muss im Core einmal getestet werden
+   * (die bestaetigte Steam-Guard-Anmeldung des Panels gilt hier nicht). Rueckgabe 'ok' oder der Grund fuers Ueberspringen.
+   */
+  importRecord(input: { id: string; ownerId: string | null; ownerName: string; label: string; accountName: string; steamId: string | null; isShared: boolean; lastUsedAt: string | null; createdAt: string; password: string | null }, dryRun = false): string {
+    const list = this.all();
+    if (list.some((r) => r.id === input.id)) return 'Kennung schon vorhanden';
+    if (list.some((r) => r.accountName.toLowerCase() === input.accountName.toLowerCase())) return 'Konto schon eingetragen';
+    if (!NAME_PATTERN.test(input.accountName)) return 'Kontoname mit ungültigen Zeichen';
+    if (dryRun) return 'ok';
+    const now = new Date().toISOString();
+    const { password, ...rest } = input;
+    this.put([...list, { ...rest, guardStatus: 'none', guardType: 'none', guardPrompt: null, updatedAt: now }]);
+    if (password) this.secrets.set(secretName(input.id), password);
+    return 'ok';
+  }
+
   /** Anmeldung pruefen; mit `code` zusaetzlich den Steam-Guard-Code eingeben. */
   async test(actor: SteamActor, id: string, code?: string): Promise<TestResult> {
     const rec = this.all().find((r) => r.id === id);
