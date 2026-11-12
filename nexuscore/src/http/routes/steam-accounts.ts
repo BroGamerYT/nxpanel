@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { SteamAccountError, type SteamAccounts, type SteamActor } from '../../steam/accounts.js';
+import { SteamAccountError, steamActorOf, type SteamAccounts } from '../../steam/accounts.js';
 import type { ServerRegistry } from '../../store/registry.js';
 
 /**
@@ -21,11 +21,7 @@ const guardBody = z.object({ code: z.string().trim().min(4).max(10) });
 export function registerSteamAccountRoutes(server: FastifyInstance, deps: { registry: ServerRegistry; accounts: SteamAccounts }): void {
   const { registry, accounts } = deps;
   const fail = (reply: FastifyReply, status: number, message: string, code: string): FastifyReply => reply.status(status).send({ error: message, message, code });
-  const actorOf = (req: FastifyRequest): SteamActor => {
-    const a = req.actor;
-    const admin = Boolean(a?.master || a?.role === 'admin');
-    return { id: a && !a.master ? a.id : null, username: a?.username ?? 'Administrator', admin };
-  };
+  const actorOf = (req: FastifyRequest) => steamActorOf(req.actor);
   const guarded = async <T>(reply: FastifyReply, run: () => T | Promise<T>): Promise<T | FastifyReply> => {
     try {
       return await run();

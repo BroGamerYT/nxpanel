@@ -140,6 +140,8 @@ export interface SteamAppOptions extends SteamCmdHooks {
   /** Beta-Zweig, z. B. "public" oder "experimental". */
   branch?: string | undefined;
   runner?: SteamRunner;
+  /** Anmeldung mit einem Steam-Konto statt anonym. */
+  login?: { username: string; password: string } | undefined;
   /** Anteil der Gesamt-Fortschrittsleiste, den das Laden belegt. */
   range?: [number, number];
   /** Wie oft SteamCMD bei den bekannten Zufallsfehlern erneut versucht wird. */
@@ -174,7 +176,7 @@ export async function installSteamApp(options: SteamAppOptions): Promise<SteamAp
     '+force_install_dir',
     options.installDir,
     '+login',
-    'anonymous',
+    ...(options.login ? [options.login.username, options.login.password] : ['anonymous']),
     '+app_update',
     String(options.appId),
     ...(options.branch && options.branch !== 'public' ? ['-beta', options.branch] : []),

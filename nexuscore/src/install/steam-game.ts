@@ -257,6 +257,7 @@ export interface SteamInstallInput {
 
 export interface SteamInstallHooks extends SteamCmdHooks {
   runner?: SteamRunner;
+  login?: { username: string; password: string } | undefined;
   /** Nur fuer Tests: ersetzt die Einrichtung von SteamCMD. */
   steamExe?: string;
   platform?: NodeJS.Platform;
@@ -288,6 +289,7 @@ export async function installSteamGame(input: SteamInstallInput, hooks: SteamIns
     installDir: input.serverDir,
     appId: launch.appId,
     branch: launch.branch,
+    login: hooks.login,
     ...(hooks.onProgress ? { onProgress: hooks.onProgress } : {}),
     ...(hooks.onLine ? { onLine: hooks.onLine } : {}),
     ...(hooks.signal ? { signal: hooks.signal } : {}),

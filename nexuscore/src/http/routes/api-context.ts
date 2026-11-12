@@ -59,6 +59,7 @@ export interface ApiContext {
   backups: BackupManager;
   imports: ImportService;
   secrets: SecretStore;
+  steamAccounts: import('../../steam/accounts.js').SteamAccounts;
 
   /** Server nach ID oder Kurz-ID. */
   findServer: (idOrShortId: string) => ServerInstanceConfig | undefined;

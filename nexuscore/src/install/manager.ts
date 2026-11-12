@@ -31,6 +31,8 @@ export interface InstallSpec {
   propertiesTemplate: Record<string, string>;
   /** Nur bei kind = steamcmd oder download: App-ID bzw. Quelle, Programm, Argumente, Dateien. */
   steam?: SteamLaunch;
+  /** Steam-Konto fuer Spiele, die ein Konto brauchen. */
+  steamAccountId?: string;
 }
 
 /** Die Angaben einer frueheren Installation - fuer Neuinstallation und Aenderung der Version. */
@@ -40,6 +42,7 @@ export function installSpecOf(info: ServerInstallInfo): InstallSpec {
     variables: info.variables ?? {},
     propertiesTemplate: info.propertiesTemplate ?? {},
     ...(info.steam ? { steam: info.steam } : {}),
+    ...(info.steamAccountId ? { steamAccountId: info.steamAccountId } : {}),
   };
 }
 
@@ -123,6 +126,7 @@ interface InstallOutcome {
 
 export class InstallManager {
   private readonly running = new Map<string, Promise<void>>();
+  private steamLogin: ((accountId: string) => { username: string; password: string } | null) | null = null;
 
   constructor(
     private readonly registry: ServerRegistry,
@@ -130,6 +134,19 @@ export class InstallManager {
     private readonly bus: EventBus,
     private readonly options: InstallManagerOptions,
   ) {}
+
+  /** Woher die Installation Name und Passwort eines Steam-Kontos holt (der Core setzt das, sobald der Speicher bereit ist). */
+  setSteamLogin(resolve: (accountId: string) => { username: string; password: string } | null): void {
+    this.steamLogin = resolve;
+  }
+
+  /** Name und Passwort des Kontos der Installation - ohne Konto null; ein Konto, das es nicht mehr gibt, ist ein Fehler. */
+  private loginFor(spec: InstallSpec): { username: string; password: string } | null {
+    if (!spec.steamAccountId) return null;
+    const login = this.steamLogin?.(spec.steamAccountId) ?? null;
+    if (!login) throw new Error('Das Steam-Konto dieses Servers gibt es nicht mehr oder sein Passwort ist nicht lesbar. Bitte unter „Steam-Konten“ prüfen.');
+    return login;
+  }
 
   isInstalling(serverId: string): boolean {
     return this.running.has(serverId);
@@ -174,6 +191,7 @@ export class InstallManager {
     if (!image) throw new ConfigError('Das Spiel nennt kein Image für die Installation.');
     const refPorts = config.container?.refPorts ?? {};
     const port = Number(config.env?.SERVER_PORT) || config.ports[0]?.hostPort || 0;
+    const login = this.loginFor(spec);
     const ctx = { variables: spec.variables, ramMb: config.maxMemoryMb ?? 0, ip: '0.0.0.0', port, ports: refPorts, serverDir: '/mnt/server', serverName: config.name };
     // Variablen, die selbst Platzhalter enthalten, werden vorab aufgeloest (wie im Panel)
     const env: Record<string, string> = {
@@ -182,6 +200,8 @@ export class InstallManager {
       SERVER_IP: '0.0.0.0',
       SERVER_PORT: String(port),
       SERVER_NAME: config.name,
+      // Das Konto geht nur in die Umgebung des Installers - nie in die Konfiguration des Servers
+      ...(login ? { STEAM_USER: login.username, STEAM_PASS: login.password } : {}),
     };
     let script = substitute(inst.script.replace(/\r\n?/g, '\n'), ctx);
     // Laeuft der Server spaeter als normaler Benutzer (run_as), bekommt er die Dateien, die der Installer als root anlegte
@@ -194,7 +214,7 @@ export class InstallManager {
     let lines = 0;
     const code = await this.driver.runInstaller({ serverId, image, shell, script, env, hostDir: config.workingDir }, (line) => {
       lines++;
-      this.say(serverId, line);
+      this.say(serverId, login ? line.split(login.password).join('***') : line);
       // Fortschritt ist unbekannt: langsam gegen 90 % kriechen, damit die Oberflaeche nicht stehen bleibt
       progress(Math.min(0.9, 0.05 + lines / 400), `Installationsskript läuft (${lines} Zeilen)`);
     });
@@ -246,6 +266,7 @@ export class InstallManager {
     serverId: string,
   ): Promise<InstallOutcome> {
     if (!spec.steam) throw new Error('Für dieses Spiel fehlen die Windows-Angaben im Egg.');
+    const login = this.loginFor(spec);
     const result = await installSteamGame(
       {
         serverDir: config.workingDir,
@@ -259,7 +280,8 @@ export class InstallManager {
       {
         onProgress: progress,
         // SteamCMD ist gespraechig - nur in die Konsole der Instanz, nicht in den Aufgaben-Balken
-        onLine: (line) => this.say(serverId, line),
+        onLine: (line) => this.say(serverId, login ? line.split(login.password).join('***') : line),
+        login: login ?? undefined,
         ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
         ...(this.options.steamRunner ? { runner: this.options.steamRunner } : {}),
         ...(this.options.steamExe ? { steamExe: this.options.steamExe } : {}),
@@ -354,6 +376,7 @@ export class InstallManager {
           variables: spec.variables,
           propertiesTemplate: spec.propertiesTemplate,
           ...(spec.steam ? { steam: spec.steam } : {}),
+          ...(spec.steamAccountId ? { steamAccountId: spec.steamAccountId } : {}),
         },
       };
       await this.registry.update(installed);
@@ -386,6 +409,7 @@ export class InstallManager {
               variables: spec.variables,
               propertiesTemplate: spec.propertiesTemplate,
               ...(spec.steam ? { steam: spec.steam } : {}),
+              ...(spec.steamAccountId ? { steamAccountId: spec.steamAccountId } : {}),
             },
           })
           .catch(() => {});

@@ -194,6 +194,8 @@ export function registerApiV1Routes(
   if (secrets.migrateFromPlain('modpacks.curseforgeKey', 'curseforge')) logger.info('CurseForge-Schlüssel verschlüsselt');
   const storageTargets = new StorageTargets(registry, secrets);
   const steamAccounts = new SteamAccounts(registry, secrets, () => options.steam?.login ?? createLoginRunner(driver, registry.dir));
+  // Installationen holen Name und Passwort des Kontos selbst (die Konfiguration des Servers speichert nur die Kennung)
+  installs?.setSteamLogin((accountId) => steamAccounts.credentials({ id: null, username: 'core', admin: true }, accountId));
   const dns = new DnsService(registry, secrets, options.dns ?? {});
   const imports = new ImportService({ registry, bus, installs });
   const power = createPowerOps({
@@ -325,6 +327,7 @@ export function registerApiV1Routes(
     backups,
     imports,
     secrets,
+    steamAccounts,
     findServer,
     stateOf,
     statusOf,

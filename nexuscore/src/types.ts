@@ -139,6 +139,8 @@ export interface ServerInstallInfo {
   /** Variablen und Vorlage der Installation - fuer Neuinstallation und das Schreiben der Konfiguration vor dem Start. */
   variables?: Record<string, string>;
   propertiesTemplate?: Record<string, string>;
+  /** Steam-Konto, mit dem geladen wird (nur die Kennung - Name und Passwort holt die Installation beim Konto). */
+  steamAccountId?: string;
 }
 
 export type ServerStatus = 'offline' | 'starting' | 'running' | 'stopping' | 'error';

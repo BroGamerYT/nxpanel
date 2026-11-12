@@ -19,6 +19,11 @@ export class SteamAccountError extends Error {
 }
 
 /** Wer fragt: Administratoren (und das Master-Token) sehen und aendern alles. */
+/** Aus dem angemeldeten Benutzer (oder dem Master-Token) den Fragenden machen. */
+export function steamActorOf(a: { master?: boolean; id: string; role?: string; username?: string } | undefined): SteamActor {
+  return { id: a && !a.master ? a.id : null, username: a?.username ?? 'Administrator', admin: Boolean(a?.master || a?.role === 'admin') };
+}
+
 export interface SteamActor {
   id: string | null;
   username: string;

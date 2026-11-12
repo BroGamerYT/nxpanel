@@ -12,13 +12,14 @@ import { initialValue, isUserVariable, validateVariables } from '../../eggs/rule
 import { loadEggs } from '../../eggs/loader.js';
 import { mayUseImportFile, type PendingImport } from '../../servers/import-service.js';
 import { importRoot } from '../../servers/importer.js';
+import { steamActorOf } from '../../steam/accounts.js';
 import type { ApiContext } from './api-context.js';
 
 /**
  * Server anlegen: Docker (Container aus dem Egg), Installationen und Platzhalter-Start.
  */
 export function registerServerCreateRoutes(ctx: ApiContext): void {
-  const { server, driver, bus, registry, account, installs, policy, imports, eggInstallData, eggPorts, portRangeNow } = ctx;
+  const { server, driver, bus, registry, account, installs, policy, imports, eggInstallData, eggPorts, portRangeNow, steamAccounts } = ctx;
 
   // Server anlegen (POST /api/v1/servers)
   server.post<{
@@ -32,9 +33,11 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
       imageKey?: string;
       /** Archiv im Import-Ordner: die Daten werden nach dem Anlegen (und der Installation) uebernommen. */
       importFile?: string;
+      /** Steam-Konto fuer Spiele, die ein Konto zum Laden brauchen (eigenes oder freigegebenes). */
+      steamAccountId?: string;
     };
   }>('/api/v1/servers', async (req, reply) => {
-    const { name, eggId, ramMb, cpuPercent, variables, imageKey, importFile } = req.body;
+    const { name, eggId, ramMb, cpuPercent, variables, imageKey, importFile, steamAccountId } = req.body;
     if (!name || !eggId) {
       return reply.status(400).send({ error: 'Name und Game sind erforderlich.' });
     }
@@ -52,6 +55,12 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
         return reply.status(403).send({ error: `Arbeitsspeicher-Limit erreicht (${limits.ramLimitMb} MB).`, code: 'limit_reached' });
       }
     }
+
+    // Steam-Konto: nur eines, das der Benutzer sehen darf und das ein Passwort hat - sonst scheitert die Installation spaeter ratlos
+    if (steamAccountId !== undefined && steamAccountId !== '' && !steamAccounts.credentials(steamActorOf(creator), String(steamAccountId))) {
+      return reply.status(400).send({ error: 'Das Steam-Konto gibt es nicht, ist nicht freigegeben oder hat kein Passwort.', code: 'invalid_steam_account' });
+    }
+    const steamLink = steamAccountId ? { steamAccountId: String(steamAccountId) } : {};
 
     // Generiere saubere ID
     const cleanId = name
@@ -143,12 +152,12 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
         maxMemoryMb: ramMb ?? 2048,
         maxCpuPercent: cpuPercent ?? 100,
         ports,
-        install: { state: 'installing', kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData },
+        install: { state: 'installing', kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData, ...steamLink },
       };
       await registry.add(installing);
       if (!creator.master) setOwner(registry, id, creator.id);
       registry.audit('server.create', id, 'standalone', { name, game: eggId, port, install: plan.kind });
-      const task = installs.start(id, { kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData });
+      const task = installs.start(id, { kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData, ...steamLink });
       created(id);
       return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
     }
@@ -167,10 +176,10 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
       // Mit Installationsskript: erst der Installer-Container, danach meldet sich die Instanz beim Treiber an
       const containerPlan = installs ? containerInstallPlan(egg.raw) : null;
       if (installs && containerPlan) {
-        await registry.add({ ...instance, install: { state: 'installing', kind: 'container', ...installData } });
+        await registry.add({ ...instance, install: { state: 'installing', kind: 'container', ...installData, ...steamLink } });
         if (!creator.master) setOwner(registry, id, creator.id);
         registry.audit('server.create', id, 'standalone', { name, game: eggId, port, image: instance.container?.image, install: 'container' });
-        const task = installs.start(id, { kind: 'container', ...installData });
+        const task = installs.start(id, { kind: 'container', ...installData, ...steamLink });
         created(id);
       return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
       }
