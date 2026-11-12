@@ -87,6 +87,27 @@ describe('Integrationen-Routen', () => {
   });
 });
 
+describe('Playit-Schlüssel', () => {
+  const KEY = 'a1b2c3d4e5f6-geheimer-playit-schluessel';
+  it('wird verschlüsselt gespeichert, nur der Anfang kommt zurück, nichts im Protokoll', async () => {
+    expect((await post('/api/v1/admin/integrations/playit', { secretKey: KEY })).statusCode).toBe(200);
+    const body = (await get('/api/v1/admin/integrations')).json();
+    expect(body.playit).toEqual({ configured: true, secretKey: 'a1b2...' });
+    expect(JSON.stringify(registry.getSetting('secret.playit'))).not.toContain('geheimer');
+    expect(JSON.stringify((await get('/api/v1/admin/audit?action=admin.playit')).json())).not.toContain('geheimer');
+    expect(JSON.stringify((await get('/api/v1/admin/audit?action=admin.playit')).json())).toContain('admin.playit_update');
+  });
+  it('lehnt Unbrauchbares ab und entfernt auf Wunsch', async () => {
+    expect((await post('/api/v1/admin/integrations/playit', { secretKey: 'zu kurz & <b>' })).statusCode).toBe(400);
+    expect((await get('/api/v1/admin/integrations')).json().playit.configured).toBe(true);
+    expect((await post('/api/v1/admin/integrations/playit', { secretKey: null })).statusCode).toBe(200);
+    expect((await get('/api/v1/admin/integrations')).json().playit).toEqual({ configured: false, secretKey: '' });
+  });
+  it('braucht Administratorrechte', async () => {
+    expect((await server.inject({ method: 'POST', url: '/api/v1/admin/integrations/playit', headers: json, payload: { secretKey: KEY } })).statusCode).toBe(401);
+  });
+});
+
 describe('Meldungen', () => {
   function setup() {
     const sent: Array<{ url: string; body: { embeds: Array<{ title: string; description: string }>; allowed_mentions: unknown } }> = [];

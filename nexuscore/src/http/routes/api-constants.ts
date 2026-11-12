@@ -4,7 +4,7 @@
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys', 'steam', 'sftp', 'firewall', 'help', 'subusers', 'updates', 'import', 'modpacks'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys', 'steam', 'sftp', 'firewall', 'help', 'subusers', 'updates', 'import', 'modpacks', 'playit'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',

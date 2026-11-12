@@ -248,7 +248,7 @@ export function registerApiV1Routes(
     ...(options.ping ? { ping: options.ping } : {}),
   });
   registerAdminRoutes(server, { registry, driver, tester, account });
-  registerIntegrationRoutes(server, { registry, discord });
+  registerIntegrationRoutes(server, { registry, discord, secrets });
   registerAdminFileRoutes(server, { registry });
   registerHostRoutes(server, { registry, driver, dataDir: registry.dir });
   registerFirewallRoutes(server, { registry, firewall });
