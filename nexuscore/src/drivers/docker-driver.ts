@@ -342,6 +342,10 @@ export class DockerDriver implements HostDriver {
     const spec = specOf(config);
     if (!spec.dataDir || !config.workingDir) return;
     await fs.mkdir(config.workingDir, { recursive: true });
+    // Wie im Panel: der Ordner ist fuer jeden Benutzer im Container beschreibbar. Die meisten Spiele-Images laufen als eigener
+    // Benutzer (1000, 25000 ...) und legen ihre Dateien selbst an; gehoert der Ordner dem Core (oder root), scheitern
+    // SteamCMD-Updates, Proton-Prefixe und Installationsskripte der Spiele ("Missing file permissions", Code 127).
+    if (process.platform !== 'win32') await fs.chmod(config.workingDir, 0o777).catch(() => {});
     if (spec.user && process.platform !== 'win32') {
       const [uid, gid] = spec.user.split(':').map(Number);
       if (Number.isInteger(uid) && Number.isInteger(gid)) {
