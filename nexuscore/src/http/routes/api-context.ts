@@ -22,6 +22,8 @@ export interface ApiOptions {
   ping?: (host: string, port: number) => Promise<SlpResult>;
   policy?: AccessPolicy;
   firewall?: FirewallManager;
+  /** Tests: Netzzugriff und oeffentliche Adresse des DNS-Abgleichs ersetzen. */
+  dns?: { fetch?: (url: string, init?: RequestInit) => Promise<Response>; publicIp?: () => Promise<string> };
 }
 
 /** Eine laufende Aufgabe, wie die Oberflaeche sie anzeigt. */

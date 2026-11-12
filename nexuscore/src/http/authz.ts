@@ -189,6 +189,7 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: new RegExp(`${S}/storage-targets(/:targetId(/test)?)?$`), need: flag('backup.create') },
   { methods: ['POST'], pattern: new RegExp(`${S}/modpack/update$`), need: flag('startup.update') },
   { methods: ['PATCH', 'DELETE'], pattern: new RegExp(`${S}/allocations/:port$`), need: flag('allocation.assign') },
+  { methods: ['PATCH'], pattern: new RegExp(`${S}/domain$`), need: flag('allocation.assign') },
 
   // ------------------------------------------------------------------ Admin
   // Nur Administratoren: wer Benutzer verwalten darf, koennte sich sonst selbst zum Administrator machen
@@ -197,7 +198,7 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/admin\/test-(report|games)(\/|$)/, need: perm('admin.test_report') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/files(\/|$)/, need: perm('admin.files') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/integrations(\/|$)/, need: perm('admin.integrations') },
-  { methods: '*', pattern: /^\/api\/v1\/admin\/(nodes|allocations|network\/check|hosts|gaming-mode|limits)(\/|$)/, need: perm('admin.nodes') },
+  { methods: '*', pattern: /^\/api\/v1\/admin\/(nodes|allocations|network\/(check|dns)|hosts|gaming-mode|limits)(\/|$)/, need: perm('admin.nodes') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/eggs\/:id\/cover$/, need: perm('admin.eggs') },
   // Ein Egg ist Programmcode (Installationsskript, Startkommando): importieren und loeschen nur Administratoren
   { methods: '*', pattern: /^\/api\/v1\/admin\/eggs(\/|$)/, need: { kind: 'admin' } },

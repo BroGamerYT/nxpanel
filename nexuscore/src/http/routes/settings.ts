@@ -45,6 +45,10 @@ export interface ServerMeta {
   /** Bandbreite in kbit/s. Wird noch nicht durchgesetzt (Block B3). */
   bandwidthDownloadKbps?: number | null;
   bandwidthUploadKbps?: number | null;
+  /** Domain: Subdomain unter der Hauptdomain, eigene Domain, SRV-Eintrag. */
+  subdomain?: string | null;
+  customDomain?: string | null;
+  srvRecordEnabled?: boolean;
 }
 
 const metaKey = (id: string) => `server.${id}.meta`;
@@ -53,7 +57,7 @@ export function getServerMeta(registry: ServerRegistry, id: string): ServerMeta 
   return registry.getSetting<ServerMeta>(metaKey(id)) ?? {};
 }
 
-function saveServerMeta(registry: ServerRegistry, id: string, patch: Partial<ServerMeta>): void {
+export function saveServerMeta(registry: ServerRegistry, id: string, patch: Partial<ServerMeta>): void {
   registry.setSetting(metaKey(id), { ...getServerMeta(registry, id), ...patch });
 }
 

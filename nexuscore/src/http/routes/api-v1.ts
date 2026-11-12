@@ -63,6 +63,8 @@ import { registerEggAdminRoutes } from './egg-admin.js';
 import { registerImportRoutes } from './imports.js';
 import { registerModpackRoutes } from './modpacks.js';
 import { registerStorageTargetRoutes } from './storage-targets.js';
+import { registerDnsRoutes } from './dns.js';
+import { DnsService } from '../../network/dns.js';
 import { StorageTargets } from '../../store/storage-targets.js';
 import { SecretStore } from '../../store/secrets.js';
 import { createModpackUpdater } from '../../servers/modpack-update.js';
@@ -188,6 +190,7 @@ export function registerApiV1Routes(
   const secrets = new SecretStore(registry, { envKey: config.secretKey });
   if (secrets.migrateFromPlain('modpacks.curseforgeKey', 'curseforge')) logger.info('CurseForge-Schlüssel verschlüsselt');
   const storageTargets = new StorageTargets(registry, secrets);
+  const dns = new DnsService(registry, secrets, options.dns ?? {});
   const imports = new ImportService({ registry, bus, installs });
   const power = createPowerOps({
     registry,
@@ -223,10 +226,12 @@ export function registerApiV1Routes(
     backups.start();
     players.start();
     discord.start();
+    dns.start();
     gaming.start();
     server.addHook('onClose', async () => {
       gaming.stop();
       discord.stop();
+      dns.stop();
       scheduler.stop();
       backups.stop();
       players.stop();
@@ -349,6 +354,7 @@ export function registerApiV1Routes(
   const modpacks = createModpackUpdater({ registry, driver, power, backups, bus });
   registerModpackRoutes(server, { registry, secrets, updater: modpacks, policy, find: findServer });
   registerStorageTargetRoutes(server, { registry, targets: storageTargets, find: findServer });
+  registerDnsRoutes(server, { registry, dns, find: findServer });
   registerDockerRoutes(server, { registry, driver });
   if (account) {
     registerImpersonateRoutes(server, { registry, account, sessionCookie });

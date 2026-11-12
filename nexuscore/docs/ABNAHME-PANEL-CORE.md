@@ -4,8 +4,8 @@ Stand: 12.11.2026. Ziel: Der Core ist das einzige Backend; das alte Panel-Backen
 
 ## Wie das gemessen wurde (und was es nicht sagt)
 
-* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **206** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
-* **Ohne Gegenstück im Core: 12 Panel-Routen.** Davon ruft die Oberfläche **11** tatsächlich auf. Der Core hat zusätzlich **17** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
+* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **211** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
+* **Ohne Gegenstück im Core: 7 Panel-Routen.** Davon ruft die Oberfläche **6** tatsächlich auf. Der Core hat zusätzlich **17** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
 * Gleiche Route heißt **nicht** gleiches Verhalten. Das Verhalten ist nur dort geprüft, wo es Tests gibt (856 im Core); ein Vergleich Seite an Seite mit dem Panel (gleiche Anfrage, gleiche Antwort) fehlt noch.
 * Die Oberfläche blendet Bereiche aus, die der Core nicht meldet (`features` in `/api/v1/about`). Fehlende Funktionen sind deshalb **unsichtbar, nicht kaputt**.
 
@@ -23,7 +23,7 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 | Modpacks (Minecraft) | CurseForge/Modrinth suchen und installieren/aktualisieren | 0 | 0 | **ERLEDIGT** | – |
 | Speicherziele (Backups extern) | Backups auf externe Ziele (S3, SFTP ...) | 0 | 0 | **ERLEDIGT** | – |
 | Steam-Konten für Downloads | SteamCMD-Anmeldung mit Konto und Steam Guard | 4 | 4 | **SPÄTER** | L |
-| Domain und DNS | Cloudflare-DNS-Einträge je Server, Domain am Server | 5 | 5 | **SPÄTER** | M |
+| Domain und DNS | Cloudflare-DNS-Einträge je Server, Domain am Server | 0 | 0 | **ERLEDIGT** | – |
 | Hosts hinzufügen/ändern/löschen | Weitere Rechner (Cores) an das Panel koppeln | 3 | 2 | **BLOCK C** | L |
 | Playit-Integration | Tunnel über playit.gg einrichten | 0 | 0 | **ERLEDIGT** | – |
 | Docker aufräumen | Ungenutzte Images/Cache löschen (Dashboard) | 0 | 0 | **ERLEDIGT** | – |
@@ -65,11 +65,6 @@ Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche 
 
 | Methode | Pfad | Bereich | Von der Oberfläche benutzt |
 | --- | --- | --- | :-: |
-| GET | `/api/v1/admin/network/dns` | Domain und DNS | ja |
-| PATCH | `/api/v1/admin/network/dns` | Domain und DNS | ja |
-| POST | `/api/v1/admin/network/dns/sync` | Domain und DNS | ja |
-| POST | `/api/v1/admin/network/dns/test` | Domain und DNS | ja |
-| PATCH | `/api/v1/servers/:p/domain` | Domain und DNS | ja |
 | POST | `/api/v1/admin/hosts` | Hosts hinzufügen/ändern/löschen | ja |
 | DELETE | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | ja |
 | PATCH | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | nein |

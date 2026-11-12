@@ -1,3 +1,4 @@
+import type { ApiOptions } from './routes/api-context.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import websocket from '@fastify/websocket';
 import multipart from '@fastify/multipart';
@@ -47,6 +48,8 @@ export async function createCoreServer(
     sftp?: { host: string; port: number } | null;
     /** Firewall-Verwaltung; Tests geben eine mit Attrappe statt netsh an. */
     firewall?: FirewallManager;
+    /** Tests: Netzzugriff und Adresse des DNS-Abgleichs ersetzen. */
+    dns?: ApiOptions['dns'];
   } = {},
 ): Promise<FastifyInstance> {
   // Fastify loggt nicht selbst: der Core bringt seinen eigenen pino-Logger
@@ -290,6 +293,7 @@ export async function createCoreServer(
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.ping ? { ping: options.ping } : {}),
     ...(options.firewall ? { firewall: options.firewall } : {}),
+    ...(options.dns ? { dns: options.dns } : {}),
   });
   // SFTP gibt es nur mit Benutzerkonten (Standalone) und nur, wenn es eingeschaltet ist
   const sftpWanted = options.sftp !== undefined ? options.sftp : config.sftpEnabled ? { host: config.sftpHost, port: config.sftpPort } : null;
