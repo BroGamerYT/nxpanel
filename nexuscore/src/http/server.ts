@@ -30,6 +30,7 @@ import { registerApiV1Routes } from './routes/api-v1.js';
 import type { SlpResult } from '../games/minecraft.js';
 import { registerWebRoutes } from './routes/web.js';
 import { LocalAccount } from '../store/account.js';
+import { startSftp } from '../sftp/server.js';
 import { MASTER_ACTOR, accessPolicyFor, authorize, classify } from './authz.js';
 import { setIdentity } from '../store/identity.js';
 import { findInstance } from '../store/find.js';
@@ -40,7 +41,10 @@ export async function createCoreServer(
   driver: HostDriver,
   bus: EventBus,
   registry: ServerRegistry,
-  options: { installs?: InstallManager | null; fetchImpl?: Fetcher; ping?: (host: string, port: number) => Promise<SlpResult> } = {},
+  options: { installs?: InstallManager | null; fetchImpl?: Fetcher; ping?: (host: string, port: number) => Promise<SlpResult>;
+    /** SFTP: aus = null; ohne Angabe gilt die Einstellung NEXUSCORE_SFTP_ENABLED (Tests geben Port 0 an). */
+    sftp?: { host: string; port: number } | null;
+  } = {},
 ): Promise<FastifyInstance> {
   // Fastify loggt nicht selbst: der Core bringt seinen eigenen pino-Logger
   // mit, damit Request-Log und Anwendungslog dasselbe Format und dieselbe
@@ -283,6 +287,15 @@ export async function createCoreServer(
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.ping ? { ping: options.ping } : {}),
   });
+  // SFTP gibt es nur mit Benutzerkonten (Standalone) und nur, wenn es eingeschaltet ist
+  const sftpWanted = options.sftp !== undefined ? options.sftp : config.sftpEnabled ? { host: config.sftpHost, port: config.sftpPort } : null;
+  if (sftpWanted && account) {
+    const sftp = await startSftp({ account, registry, policy, host: sftpWanted.host, port: sftpWanted.port, maxUploadMb: config.maxUploadMb });
+    server.decorate('sftp', sftp);
+    server.addHook('onClose', async () => {
+      await sftp.close();
+    });
+  }
   registerInfoRoutes(server);
   registerPairRoutes(server);
   registerServerRoutes(server, driver, registry);

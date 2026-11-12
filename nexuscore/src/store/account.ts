@@ -47,6 +47,24 @@ export interface PasskeyRecord {
 }
 
 /** Alles, was zu einem Benutzer gehoert - inklusive Geheimnisse. Verlaesst nie dieses Modul. */
+interface SftpPasswordRecord {
+  id: string;
+  label: string;
+  /** Format wie passwordHash. */
+  hash: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface SftpPasswordInfo {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export const MAX_SFTP_PASSWORDS = 10;
+
 interface UserRecord {
   id: string;
   username: string;
@@ -72,6 +90,8 @@ interface UserRecord {
   /** SHA-256 der noch unbenutzten Wiederherstellungscodes. */
   recovery?: string[];
   passkeys?: PasskeyRecord[];
+  /** Eigene Passwoerter fuer SFTP (nur der Hash wird gespeichert). */
+  sftpPasswords?: SftpPasswordRecord[];
   /** Verknuepftes Steam-Konto (SteamID64) fuer die Anmeldung mit Steam. */
   steamId?: string;
   steamName?: string;
@@ -764,6 +784,68 @@ export class LocalAccount {
     await this.save();
   }
 
+  // ------------------------------------------------------------------- SFTP
+
+  sftpPasswords(userId: string): SftpPasswordInfo[] {
+    return (this.rec(userId).sftpPasswords ?? []).map(({ id, label, createdAt, lastUsedAt }) => ({ id, label, createdAt, lastUsedAt }));
+  }
+
+  /** Legt ein SFTP-Passwort an; im Klartext gibt es das nur hier, gespeichert wird der Hash. */
+  async createSftpPassword(userId: string, label: string): Promise<{ info: SftpPasswordInfo; password: string }> {
+    const u = this.rec(userId);
+    const name = label.replace(/[\r\n]+/g, ' ').trim().slice(0, 60);
+    if (!name) throw new AccountError('Bitte eine Bezeichnung angeben', 'invalid_request');
+    if ((u.sftpPasswords?.length ?? 0) >= MAX_SFTP_PASSWORDS) {
+      throw new AccountError(`Höchstens ${MAX_SFTP_PASSWORDS} SFTP-Passwörter je Konto`, 'too_many_sftp_passwords');
+    }
+    // 4 Gruppen a 6 Zeichen, gut abzutippen: abcdef-ghijkl-...
+    const raw = crypto.randomBytes(18).toString('base64url').replace(/[-_]/g, 'x').slice(0, 24).toLowerCase();
+    const password = raw.match(/.{6}/g)!.join('-');
+    const rec: SftpPasswordRecord = { id: crypto.randomUUID(), label: name, hash: await hashPassword(password), createdAt: new Date().toISOString(), lastUsedAt: null };
+    u.sftpPasswords = [...(u.sftpPasswords ?? []), rec];
+    await this.save();
+    return { info: { id: rec.id, label: rec.label, createdAt: rec.createdAt, lastUsedAt: null }, password };
+  }
+
+  async deleteSftpPassword(userId: string, id: string): Promise<boolean> {
+    const u = this.rec(userId);
+    const before = u.sftpPasswords?.length ?? 0;
+    u.sftpPasswords = (u.sftpPasswords ?? []).filter((p) => p.id !== id);
+    if (u.sftpPasswords.length === before) return false;
+    await this.save();
+    return true;
+  }
+
+  /**
+   * Anmeldung per SFTP. SFTP kann keinen zweiten Faktor abfragen: mit Zwei-Faktor-Schutz gilt NUR ein
+   * eigenes SFTP-Passwort, nie das Kontopasswort - sonst waere der Schutz ueber SFTP zu umgehen.
+   * Fehlversuche zaehlen auf dieselbe Sperre je Herkunft wie bei der Anmeldung im Browser.
+   */
+  async verifySftp(login: string, password: string, origin: string): Promise<AccountUser | null> {
+    if (this.lockedForSeconds(origin) > 0) return null;
+    const user = this.byLogin(login);
+    dummyHash ??= hashPassword('kein-benutzer-gleichzeitige-rechenzeit');
+    if (!user || user.suspended) {
+      await verifyPassword(password, await dummyHash);
+      this.recordFailure(origin);
+      return null;
+    }
+    for (const p of user.sftpPasswords ?? []) {
+      if (await verifyPassword(password, p.hash)) {
+        p.lastUsedAt = new Date().toISOString();
+        await this.save();
+        this.failures.delete(origin);
+        return view(user);
+      }
+    }
+    if (user.totp || !(await verifyPassword(password, user.passwordHash))) {
+      this.recordFailure(origin);
+      return null;
+    }
+    this.failures.delete(origin);
+    return view(user);
+  }
+
   /** Ob ueberhaupt jemand einen Passkey hat - die Anmeldeseite zeigt den Knopf nur dann sinnvoll. */
   hasAnyPasskey(): boolean {
     return this.users.some((u) => (u.passkeys?.length ?? 0) > 0);
@@ -850,6 +932,19 @@ function normalize(raw: Partial<UserRecord>): UserRecord | null {
               counter: Number.isFinite(p.counter) ? Number(p.counter) : 0,
               deviceName: typeof p.deviceName === 'string' ? p.deviceName.slice(0, 100) : 'Passkey',
               transports: Array.isArray(p.transports) ? p.transports.filter((x) => typeof x === 'string') : [],
+              createdAt: typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString(),
+              lastUsedAt: typeof p.lastUsedAt === 'string' ? p.lastUsedAt : null,
+            })),
+        }
+      : {}),
+    ...(Array.isArray(raw.sftpPasswords)
+      ? {
+          sftpPasswords: raw.sftpPasswords
+            .filter((p): p is SftpPasswordRecord => Boolean(p) && typeof p.id === 'string' && typeof p.hash === 'string')
+            .map((p) => ({
+              id: p.id,
+              label: typeof p.label === 'string' ? p.label.slice(0, 60) : 'SFTP',
+              hash: p.hash,
               createdAt: typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString(),
               lastUsedAt: typeof p.lastUsedAt === 'string' ? p.lastUsedAt : null,
             })),

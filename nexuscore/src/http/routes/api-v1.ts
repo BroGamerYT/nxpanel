@@ -35,6 +35,7 @@ import { registerAdminRoutes } from './admin.js';
 import { registerNetworkRoutes } from './network.js';
 import { registerPasskeyRoutes } from './passkeys.js';
 import { registerSteamLoginRoutes } from './steam-login.js';
+import { registerSftpPasswordRoutes } from './sftp-passwords.js';
 import { PasskeyService } from '../../auth/passkeys.js';
 import { registerSystemRoutes } from './system.js';
 import { GamingMode } from '../../gaming/manager.js';
@@ -73,7 +74,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys', 'steam'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys', 'steam', 'sftp'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -279,6 +280,7 @@ export function registerApiV1Routes(
     };
     registerPasskeyRoutes(server, { registry, account, service: new PasskeyService(account), issueSession });
     registerSteamLoginRoutes(server, { registry, account, issueSession });
+    registerSftpPasswordRoutes(server, { registry, account });
   }
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });
@@ -405,7 +407,7 @@ export function registerApiV1Routes(
       name: 'NexusPanel Standalone (NexusCore)',
       version: '0.2.0',
       build: 'standalone-native',
-      sftp: { enabled: false, port: 2022 },
+      sftp: { enabled: config.sftpEnabled && account !== null, port: config.sftpPort },
       standalone: true,
       features: CORE_FEATURES,
       // Leere Listen, damit Seiten, die sie lesen, nicht abstuerzen.

@@ -244,7 +244,7 @@ Endlosschleife läuft. Nichts wird installiert.
 > Gerätenamen (`nul`, `con` …), `:` (Datenströme) und Punkt/Leerzeichen am Ende abgelehnt. Uploads laufen über
 > eine Temp-Datei, haben eine Obergrenze (`NEXUSCORE_MAX_UPLOAD_MB`) und nehmen aus dem Dateinamen nur den Namen.
 > **Weg für die Dateilogik:** bewusst nachgebaut statt geteilt (der Core darf `src/` des Panels nicht importieren).
-> **Noch offen in B4:** SFTP, Zip64 (über 4 GB), .tar.zst.
+> **B4 erledigt (12.11.2026):** SFTP (`src/sftp/server.ts`, mit `NEXUSCORE_SFTP_ENABLED=true`), Zip64 und .tar.zst. SFTP ist mit echtem SSH-Client getestet, aber noch nicht mit WinSCP/FileZilla.
 >
 > **Funktionsliste und Oberfläche:** `GET /api/v1/about` meldet `standalone: true` und `features`
 > (heute `files`, `settings`, `logfiles`, `schedules`, `backups`, `players`, `admin`, `audit` und `account`, `configs`, `motd` und `testreport`). Die Oberfläche (`web/src/lib/features.ts`) blendet Menüpunkte, Server-Tabs, Einträge der

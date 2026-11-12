@@ -47,6 +47,9 @@ const schema = z
     NEXUSCORE_LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
     NEXUSCORE_ALLOW_INSECURE_AUTH: envBool(false),
     NEXUSCORE_ALLOW_USER_FILE_WRITE: envBool(false),
+    NEXUSCORE_SFTP_ENABLED: envBool(false),
+    NEXUSCORE_SFTP_PORT: z.coerce.number().int().min(1).max(65535).default(2022),
+    NEXUSCORE_SFTP_HOST: z.string().default(''),
   })
   .superRefine((env, ctx) => {
     const [rangeFrom, rangeTo] = env.NEXUSCORE_PORT_RANGE.split('-').map(Number);
@@ -135,6 +138,11 @@ export const config = {
    * ein Plugin ueberschreiben kann, fuehrt damit Programme auf diesem Rechner aus. Deshalb standardmaessig nein.
    */
   allowUserFileWrite: env.NEXUSCORE_ALLOW_USER_FILE_WRITE,
+  /** SFTP-Zugang (Port 2022): standardmaessig aus. */
+  sftpEnabled: env.NEXUSCORE_SFTP_ENABLED,
+  sftpPort: env.NEXUSCORE_SFTP_PORT,
+  /** Adresse fuer SFTP; leer = dieselbe wie die des Cores (also nur dieser Rechner, solange der Core es ist). */
+  sftpHost: env.NEXUSCORE_SFTP_HOST.trim() || env.NEXUSCORE_HOST,
 };
 
 export const dataDir = config.dataDir;
