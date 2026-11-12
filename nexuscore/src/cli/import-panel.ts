@@ -11,7 +11,7 @@ import { SteamAccounts } from '../steam/accounts.js';
 /**
  * Datenuebernahme aus dem Panel.
  *
- *   node dist/cli/import-panel.js --export panel-export.json [--panel-key <64 Hex>] [--volumes /var/lib/panel/volumes] [--apply]
+ *   node dist/cli/import-panel.js --export panel-export.json [--panel-key <64 Hex>] [--volumes /var/lib/panel/volumes] [--backups /var/lib/panel/backups] [--copy-backups] [--apply]
  *
  * Ohne --apply ist es ein Trockenlauf: Bericht, nichts wird geschrieben. Den Panel-Schluessel (ENCRYPTION_KEY des Panels)
  * auch ueber die Umgebung `PANEL_ENCRYPTION_KEY` geben - dann steht er nicht in der Befehlszeile.
@@ -54,7 +54,7 @@ async function main(): Promise<number> {
   const secrets = new SecretStore(registry, { envKey: config.secretKey });
   const steamAccounts = new SteamAccounts(registry, secrets, () => null);
   const panelKey = arg('panel-key') ?? process.env.PANEL_ENCRYPTION_KEY;
-  const report = await importPanelData(data, { registry, account, secrets, steamAccounts, eggs: await loadEggs() }, { dryRun: !apply, panelKey, volumesDir: arg('volumes') ?? '/var/lib/panel/volumes' });
+  const report = await importPanelData(data, { registry, account, secrets, steamAccounts, eggs: await loadEggs() }, { dryRun: !apply, panelKey, volumesDir: arg('volumes') ?? '/var/lib/panel/volumes', backupsDir: arg('backups') ?? '/var/lib/panel/backups', copyBackups: process.argv.includes('--copy-backups') });
   printReport(report);
   registry.close();
   return report.errors > 0 ? 1 : 0;

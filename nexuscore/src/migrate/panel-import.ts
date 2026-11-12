@@ -6,6 +6,7 @@ import { initialValue } from '../eggs/rules.js';
 import type { LoadedEgg } from '../eggs/loader.js';
 import { containerInstallPlan } from '../install/manager.js';
 import { setNetwork } from '../network.js';
+import { isInside, serverRootFor } from '../protocol/paths.js';
 import { isServerFlag } from '../auth/permissions.js';
 import { saveServerMeta } from '../http/routes/settings.js';
 import { Scheduler } from '../schedules/scheduler.js';
@@ -16,6 +17,7 @@ import type { SecretStore } from '../store/secrets.js';
 import type { SteamAccounts } from '../steam/accounts.js';
 import { DnsService } from '../network/dns.js';
 import type { ServerPort } from '../types.js';
+import type { BackupRow } from '../store/registry.js';
 
 /**
  * Datenuebernahme aus dem Panel (Postgres) in den Core.
@@ -78,6 +80,12 @@ export interface ImportOptions {
   panelKey?: string | undefined;
   /** Ordner mit den Server-Ordnern des Panels (`<short_id>`), Standard /var/lib/panel/volumes. */
   volumesDir: string;
+  /** Ordner mit den Backups des Panels (`<server-uuid>/<backup-uuid>.tar.zst`), Standard /var/lib/panel/backups. */
+  backupsDir?: string | undefined;
+  /** Ablage der Backups im Core; Standard `<Datenordner>/backups`. */
+  backupsRoot?: string | undefined;
+  /** Dateien kopieren statt verknuepfen (noetig, wenn beide Ordner auf verschiedenen Datentraegern liegen). */
+  copyBackups?: boolean | undefined;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
@@ -259,6 +267,7 @@ export async function importPanelData(data: PanelExport, deps: ImportDeps, opts:
   // ------------------------------------------------------------------- Server
   const eggById = new Map((data.eggs ?? []).map((e) => [String(e.id), e]));
   const volumes = path.resolve(opts.volumesDir);
+  const serversDone = new Set<string>();
   for (const s of data.servers ?? []) {
     const short = String(s.short_id);
     const label = `${s.name} (${short})`;
@@ -308,6 +317,9 @@ export async function importPanelData(data: PanelExport, deps: ImportDeps, opts:
     // Ordner
     const serverDir = path.join(volumes, short);
     const dirOk = await fs.stat(serverDir).then((st) => st.isDirectory(), () => false);
+    if (!isInside(serverRootFor(registry.dir), serverDir)) {
+      say('warn', 'Server', `${label}: Der Ordner liegt außerhalb des Server-Verzeichnisses des Cores (${serverRootFor(registry.dir)}) - Dateimanager und Backups sind dafür gesperrt. Den Core mit NEXUSCORE_SERVER_ROOT=${volumes} starten.`);
+    }
     if (!dirOk) say('warn', 'Server', `${label}: Ordner ${serverDir} nicht gefunden - ohne ihn startet der Server leer.`);
 
     const instance = buildDockerInstance({
@@ -367,11 +379,97 @@ export async function importPanelData(data: PanelExport, deps: ImportDeps, opts:
     if (num(s.auto_sleep_minutes) > 0) say('warn', 'Server', `${label}: Auto-Sleep gibt es im Core noch nicht.`);
     if (s.auto_backup_enabled === true) say('warn', 'Server', `${label}: Automatische Backups bitte als Zeitplan im Core neu einrichten.`);
     counts.servers = (counts.servers ?? 0) + 1;
+    serversDone.add(short);
     say('ok', 'Server', `${label}: ${egg.name}, ${ports.map((p) => `${p.name}:${p.hostPort}`).join(' ')}, Ordner ${serverDir}${s.status === 'running' ? ' - läuft im Panel noch, muss dort zuerst gestoppt werden' : ''}.`);
   }
-  if ((data.backups ?? []).length) say('warn', 'Backups', `${data.backups!.length} Backups werden noch nicht übernommen (Dateien bleiben unter dem Backup-Ordner des Panels liegen).`);
+  await importBackups(data, deps, opts, say, counts, serversDone);
   if ((data.storage_targets ?? []).length) say('warn', 'Speicherziele', `${data.storage_targets!.length} Speicherziele nicht übernommen - im Core neu anlegen.`);
   if ((data.player_bans ?? []).length) say('warn', 'Spieler', `${data.player_bans!.length} Spielersperren nicht übernommen.`);
 
   return { dryRun: opts.dryRun, lines, counts, errors: lines.filter((l) => l.level === 'error').length, warnings: lines.filter((l) => l.level === 'warn').length };
+}
+
+/**
+ * Backups: die Archive (`.tar.zst`, SHA-256 wie im Core) bleiben, wie sie sind - sie werden nicht neu gepackt. Standardmaessig
+ * wird eine harte Verknuepfung in den Backup-Ordner des Core gelegt (kostet keinen Platz und keine Zeit, auch bei 10-GB-Dateien;
+ * das Panel behaelt seine Datei). Auf verschiedenen Datentraegern geht das nicht: dann mit `copyBackups` kopieren.
+ */
+async function importBackups(data: PanelExport, deps: ImportDeps, opts: ImportOptions, say: (l: ImportLine['level'], a: string, m: string) => void, counts: Record<string, number>, serversDone: Set<string>): Promise<void> {
+  const rows = data.backups ?? [];
+  if (!rows.length) return;
+  const { registry } = deps;
+  const from = path.resolve(opts.backupsDir ?? '/var/lib/panel/backups');
+  const root = path.resolve(opts.backupsRoot ?? path.join(registry.dir, 'backups'));
+  const shortOf = new Map((data.servers ?? []).map((s) => [String(s.id), String(s.short_id)]));
+  for (const b of rows) {
+    const id = String(b.id);
+    const label = `${b.name} (${id.slice(0, 8)})`;
+    const short = shortOf.get(String(b.server_id));
+    if (!short || !(registry.get(short) || serversDone.has(short))) {
+      say('warn', 'Backups', `${label}: Der Server ist nicht im Core - übersprungen.`);
+      continue;
+    }
+    if (b.status !== 'completed') {
+      say('warn', 'Backups', `${label}: Status "${b.status}" - nur abgeschlossene Backups werden übernommen.`);
+      continue;
+    }
+    if (registry.getBackup(id)) {
+      say('warn', 'Backups', `${label}: gibt es im Core schon - übersprungen.`);
+      continue;
+    }
+    const filename = String(b.filename ?? '');
+    const ext = /\.tar\.zst$/i.test(filename) ? 'tar.zst' : /\.tar\.gz$/i.test(filename) ? 'tar.gz' : null;
+    if (!ext) {
+      say('error', 'Backups', `${label}: unbekanntes Format "${filename}".`);
+      continue;
+    }
+    const source = path.join(from, String(b.server_id), `${id}.${ext}`);
+    const st = await fs.stat(source).catch(() => null);
+    if (!st?.isFile()) {
+      say('warn', 'Backups', `${label}: Datei ${source} nicht gefunden - übersprungen.`);
+      continue;
+    }
+    if (typeof b.bytes === 'number' && st.size !== b.bytes) {
+      say('error', 'Backups', `${label}: Größe stimmt nicht (${st.size} statt ${b.bytes} Byte) - das Backup ist unvollständig.`);
+      continue;
+    }
+    const target = path.join(root, short, `${id}.${ext}`);
+    if (!opts.dryRun) {
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      try {
+        if (opts.copyBackups) await fs.copyFile(source, target);
+        else await fs.link(source, target);
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'EEXIST') {
+          say('warn', 'Backups', `${label}: Zieldatei ${target} liegt schon da - übersprungen.`);
+        } else if (code === 'EXDEV') {
+          say('error', 'Backups', `${label}: Panel- und Core-Ordner liegen auf verschiedenen Datenträgern - mit --copy-backups kopieren (${Math.round(st.size / 1048576)} MB).`);
+        } else {
+          say('error', 'Backups', `${label}: ${(err as Error).message}`);
+        }
+        continue;
+      }
+      const row: BackupRow = {
+        id,
+        server_id: short,
+        name: String(b.name),
+        filename,
+        bytes: st.size,
+        checksum: str(b.checksum),
+        locked: b.locked === true,
+        status: 'completed',
+        error: null,
+        ignored_files: Array.isArray(b.ignored_files) ? arr(b.ignored_files) : null,
+        verification_status: b.verification_status === 'valid' ? 'valid' : 'unverified',
+        verified_at: b.verification_status === 'valid' ? iso(b.verified_at) : null,
+        verification_details: null,
+        created_at: iso(b.created_at) ?? new Date().toISOString(),
+        completed_at: iso(b.completed_at),
+      };
+      registry.saveBackup(row);
+    }
+    counts.backups = (counts.backups ?? 0) + 1;
+    say('ok', 'Backups', `${label}: ${Math.round(st.size / 1048576)} MB ${opts.copyBackups ? 'kopiert' : 'verknüpft'}${b.verification_status === 'valid' ? ', als geprüft übernommen' : ''}.`);
+  }
 }
