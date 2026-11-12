@@ -8,6 +8,7 @@ import type { ServerInstanceConfig, ServerState, ServerStatus } from '../../type
 import type { LoadedEgg } from '../../eggs/loader.js';
 import type { SlpResult } from '../../games/minecraft.js';
 import type { BackupManager } from '../../backups/manager.js';
+import type { ImportService } from '../../servers/import-service.js';
 import type { FirewallManager } from '../../system/firewall.js';
 import type { AccessPolicy } from '../authz.js';
 import type { createPowerOps } from '../../ops/power.js';
@@ -52,6 +53,7 @@ export interface ApiContext {
   power: ReturnType<typeof createPowerOps>;
   firewall: FirewallManager;
   backups: BackupManager;
+  imports: ImportService;
 
   /** Server nach ID oder Kurz-ID. */
   findServer: (idOrShortId: string) => ServerInstanceConfig | undefined;

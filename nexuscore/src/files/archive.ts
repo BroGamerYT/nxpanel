@@ -196,6 +196,60 @@ async function readZipDirectory(handle: fs.FileHandle, fileSize: number): Promis
 }
 
 export async function extractZip(archive: string, target: string, limits: ArchiveLimits = DEFAULT_LIMITS): Promise<ExtractResult> {
+  return extractZipMapped(archive, target, (name) => name, limits);
+}
+
+/** Ein Eintrag eines Zips, wie ihn das Inhaltsverzeichnis nennt. */
+export interface ZipListing {
+  name: string;
+  size: number;
+  isDir: boolean;
+  isSymlink: boolean;
+}
+
+/** Inhaltsverzeichnis eines Zips (ohne etwas zu entpacken) - auch bei Archiven von vielen GB in Sekunden. */
+export async function listZipEntries(archive: string): Promise<ZipListing[]> {
+  const handle = await fs.open(archive, 'r');
+  try {
+    const entries = await readZipDirectory(handle, (await handle.stat()).size);
+    return entries.map((e) => ({ name: e.name, size: e.size, isDir: e.name.endsWith('/'), isSymlink: e.isSymlink }));
+  } finally {
+    await handle.close();
+  }
+}
+
+/** Eine kleine Datei aus einem Zip lesen (hoechstens maxBytes entpackt). Fehlt sie oder ist sie zu gross: null. */
+export async function readZipEntry(archive: string, name: string, maxBytes: number): Promise<Buffer | null> {
+  const handle = await fs.open(archive, 'r');
+  try {
+    const size = (await handle.stat()).size;
+    const e = (await readZipDirectory(handle, size)).find((x) => x.name === name);
+    if (!e || e.isSymlink || (e.flags & 1) !== 0 || (e.method !== 0 && e.method !== 8) || e.size > maxBytes || e.name.endsWith('/')) return null;
+    const local = Buffer.alloc(30);
+    await handle.read(local, 0, 30, e.offset);
+    if (local.readUInt32LE(0) !== 0x04034b50) throw bad('Das Zip-Archiv ist beschädigt');
+    const start = e.offset + 30 + local.readUInt16LE(26) + local.readUInt16LE(28);
+    if (start + e.compSize > size) throw bad('Das Zip-Archiv ist beschädigt');
+    const raw = Buffer.alloc(e.compSize);
+    if (e.compSize > 0) await handle.read(raw, 0, e.compSize, start);
+    const data = e.method === 8 ? zlib.inflateRawSync(raw, { maxOutputLength: maxBytes }) : raw;
+    if (data.length !== e.size || (zlib.crc32(data) >>> 0) !== e.crc) throw bad(`„${e.name}“ ist beschädigt (Prüfsumme stimmt nicht)`);
+    return data;
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Wie extractZip, aber jeder Eintrag wird erst umbenannt oder ausgewaehlt: `map` liefert den Zielpfad im Zielordner
+ * (null = nicht uebernehmen). Die Sicherheitspruefungen gelten fuer den Zielpfad unveraendert.
+ */
+export async function extractZipMapped(
+  archive: string,
+  target: string,
+  map: (name: string, isDir: boolean) => string | null,
+  limits: ArchiveLimits = DEFAULT_LIMITS,
+): Promise<ExtractResult> {
   const sink = new Sink(target, limits);
   const handle = await fs.open(archive, 'r');
   try {
@@ -204,11 +258,13 @@ export async function extractZip(archive: string, target: string, limits: Archiv
     for (const e of entries) {
       sink.count();
       const isDir = e.name.endsWith('/');
+      const mapped = map(e.name, isDir);
+      if (mapped === null) continue; // nicht ausgewaehlt: weder geschrieben noch als unsicher gezaehlt
       if (e.isSymlink || (e.flags & 1) !== 0 || (e.method !== 0 && e.method !== 8)) {
         sink.skip(); // Verknuepfung, verschluesselt oder unbekannte Kompression
         continue;
       }
-      const dest = await sink.resolve(e.name, isDir);
+      const dest = await sink.resolve(mapped, isDir);
       if (!dest || isDir) continue;
 
       const local = Buffer.alloc(30);

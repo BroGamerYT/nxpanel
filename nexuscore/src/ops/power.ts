@@ -39,6 +39,8 @@ export function createPowerOps(deps: {
   onStopRequested?: (serverId: string) => void;
   /** Wird nach der Vorbereitung, kurz vor dem Start gerufen (z. B. Firewall-Freigabe). Ein Fehler verhindert den Start nie. */
   beforeStart?: (serverId: string) => Promise<unknown>;
+  /** Liefert einen Grund, wenn der Server gerade nicht gestartet werden darf (Import laeuft), sonst null. */
+  busy?: (serverId: string) => string | null;
 }): PowerOps {
   const { registry, driver } = deps;
 
@@ -51,6 +53,8 @@ export function createPowerOps(deps: {
   /** Alles, was vor einem Start stimmen muss. */
   async function prepare(id: string): Promise<void> {
     const c = need(id);
+    const busy = deps.busy?.(id);
+    if (busy) throw new PowerError(busy, 409, 'busy');
     if (c.install && c.install.state !== 'done') {
       throw new PowerError(
         c.install.state === 'installing'

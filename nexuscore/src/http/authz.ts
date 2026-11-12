@@ -166,6 +166,12 @@ const RULES: readonly Rule[] = [
     need: { kind: 'body-server', pick: (b) => { const f = PLAYER_FLAG[String(bodyOf(b)['action'])]; return f ? [f] : 'all'; } },
   },
 
+  // ------------------------------------------------------------------ Import
+  // Archive hoch- und ansehen: wer Server anlegen darf (die Route prueft das und die Besitzer der Dateien selbst)
+  { methods: '*', pattern: /^\/api\/v1\/imports(\/|$)/, need: { kind: 'user' } },
+  // In einen Server importieren: Besitzer und Administrator (prueft die Route; hier nur: der Server ist sichtbar)
+  { methods: ['GET', 'POST'], pattern: new RegExp(`${S}/import(/upload)?$`), need: { kind: 'server', any: 'see' } },
+
   // -------------------------------------------------------------- Mitnutzer
   { methods: GET, pattern: new RegExp(`${S}/subusers(/permissions)?$`), need: flag('subuser.read') },
   { methods: ['POST'], pattern: new RegExp(`${S}/subusers$`), need: flag('subuser.create') },

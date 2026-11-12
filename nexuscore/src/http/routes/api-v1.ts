@@ -60,6 +60,8 @@ import { registerEggRoutes } from './eggs.js';
 import { registerHealthRoutes } from './health.js';
 import { registerDocsRoutes } from './docs.js';
 import { registerEggAdminRoutes } from './egg-admin.js';
+import { registerImportRoutes } from './imports.js';
+import { ImportService } from '../../servers/import-service.js';
 import { registerDockerRoutes } from './docker.js';
 import { registerImpersonateRoutes } from './impersonate.js';
 import { registerSubuserRoutes } from './subusers.js';
@@ -177,7 +179,14 @@ export function registerApiV1Routes(
   const firewall = options.firewall ?? new FirewallManager(path.join(registry.dir, 'firewall-rules.json'));
   // Freigabe in der Windows-Firewall automatisch halten - nur fuer Spiele, die als Prozess dieses Rechners laufen (nicht in Docker)
   const firewallAuto = new FirewallAuto({ registry, firewall, bus, enabled: config.firewallAuto && driver.name === 'windows-native' });
-  const power = createPowerOps({ registry, driver, onStopRequested: (id) => discord.expectStop(id), beforeStart: (id) => firewallAuto.ensure(id) });
+  const imports = new ImportService({ registry, bus, installs });
+  const power = createPowerOps({
+    registry,
+    driver,
+    onStopRequested: (id) => discord.expectStop(id),
+    beforeStart: (id) => firewallAuto.ensure(id),
+    busy: (id) => (imports.isImporting(id) ? 'Es läuft gerade ein Import.' : null),
+  });
   const gaming = new GamingMode({ registry, driver, power, bus });
   // Backups gibt es im Core noch nicht: dann lehnt der Planer solche Zeitplaene ab.
   const backups = new BackupManager({
@@ -296,6 +305,7 @@ export function registerApiV1Routes(
     power,
     firewall,
     backups,
+    imports,
     findServer,
     stateOf,
     statusOf,
@@ -325,6 +335,7 @@ export function registerApiV1Routes(
   registerHealthRoutes(server, { registry, driver });
   registerDocsRoutes(server);
   registerEggAdminRoutes(server, { registry, fetchImpl: options.fetchImpl });
+  registerImportRoutes(server, { registry, imports, policy, find: findServer, stateOf, isOwnerOf });
   registerDockerRoutes(server, { registry, driver });
   if (account) {
     registerImpersonateRoutes(server, { registry, account, sessionCookie });

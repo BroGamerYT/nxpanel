@@ -4,8 +4,8 @@ Stand: 12.11.2026. Ziel: Der Core ist das einzige Backend; das alte Panel-Backen
 
 ## Wie das gemessen wurde (und was es nicht sagt)
 
-* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **185** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
-* **Ohne Gegenstück im Core: 30 Panel-Routen.** Davon ruft die Oberfläche **22** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
+* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **192** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
+* **Ohne Gegenstück im Core: 23 Panel-Routen.** Davon ruft die Oberfläche **17** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
 * Gleiche Route heißt **nicht** gleiches Verhalten. Das Verhalten ist nur dort geprüft, wo es Tests gibt (856 im Core); ein Vergleich Seite an Seite mit dem Panel (gleiche Anfrage, gleiche Antwort) fehlt noch.
 * Die Oberfläche blendet Bereiche aus, die der Core nicht meldet (`features` in `/api/v1/about`). Fehlende Funktionen sind deshalb **unsichtbar, nicht kaputt**.
 
@@ -18,7 +18,7 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 | Mitnutzer (Subusers) | Weitere Benutzer je Server mit eigenen Rechten einladen | 0 | 0 | **ERLEDIGT** | – |
 | Benutzer imitieren | Admin meldet sich als anderer Benutzer an, um dessen Sicht zu prüfen | 0 | 0 | **ERLEDIGT** | – |
 | Spiele verwalten (Eggs) | Eggs importieren (Datei, URL, Katalog), löschen | 0 | 0 | **ERLEDIGT** | – |
-| Server aus Backup/Upload importieren | Bestehenden Server (Archiv, Backup) in einen neuen Server übernehmen | 7 | 5 | **BAUEN** | L |
+| Server aus Backup/Upload importieren | Bestehenden Server (Archiv, Backup) in einen neuen Server übernehmen | 0 | 0 | **ERLEDIGT** | – |
 | Spiel aktualisieren | Spieldateien (SteamCMD) auf den neuesten Stand bringen | 0 | 0 | **ERLEDIGT** | – |
 | Modpacks (Minecraft) | CurseForge/Modrinth suchen und installieren/aktualisieren | 5 | 5 | **BAUEN** | L |
 | Speicherziele (Backups extern) | Backups auf externe Ziele (S3, SFTP ...) | 5 | 0 | **BAUEN** | L |
@@ -79,13 +79,6 @@ Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche 
 | GET | `/api/v1/modpacks/search` | Modpacks (Minecraft) | ja |
 | POST | `/api/v1/servers/:p/modpack/update` | Modpacks (Minecraft) | ja |
 | POST | `/api/v1/admin/integrations/playit` | Playit-Integration | ja |
-| GET | `/api/v1/imports` | Server aus Backup/Upload importieren | ja |
-| DELETE | `/api/v1/imports/:p` | Server aus Backup/Upload importieren | ja |
-| POST | `/api/v1/imports/analyze` | Server aus Backup/Upload importieren | ja |
-| POST | `/api/v1/imports/upload` | Server aus Backup/Upload importieren | nein |
-| GET | `/api/v1/servers/:p/import` | Server aus Backup/Upload importieren | ja |
-| POST | `/api/v1/servers/:p/import` | Server aus Backup/Upload importieren | ja |
-| POST | `/api/v1/servers/:p/import/upload` | Server aus Backup/Upload importieren | nein |
 | GET | `/api/v1/admin/storage-targets` | Speicherziele (Backups extern) | nein |
 | GET | `/api/v1/servers/:p/storage-targets` | Speicherziele (Backups extern) | nein |
 | POST | `/api/v1/servers/:p/storage-targets` | Speicherziele (Backups extern) | nein |

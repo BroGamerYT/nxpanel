@@ -10,13 +10,15 @@ import { buildDockerInstance, EggContainerError } from '../../docker/egg-contain
 import { getAccess, setOwner } from '../../store/access.js';
 import { initialValue, isUserVariable, validateVariables } from '../../eggs/rules.js';
 import { loadEggs } from '../../eggs/loader.js';
+import { mayUseImportFile, type PendingImport } from '../../servers/import-service.js';
+import { importRoot } from '../../servers/importer.js';
 import type { ApiContext } from './api-context.js';
 
 /**
  * Server anlegen: Docker (Container aus dem Egg), Installationen und Platzhalter-Start.
  */
 export function registerServerCreateRoutes(ctx: ApiContext): void {
-  const { server, driver, bus, registry, account, installs, policy, eggInstallData, eggPorts, portRangeNow } = ctx;
+  const { server, driver, bus, registry, account, installs, policy, imports, eggInstallData, eggPorts, portRangeNow } = ctx;
 
   // Server anlegen (POST /api/v1/servers)
   server.post<{
@@ -28,9 +30,11 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
       diskMb?: number;
       variables?: Record<string, string>;
       imageKey?: string;
+      /** Archiv im Import-Ordner: die Daten werden nach dem Anlegen (und der Installation) uebernommen. */
+      importFile?: string;
     };
   }>('/api/v1/servers', async (req, reply) => {
-    const { name, eggId, ramMb, cpuPercent, variables, imageKey } = req.body;
+    const { name, eggId, ramMb, cpuPercent, variables, imageKey, importFile } = req.body;
     if (!name || !eggId) {
       return reply.status(400).send({ error: 'Name und Game sind erforderlich.' });
     }
@@ -76,6 +80,21 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
     // Benutzer ohne Verwalterrolle: nur bekannte Spiele, nur die Variablen, die das Spiel vorsieht - und gueltig.
     // Sonst liesse sich ueber frei gewaehlte Werte (Umgebung, Startoptionen) Einfluss auf den Rechner nehmen.
     const adminLike = creator.master || creator.role === 'admin';
+    // Daten aus einem Backup uebernehmen: das Archiv pruefen, bevor irgendetwas angelegt wird
+    let pendingImport: PendingImport | null = null;
+    if (typeof importFile === 'string' && importFile) {
+      if (!adminLike && !policy.userFileWrite) {
+        return reply.status(403).send({ error: 'Dateien ändern darf auf diesem Rechner nur ein Administrator - damit auch kein Import.', code: 'forbidden' });
+      }
+      const name = path.basename(importFile);
+      if (!/\.zip$/i.test(name) || !mayUseImportFile(creator, name)) return reply.status(404).send({ error: 'Datei nicht im Import-Ordner', code: 'not_found' });
+      const full = path.join(importRoot(), name);
+      if (!(await fs.stat(full).catch(() => null))?.isFile()) return reply.status(404).send({ error: 'Datei nicht im Import-Ordner', code: 'not_found' });
+      pendingImport = { path: full, name, removeAfter: name.startsWith('upload-') };
+    }
+    const created = (id: string): void => {
+      if (pendingImport) imports.afterCreate(id, pendingImport, creator.username);
+    };
     const knownEgg = (await loadEggs()).find((e) => e.id === eggId);
     let givenVariables: Record<string, unknown> | undefined = variables;
     if (!adminLike) {
@@ -130,6 +149,7 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
       if (!creator.master) setOwner(registry, id, creator.id);
       registry.audit('server.create', id, 'standalone', { name, game: eggId, port, install: plan.kind });
       const task = installs.start(id, { kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData });
+      created(id);
       return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
     }
 
@@ -151,13 +171,15 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
         if (!creator.master) setOwner(registry, id, creator.id);
         registry.audit('server.create', id, 'standalone', { name, game: eggId, port, image: instance.container?.image, install: 'container' });
         const task = installs.start(id, { kind: 'container', ...installData });
-        return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
+        created(id);
+      return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
       }
       await driver.registerServer(instance);
       await registry.add(instance);
       if (!creator.master) setOwner(registry, id, creator.id);
       registry.audit('server.create', id, 'standalone', { name, game: eggId, port, image: instance.container?.image });
       bus.emit({ type: 'state', serverId: id, state: { id, status: 'offline' }, ts: new Date().toISOString() });
+      created(id);
       return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) } });
     }
 
@@ -195,7 +217,8 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
       ts: new Date().toISOString(),
     });
 
-    return reply.status(201).send({
+    created(id);
+      return reply.status(201).send({
       server: {
         id,
         shortId: id.slice(0, 8),
