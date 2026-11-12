@@ -25,6 +25,13 @@ import type { ServerInstanceConfig } from '../types.js';
  * und verschwindet wieder.
  */
 
+/** Spiele, die sich nicht anonym laden lassen: ein Fehlschlag ist dort meist fehlende Lizenz, kein Fehler des Cores. */
+const LICENSE_HINTS: Record<string, string> = {
+  'left-4-dead-2': 'Braucht ein Steam-Konto mit L4D2-Lizenz - Valve erlaubt dafür keinen anonymen Download.',
+  'farming-simulator-25': 'Braucht ein Steam-Konto mit FS25-Lizenz oder die GIANTS-Dateien im Ordner game/.',
+  'arma-3': 'Braucht ein Steam-Konto mit Arma-3-Lizenz.',
+};
+
 export type TestStatus = 'SUCCESS' | 'INSTALL_FAILED' | 'START_CRASHED' | 'TIMEOUT';
 export type TestMode = 'resume' | 'fresh' | 'retry-failed';
 
@@ -323,7 +330,7 @@ export class GameTester {
       status,
       installDurationSec: install,
       runtimeDurationSec: runtime,
-      errorSummary: summary,
+      errorSummary: LICENSE_HINTS[testCase.id] ? `${LICENSE_HINTS[testCase.id]} (${summary})` : summary,
       logExcerpt: this.excerpt(id),
     });
     let installSec = 0;
