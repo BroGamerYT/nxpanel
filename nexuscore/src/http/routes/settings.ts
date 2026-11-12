@@ -6,6 +6,7 @@ import type { LoadedEgg } from '../../eggs/loader.js';
 import { isSecretVariable, isUserVariable, parseRules, validateVariables } from '../../eggs/rules.js';
 import { installKindFor, installSpecOf, type InstallManager } from '../../install/manager.js';
 import { isMinecraftKind } from '../../install/minecraft.js';
+import { dockerEnv } from '../../docker/egg-container.js';
 import { heapMb } from '../../install/minecraft.js';
 import { resolveInstanceDir } from '../../files/instance-dir.js';
 import { allocatePort, isPortFree } from '../../protocol/ports.js';
@@ -255,7 +256,12 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
       isMinecraftKind(c.install?.kind) && ramNow !== ramBefore
         ? c.args.map((a) => (a.startsWith('-Xmx') ? `-Xmx${heapMb(ramNow)}M` : a))
         : c.args;
-    const next: ServerInstanceConfig = { ...c, maxMemoryMb: ramNow, maxCpuPercent: b.cpuPercent ?? c.maxCpuPercent ?? 100, args };
+    let next: ServerInstanceConfig = { ...c, maxMemoryMb: ramNow, maxCpuPercent: b.cpuPercent ?? c.maxCpuPercent ?? 100, args };
+    // Docker: SERVER_MEMORY und Platzhalter wie {{SERVER_MEMORY_HEAP}} im Startkommando folgen dem neuen Speicher
+    if (c.container && ramNow !== ramBefore) {
+      const egg = (await eggs()).find((e) => e.id === c.game);
+      if (egg) next = { ...next, env: dockerEnvOf(next, egg, c.install?.variables ?? c.env ?? {}) };
+    }
     await registry.update(next);
 
     // Speicher und Bandbreite merkt sich der Core (Anzeige, Budget); durchgesetzt wird davon noch nichts (B3).
@@ -277,6 +283,17 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
   // ---------------------------------------------------------------- Spiel-Einstellungen
 
   /** Die Egg-Variablen des Servers und die aktuell gesetzten Werte. */
+  /** Docker: Umgebung des Containers aus den (neuen) Variablen und dem aktuellen Speicher berechnen. */
+  function dockerEnvOf(c: ServerInstanceConfig, egg: LoadedEgg, variables: Record<string, string>): Record<string, string> {
+    return dockerEnv(egg, variables, {
+      name: c.name,
+      ramMb: c.maxMemoryMb ?? 0,
+      port: Number(c.env?.SERVER_PORT) || c.ports[0]?.hostPort || 0,
+      refPorts: c.container?.refPorts ?? {},
+      serverDir: c.container?.dataDir ?? '/data',
+    });
+  }
+
   async function variablesOf(c: ServerInstanceConfig): Promise<{ defs: NonNullable<LoadedEgg['raw']['variables']>; current: Record<string, string> }> {
     const egg = (await eggs()).find((e) => e.id === c.game);
     return { defs: egg?.raw.variables ?? [], current: { ...(c.env ?? {}), ...(c.install?.variables ?? {}) } };
@@ -289,8 +306,10 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
 
     return {
       startup: [c.executable, ...c.args].filter(Boolean).join(' '),
-      // Der Core startet ohne Container-Image - es gibt nichts auszuwaehlen.
-      images: [],
+      // Nur im Docker-Betrieb gibt es ein Image zu waehlen
+      images: c.container
+        ? ((await eggs()).find((e) => e.id === c.game)?.images ?? []).map((i) => ({ ...i, current: i.image === c.container?.image }))
+        : [],
       variables: defs
         .filter(isUserVariable)
         .map((v) => {
@@ -324,7 +343,7 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
     if (!c) return reply;
     const body = startupBody.safeParse(req.body);
     if (!body.success) return invalidRequest(reply, body.error);
-    if (body.data.imageKey) {
+    if (body.data.imageKey && !c.container) {
       return fail(reply, 400, 'Der Core startet Spiele ohne Container-Image - es gibt keine Laufzeit zu wählen.', 'invalid_input');
     }
     if (!(await requireStopped(c, reply))) return reply;
@@ -352,9 +371,18 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
     // zaehlt jedes Feld als geaendert, das nur zum ersten Mal einen Wert bekommt.
     const before = Object.fromEntries(defs.map((d) => [d.env_variable, current[d.env_variable] ?? d.default_value ?? '']));
     const changed = Object.keys(values).filter((k) => values[k] !== before[k]);
-    const next: ServerInstanceConfig = c.install
+    let next: ServerInstanceConfig = c.install
       ? { ...c, install: { ...c.install, variables: values } }
       : { ...c, env: { ...(c.env ?? {}), ...values } };
+    // Docker: Umgebung des Containers (Platzhalter, Startkommando) und Image neu berechnen
+    if (c.container) {
+      const egg = (await eggs()).find((e) => e.id === c.game);
+      if (egg) {
+        const image = body.data.imageKey ? egg.images.find((i) => i.key === body.data.imageKey) : undefined;
+        if (body.data.imageKey && !image) return fail(reply, 400, 'Dieses Image gibt es für das Spiel nicht.', 'invalid_input');
+        next = { ...next, env: dockerEnvOf(next, egg, values), ...(image ? { executable: image.image, container: { ...c.container, image: image.image } } : {}) };
+      }
+    }
     await registry.update(next);
     // Namen der geaenderten Felder ins Protokoll, nie die Werte (Passwoerter).
     registry.audit('server.startup_update', c.id, 'standalone', { changed });

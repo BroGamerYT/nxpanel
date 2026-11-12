@@ -11,6 +11,9 @@ import { installDownloadGame } from './download-game.js';
 import { installMinecraft } from './minecraft.js';
 import { isDownloadSource } from './sources.js';
 import { installSteamGame } from './steam-game.js';
+import { loadEggs } from '../eggs/loader.js';
+import { substitute } from '../eggs/substitute.js';
+import { ConfigError } from './config-error.js';
 import type { SteamRunner } from './steamcmd.js';
 
 /**
@@ -23,7 +26,7 @@ import type { SteamRunner } from './steamcmd.js';
  */
 
 export interface InstallSpec {
-  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd' | 'download';
+  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd' | 'download' | 'container';
   variables: Record<string, string>;
   propertiesTemplate: Record<string, string>;
   /** Nur bei kind = steamcmd oder download: App-ID bzw. Quelle, Programm, Argumente, Dateien. */
@@ -99,6 +102,15 @@ export function installPlanFor(
   };
 }
 
+/**
+ * Docker-Treiber: hat das Egg ein Installationsskript, laeuft es in einem Installer-Container (wie im Panel).
+ * Eggs ohne Skript (das Image richtet sich beim ersten Start selbst ein, z. B. Minecraft) brauchen keine Installation.
+ */
+export function containerInstallPlan(raw: RawEggFile | undefined): { kind: 'container' } | null {
+  const script = raw?.scripts?.installation?.script;
+  return typeof script === 'string' && script.trim() ? { kind: 'container' } : null;
+}
+
 interface InstallOutcome {
   executable: string;
   args: string[];
@@ -150,6 +162,52 @@ export class InstallManager {
 
   private say(serverId: string, line: string, stream: 'stdout' | 'stderr' = 'stdout'): void {
     this.bus.emit({ type: 'console', serverId, line: `[Installation] ${line}`, stream, ts: new Date().toISOString() });
+  }
+
+  /** Installationsskript des Eggs im Installer-Container ausfuehren. */
+  private async installContainer(config: ServerInstanceConfig, spec: InstallSpec, progress: (f: number, m: string) => void, serverId: string): Promise<InstallOutcome> {
+    if (!this.driver.runInstaller) throw new ConfigError('Dieser Treiber kann keine Installer-Container starten.');
+    const egg = (await loadEggs()).find((e) => e.id === config.game);
+    const inst = egg?.raw.scripts?.installation;
+    if (!egg || !inst?.script?.trim()) throw new ConfigError('Das Spiel hat kein Installationsskript.');
+    const image = inst.container ?? config.container?.image;
+    if (!image) throw new ConfigError('Das Spiel nennt kein Image für die Installation.');
+    const refPorts = config.container?.refPorts ?? {};
+    const port = Number(config.env?.SERVER_PORT) || config.ports[0]?.hostPort || 0;
+    const ctx = { variables: spec.variables, ramMb: config.maxMemoryMb ?? 0, ip: '0.0.0.0', port, ports: refPorts, serverDir: '/mnt/server', serverName: config.name };
+    // Variablen, die selbst Platzhalter enthalten, werden vorab aufgeloest (wie im Panel)
+    const env: Record<string, string> = {
+      ...Object.fromEntries(Object.entries(spec.variables).map(([k, v]) => [k, substitute(v, ctx)])),
+      SERVER_MEMORY: String(config.maxMemoryMb ?? 0),
+      SERVER_IP: '0.0.0.0',
+      SERVER_PORT: String(port),
+      SERVER_NAME: config.name,
+    };
+    let script = substitute(inst.script.replace(/\r\n?/g, '\n'), ctx);
+    // Laeuft der Server spaeter als normaler Benutzer (run_as), bekommt er die Dateien, die der Installer als root anlegte
+    const user = config.container?.user;
+    if (user && /^\d+:\d+$/.test(user)) script = `trap 'chown -R ${user} /mnt/server 2>/dev/null || true' EXIT\n${script}`;
+    const shell = /(?:^|\/)ash$/.test((inst.entrypoint ?? '').trim()) ? 'ash' : 'bash';
+
+    progress(0.05, `Installationsskript läuft (${image})`);
+    const started = Date.now();
+    let lines = 0;
+    const code = await this.driver.runInstaller({ serverId, image, shell, script, env, hostDir: config.workingDir }, (line) => {
+      lines++;
+      this.say(serverId, line);
+      // Fortschritt ist unbekannt: langsam gegen 90 % kriechen, damit die Oberflaeche nicht stehen bleibt
+      progress(Math.min(0.9, 0.05 + lines / 400), `Installationsskript läuft (${lines} Zeilen)`);
+    });
+    if (code !== 0) throw new Error(`Das Installationsskript endete mit Code ${code}.`);
+    const seconds = Math.round((Date.now() - started) / 1000);
+    return {
+      executable: config.executable,
+      args: config.args,
+      stopTimeoutSeconds: config.stopTimeoutSeconds ?? 30,
+      info: {},
+      message: `Installation abgeschlossen (${seconds} s)`,
+      result: { seconds, lines },
+    };
   }
 
   private async installPaper(config: ServerInstanceConfig, spec: InstallSpec, progress: (f: number, m: string) => void): Promise<InstallOutcome> {
@@ -279,7 +337,9 @@ export class InstallManager {
           ? await this.installSteam(config, spec, progress, serverId)
           : spec.kind === 'download'
             ? await this.installDownload(config, spec, progress, serverId)
-            : await this.installPaper(config, spec, progress);
+            : spec.kind === 'container'
+              ? await this.installContainer(config, spec, progress, serverId)
+              : await this.installPaper(config, spec, progress);
 
       const installed: ServerInstanceConfig = {
         ...config,

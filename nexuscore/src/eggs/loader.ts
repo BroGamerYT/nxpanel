@@ -34,6 +34,8 @@ export interface RawEggFile {
   nest?: string;
   docker_images?: Record<string, string>;
   startup?: string;
+  /** Installationsskript fuer den Docker-Weg (Installer-Container mit dem Server-Ordner unter /mnt/server). */
+  scripts?: { installation?: { script?: string; container?: string; entrypoint?: string } };
   /** Konsolenbefehl zum Beenden ("stop") oder { method: "SIGTERM", timeout_seconds }. */
   stop?: string | { method?: string; timeout_seconds?: number };
   data_dir?: string;

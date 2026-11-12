@@ -9,6 +9,17 @@ export type LogSink = (line: LogLine) => void;
  * Der Core kennt nur diese Schnittstelle: Windows nativ, Docker oder Mock sind
  * austauschbar, ohne dass HTTP-Schicht oder Event-Bus etwas davon wissen.
  */
+/** Installationsskript in einem Wegwerf-Container (nur Docker-Treiber). */
+export interface InstallerSpec {
+  serverId: string;
+  image: string;
+  shell: 'bash' | 'ash' | 'sh';
+  script: string;
+  env: Record<string, string>;
+  /** Server-Ordner auf dem Host; im Container unter /mnt/server. */
+  hostDir: string;
+}
+
 export interface HostDriver {
   readonly name: string;
   initialize(): Promise<void>;
@@ -26,6 +37,8 @@ export interface HostDriver {
   sendCommand?(serverId: string, command: string): Promise<void>;
   /** Laeuft die Instanz mit niedriger oder normaler Prioritaet (Gaming-Modus)? Ganzer Prozessbaum. */
   setPriority?(serverId: string, level: 'normal' | 'low'): Promise<number>;
+  /** Installationsskript des Eggs in einem Container ausfuehren; Rueckgabe: Beendigungscode. */
+  runInstaller?(spec: InstallerSpec, onLog: (line: string) => void): Promise<number>;
   setLogSink(sink: LogSink): void;
   shutdown(): Promise<void>;
 }

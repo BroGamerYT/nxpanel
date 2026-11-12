@@ -42,6 +42,32 @@ export function tmpfsFromEgg(raw: unknown): number | undefined {
   return undefined;
 }
 
+/**
+ * Umgebung des Containers: Variablen mit aufgeloesten Platzhaltern (leere optionale Modpack-Variablen weg)
+ * plus Zeitzone, Speicher, Spielport und Startkommando. Wird beim Anlegen und bei jeder Aenderung der
+ * Einstellungen gebraucht.
+ */
+export function dockerEnv(
+  egg: LoadedEgg,
+  variables: Record<string, string>,
+  at: { name: string; ramMb: number; port: number; refPorts: Record<string, number>; serverDir: string; timezone?: string },
+): Record<string, string> {
+  const ctx: SubstitutionContext = { variables, ramMb: at.ramMb, ip: '0.0.0.0', port: at.port, ports: at.refPorts, serverDir: at.serverDir, serverName: at.name };
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(variables)) {
+    const v = substitute(value ?? '', ctx);
+    if (OMIT_IF_EMPTY.has(key) && !v.trim()) continue;
+    env[key] = v;
+  }
+  Object.assign(env, {
+    TZ: at.timezone ?? process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
+    SERVER_MEMORY: String(at.ramMb),
+    SERVER_PORT: String(at.port),
+    STARTUP: substitute(egg.raw.startup ?? '', ctx),
+  });
+  return env;
+}
+
 export function buildDockerInstance(input: DockerInstanceInput): ServerInstanceConfig {
   const { egg } = input;
   const image = input.imageKey ? egg.images.find((i) => i.key === input.imageKey) : (egg.images.find((i) => i.default) ?? egg.images[0]);
@@ -66,27 +92,25 @@ export function buildDockerInstance(input: DockerInstanceInput): ServerInstanceC
   });
   const primary = input.ports[0]?.hostPort ?? 0;
 
-  const ctx: SubstitutionContext = { variables: input.variables, ramMb: input.ramMb, ip: '0.0.0.0', port: primary, ports: hostPorts, serverDir: input.serverDir, serverName: input.name };
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(input.variables)) {
-    const v = substitute(value ?? '', ctx);
-    if (OMIT_IF_EMPTY.has(key) && !v.trim()) continue;
-    env[key] = v;
-  }
-  const startup = substitute(egg.raw.startup ?? '', ctx);
-  Object.assign(env, {
-    TZ: input.timezone ?? process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
-    SERVER_MEMORY: String(input.ramMb),
-    SERVER_PORT: String(primary),
-    STARTUP: startup,
-  });
+  const env = dockerEnv(egg, input.variables, { name: input.name, ramMb: input.ramMb, port: primary, refPorts: hostPorts, serverDir: input.serverDir, ...(input.timezone ? { timezone: input.timezone } : {}) });
 
   const caps = filterCapabilities(egg.raw.capabilities).granted;
   const stop = egg.raw.stop;
   const entrypoint = egg.raw.entrypoint;
   const tmpfs = tmpfsFromEgg(egg.raw.tmp);
+  const configFiles = egg.raw.config_files;
   const container: ContainerSpec = {
     image: image.image,
+    refPorts: hostPorts,
+    ...(configFiles && Object.keys(configFiles).length
+      ? {
+          configFiles: Object.fromEntries(
+            Object.entries(configFiles)
+              .filter((e): e is [string, { parser: string; find?: Record<string, unknown> }] => typeof e[1]?.parser === 'string')
+              .map(([file, spec]) => [file, { parser: spec.parser, ...(spec.find ? { find: spec.find } : {}) }]),
+          ),
+        }
+      : {}),
     dataDir: sanitizeDataPath(egg.raw.data_dir),
     ...(caps.length ? { capAdd: caps } : {}),
     ...(egg.raw.run_as && /^\d+:\d+$/.test(egg.raw.run_as) ? { user: egg.raw.run_as } : {}),

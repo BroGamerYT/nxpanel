@@ -276,12 +276,12 @@ export async function createCoreServer(
   await registerWebRoutes(server);
 
   registerStandaloneRoutes(server, driver, bus, registry);
-  // Echte Installation gibt es fuer den nativen Treiber. Docker installiert
-  // ueber das Image, der Mock-Treiber startet nichts.
+  // Echte Installation gibt es fuer den nativen Treiber und fuer Docker (Installer-Container des Eggs).
+  // Der Mock-Treiber startet nichts.
   const installs =
     options.installs !== undefined
       ? options.installs
-      : driver.name === 'windows-native'
+      : driver.name === 'windows-native' || driver.name === 'docker'
         ? new InstallManager(registry, driver, bus, { runtimesDir: runtimesDirFor(registry.dir) })
         : null;
 

@@ -20,7 +20,7 @@ import {
 import { serverRootFor, resolveInsideRoot, PathOutsideRootError } from '../../protocol/paths.js';
 import { allocatePort } from '../../protocol/ports.js';
 import type { AccountUser, LocalAccount } from '../../store/account.js';
-import { installPlanFor, installSpecOf, type InstallManager } from '../../install/manager.js';
+import { containerInstallPlan, installPlanFor, installSpecOf, type InstallManager } from '../../install/manager.js';
 import { writeServerProperties } from '../../install/minecraft.js';
 import { registerFileRoutes } from './files.js';
 import { getServerMeta, registerSettingsRoutes } from './settings.js';
@@ -707,7 +707,8 @@ export function registerApiV1Routes(
     // Block B2: echte Installation statt Attrappe, wenn der Core dieses Egg kann.
     const installData = await eggInstallData(eggId, givenVariables);
     const egg = knownEgg;
-    const plan = installs ? installPlanFor(eggId, egg?.raw, installData.variables) : null;
+    // Docker installiert ueber Installer-Container (siehe unten), nicht ueber die Windows-Wege
+    const plan = installs && driver.name !== 'docker' ? installPlanFor(eggId, egg?.raw, installData.variables) : null;
     if (!adminLike && !plan && !policy.userFileWrite) {
       // Ohne Installation bliebe nur eine Platzhalter-Startdatei - die legt auf diesem Rechner nur ein Verwalter an
       return reply.status(403).send({ error: 'Dieses Spiel kann der Core für Benutzer noch nicht installieren.', code: 'forbidden' });
@@ -751,6 +752,15 @@ export function registerApiV1Routes(
       } catch (err) {
         if (err instanceof EggContainerError) return reply.status(400).send({ error: err.message, code: 'invalid_image' });
         return reply.status(409).send({ error: (err as Error).message });
+      }
+      // Mit Installationsskript: erst der Installer-Container, danach meldet sich die Instanz beim Treiber an
+      const containerPlan = installs ? containerInstallPlan(egg.raw) : null;
+      if (installs && containerPlan) {
+        await registry.add({ ...instance, install: { state: 'installing', kind: 'container', ...installData } });
+        if (!creator.master) setOwner(registry, id, creator.id);
+        registry.audit('server.create', id, 'standalone', { name, game: eggId, port, image: instance.container?.image, install: 'container' });
+        const task = installs.start(id, { kind: 'container', ...installData });
+        return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
       }
       await driver.registerServer(instance);
       await registry.add(instance);
@@ -1073,7 +1083,7 @@ export function registerApiV1Routes(
         coverChoice: storedCover(e.id)?.choice ?? 'auto',
         hasSteamCover: steamAppId(e.name, e.raw) !== null,
         // Ohne Installer (Docker, Mock) bleibt alles wie im Panel; sonst nur, was der Core selbst installieren kann
-        installable: !installs || installPlanFor(e.id, e.raw, {}) !== null,
+        installable: driver.name === 'docker' ? e.images.length > 0 : !installs || installPlanFor(e.id, e.raw, {}) !== null,
       })),
     };
   });

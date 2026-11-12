@@ -48,6 +48,10 @@ export interface ContainerSpec {
   tmpfsMb?: number;
   /** Signal statt Konsolenbefehl zum Beenden (Egg: stop.method, z. B. SIGTERM). */
   stopSignal?: string;
+  /** Konfigurationsdateien des Eggs (config_files): werden vor jedem Start mit den aktuellen Werten gepatcht. */
+  configFiles?: Record<string, { parser: string; find?: Record<string, unknown>; set?: Record<string, unknown> }>;
+  /** Alle Ports des Eggs nach Namen (auch interne wie RCON) - fuer Platzhalter wie {{RCON_PORT}}. */
+  refPorts?: Record<string, number>;
 }
 
 export interface ServerInstanceConfig {
@@ -125,7 +129,7 @@ export interface SteamLaunch {
 
 export interface ServerInstallInfo {
   state: 'installing' | 'done' | 'failed';
-  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd' | 'download';
+  kind: 'minecraft-paper' | 'minecraft-vanilla' | 'steamcmd' | 'download' | 'container';
   /** Nur bei kind = steamcmd. */
   steam?: SteamLaunch;
   version?: string;

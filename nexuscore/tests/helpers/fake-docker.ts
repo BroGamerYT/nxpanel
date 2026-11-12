@@ -17,8 +17,10 @@ export class FakeContainer implements ContainerLike {
   constructor(readonly name: string, readonly options: Record<string, unknown>, private readonly onRemove: () => void) {
     this.id = `id-${name}`;
   }
+  onStart: (() => void) | null = null;
   async start() {
     this.calls.push('start');
+    this.onStart?.();
   }
   async stop(o?: { t?: number }) {
     this.calls.push(`stop:${o?.t}`);
@@ -75,6 +77,10 @@ export class FakeDocker implements DockerLike {
   networks = new Set<string>();
   pulled: string[] = [];
   pingFails = false;
+  /** Alle Optionen, mit denen Container angelegt wurden (auch die schon entfernten Installer). */
+  created: Array<Record<string, any>> = [];
+  /** Ausgabe und Beendigungscode des Installationsskripts. */
+  installer = { lines: ['[installer] lade Dateien', '[installer] fertig'], code: 0 };
   readonly modem = {
     followProgress: (stream: NodeJS.ReadableStream, done: (e: Error | null) => void, onProgress?: (ev: { status?: string; id?: string }) => void) => {
       onProgress?.({ id: 'abc123', status: 'Downloading' });
@@ -109,6 +115,15 @@ export class FakeDocker implements DockerLike {
   async createContainer(o: Record<string, unknown>) {
     const name = o.name as string;
     const c = new FakeContainer(name, o, () => this.containers.delete(name));
+    this.created.push(o);
+    if ((o.Labels as Record<string, string> | undefined)?.['nexuscore.installer']) {
+      c.onStart = () =>
+        setImmediate(() => {
+          for (const l of this.installer.lines) c.logStream.write(`${l}
+`);
+          c.exit(this.installer.code);
+        });
+    }
     this.containers.set(name, c);
     return c;
   }

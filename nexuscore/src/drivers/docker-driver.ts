@@ -6,6 +6,8 @@ import type { HostDriver, LogSink } from './interface.js';
 import type { ContainerSpec, ServerInstanceConfig, ServerState, ServerStats } from '../types.js';
 import { ALLOWED_CAPABILITIES } from '../eggs/capabilities.js';
 import { logger } from '../logger.js';
+import { applyConfigFiles } from '../docker/config-apply.js';
+import type { InstallerSpec } from './interface.js';
 
 /**
  * Container-Treiber fuer Linux, Proxmox, Docker Desktop und NexusPanel OS.
@@ -240,7 +242,9 @@ export class DockerDriver implements HostDriver {
   }
 
   async updateServer(config: ServerInstanceConfig): Promise<ServerState> {
-    const entry = this.require(config.id);
+    const entry = this.instances.get(config.id);
+    // Noch nicht angemeldet (z. B. nach der Installation): anmelden
+    if (!entry) return this.registerServer(config);
     if (entry.container) throw new Error('Ein laufender Server kann nicht umkonfiguriert werden.');
     entry.config = config;
     return entry.state;
@@ -300,6 +304,69 @@ export class DockerDriver implements HostDriver {
     }
   }
 
+  /** Konfigurationsdateien des Eggs mit den aktuellen Werten schreiben (vor jedem Start, wie im Panel). */
+  private async writeConfigFiles(config: ServerInstanceConfig, serverId: string): Promise<void> {
+    const spec = specOf(config);
+    if (!spec.configFiles || !config.workingDir) return;
+    const env = config.env ?? {};
+    await applyConfigFiles(
+      config.workingDir,
+      spec.configFiles,
+      { variables: env, ramMb: config.maxMemoryMb ?? 0, ip: '0.0.0.0', port: Number(env.SERVER_PORT) || config.ports[0]?.hostPort || 0, ports: spec.refPorts ?? {}, serverDir: spec.dataDir, serverName: config.name },
+      (line) => this.emit(serverId, line),
+    );
+  }
+
+  /**
+   * Installation in einem eigenen Container (Installationsskript des Eggs): der Server-Ordner liegt unter
+   * /mnt/server, der Container bekommt so wenig Rechte wie moeglich. Rueckgabe: Beendigungscode des Skripts.
+   */
+  async runInstaller(spec: InstallerSpec, onLog: (line: string) => void): Promise<number> {
+    if (!this.dockerAvailable) throw new Error('Kein Docker-Daemon erreichbar - die Installation kann nicht laufen.');
+    await fs.mkdir(spec.hostDir, { recursive: true });
+    await this.ensureImage(spec.image, spec.serverId);
+    const name = `nxc-install-${spec.serverId.replace(/[^a-zA-Z0-9_.-]/g, '-')}`;
+    await this.docker.getContainer(name).remove({ force: true }).catch(() => {});
+    const container = await this.docker.createContainer({
+      name,
+      Image: spec.image,
+      Entrypoint: [spec.shell === 'ash' ? '/bin/ash' : spec.shell === 'sh' ? '/bin/sh' : '/bin/bash', '-c'],
+      Cmd: [spec.script],
+      Env: [...Object.entries(spec.env).map(([k, v]) => `${k}=${v}`), 'SERVER_DIR=/mnt/server'],
+      WorkingDir: '/mnt/server',
+      Tty: false,
+      Labels: { 'nexuscore.installer': spec.serverId },
+      HostConfig: {
+        Mounts: [{ Type: 'bind', Source: spec.hostDir, Target: '/mnt/server' }],
+        // Der Installer laedt fremde Dateien: so wenig Rechte wie moeglich
+        CapDrop: ['ALL'],
+        CapAdd: ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER'],
+        PidsLimit: 512,
+        Memory: 2048 * 1024 * 1024,
+        LogConfig: { Type: 'json-file', Config: { 'max-size': '10m', 'max-file': '2' } },
+      },
+    });
+    try {
+      const done = new Promise<void>((resolve) => {
+        container.logs({ follow: true, stdout: true, stderr: true }, (err, stream) => {
+          if (err || !stream) return resolve();
+          const out = lineWriter(onLog);
+          const errOut = lineWriter(onLog);
+          this.docker.modem.demuxStream(stream, out, errOut);
+          stream.on('end', () => resolve());
+          stream.on('error', () => resolve());
+        });
+      });
+      await container.start();
+      const result = await container.wait();
+      // Die letzten Zeilen des Logs noch abwarten (hoechstens kurz)
+      await Promise.race([done, new Promise<void>((r) => setTimeout(r, 2000))]);
+      return result.StatusCode;
+    } finally {
+      await container.remove({ force: true }).catch(() => {});
+    }
+  }
+
   async startServer(serverId: string): Promise<ServerState> {
     const entry = this.require(serverId);
     if (!this.dockerAvailable) throw new Error('Kein Docker-Daemon erreichbar - der Container kann nicht gestartet werden.');
@@ -315,6 +382,7 @@ export class DockerDriver implements HostDriver {
     try {
       await this.ensureImage(specOf(config).image, serverId);
       await this.prepareDataDir(config, serverId);
+      await this.writeConfigFiles(config, serverId);
       // Ein uebrig gebliebener, beendeter Container gleichen Namens wuerde das Anlegen blockieren
       await this.docker.getContainer(containerName(serverId)).remove({ force: true }).catch(() => {});
       const container = await this.docker.createContainer(buildContainerOptions(config, { network: this.network }));
