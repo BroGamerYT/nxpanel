@@ -34,6 +34,14 @@ export interface RawEggFile {
   nest?: string;
   docker_images?: Record<string, string>;
   startup?: string;
+  /** Konsolenbefehl zum Beenden ("stop") oder { method: "SIGTERM", timeout_seconds }. */
+  stop?: string | { method?: string; timeout_seconds?: number };
+  data_dir?: string;
+  capabilities?: string[];
+  run_as?: string | null;
+  entrypoint?: string[];
+  /** "disk" oder { size_mb }. */
+  tmp?: unknown;
   console?: string;
   ports?: unknown;
   config_files?: Record<string, { parser?: string; find?: Record<string, unknown> } | undefined>;

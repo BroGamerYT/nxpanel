@@ -37,6 +37,7 @@ import { registerPasskeyRoutes } from './passkeys.js';
 import { registerSteamLoginRoutes } from './steam-login.js';
 import { registerSftpPasswordRoutes } from './sftp-passwords.js';
 import { registerFirewallRoutes } from './firewall.js';
+import { buildDockerInstance, EggContainerError } from '../../docker/egg-container.js';
 import { FirewallManager } from '../../system/firewall.js';
 import { PasskeyService } from '../../auth/passkeys.js';
 import { registerSystemRoutes } from './system.js';
@@ -635,9 +636,10 @@ export function registerApiV1Routes(
       cpuPercent?: number;
       diskMb?: number;
       variables?: Record<string, string>;
+      imageKey?: string;
     };
   }>('/api/v1/servers', async (req, reply) => {
-    const { name, eggId, ramMb, cpuPercent, variables } = req.body;
+    const { name, eggId, ramMb, cpuPercent, variables, imageKey } = req.body;
     if (!name || !eggId) {
       return reply.status(400).send({ error: 'Name und Game sind erforderlich.' });
     }
@@ -737,6 +739,25 @@ export function registerApiV1Routes(
       registry.audit('server.create', id, 'standalone', { name, game: eggId, port, install: plan.kind });
       const task = installs.start(id, { kind: plan.kind, ...(plan.steam ? { steam: plan.steam } : {}), ...installData });
       return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) }, taskId: task.id });
+    }
+
+    // Docker-Treiber: das Spiel läuft als Container aus dem Image des Eggs (wie im Panel)
+    if (driver.name === 'docker') {
+      if (!egg) return reply.status(404).send({ error: 'Dieses Spiel gibt es nicht.', code: 'not_found' });
+      let instance: ServerInstanceConfig;
+      try {
+        const ports = await eggPorts(egg.raw.ports, port);
+        instance = buildDockerInstance({ id, name, egg, serverDir, ramMb: ramMb ?? egg.resources.base_ram_mb ?? 2048, cpuPercent: cpuPercent ?? egg.resources.min_cpu_percent ?? 100, variables: installData.variables, ports, imageKey });
+      } catch (err) {
+        if (err instanceof EggContainerError) return reply.status(400).send({ error: err.message, code: 'invalid_image' });
+        return reply.status(409).send({ error: (err as Error).message });
+      }
+      await driver.registerServer(instance);
+      await registry.add(instance);
+      if (!creator.master) setOwner(registry, id, creator.id);
+      registry.audit('server.create', id, 'standalone', { name, game: eggId, port, image: instance.container?.image });
+      bus.emit({ type: 'state', serverId: id, state: { id, status: 'offline' }, ts: new Date().toISOString() });
+      return reply.status(201).send({ server: { id, shortId: id.slice(0, 8) } });
     }
 
     // Erstelle Standardausführung oder Script

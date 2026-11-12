@@ -34,6 +34,22 @@ export interface ServerPort {
   protocol: 'tcp' | 'udp';
 }
 
+/** Wie ein Spiel im Docker-Treiber laeuft (aus dem Egg). Ohne diese Angabe gilt `executable` als Image-Name. */
+export interface ContainerSpec {
+  image: string;
+  /** Pfad im Container, an dem der Server-Ordner eingehaengt wird (Egg: data_dir). */
+  dataDir: string;
+  /** Zusaetzliche Linux-Rechte (nur Erlaubnisliste, siehe eggs/capabilities.ts). */
+  capAdd?: string[];
+  /** Benutzer im Container, z. B. "1000:1000". */
+  user?: string;
+  entrypoint?: string[];
+  /** /tmp als Arbeitsspeicher-Laufwerk, Groesse in MB (Egg: tmp). */
+  tmpfsMb?: number;
+  /** Signal statt Konsolenbefehl zum Beenden (Egg: stop.method, z. B. SIGTERM). */
+  stopSignal?: string;
+}
+
 export interface ServerInstanceConfig {
   id: string;
   name: string;
@@ -52,6 +68,8 @@ export interface ServerInstanceConfig {
   stopCommand?: string;
   /** Wie lange auf das saubere Ende gewartet wird. Standard 30 Sekunden. */
   stopTimeoutSeconds?: number;
+  /** Nur Docker-Treiber: Image, Datenpfad, Rechte. */
+  container?: ContainerSpec;
   /** Stand der Installation - fehlt bei Instanzen, die der Core nicht selbst installiert hat. */
   install?: ServerInstallInfo;
 }
