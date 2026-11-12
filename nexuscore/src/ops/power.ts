@@ -37,6 +37,8 @@ export function createPowerOps(deps: {
   driver: HostDriver;
   /** Wird gerufen, bevor ein Stopp/Neustart/Kill ausgeloest wird (Benachrichtigungen unterscheiden so Stopp von Absturz). */
   onStopRequested?: (serverId: string) => void;
+  /** Wird nach der Vorbereitung, kurz vor dem Start gerufen (z. B. Firewall-Freigabe). Ein Fehler verhindert den Start nie. */
+  beforeStart?: (serverId: string) => Promise<unknown>;
 }): PowerOps {
   const { registry, driver } = deps;
 
@@ -79,6 +81,7 @@ export function createPowerOps(deps: {
     }
     // Was in den Einstellungen geaendert wurde, gilt ab hier auch beim Treiber.
     await driver.updateServer?.(current).catch(() => {});
+    await deps.beforeStart?.(id).catch((err: unknown) => logger.warn({ err, serverId: id }, 'Vorbereitung vor dem Start fehlgeschlagen'));
   }
 
   return {

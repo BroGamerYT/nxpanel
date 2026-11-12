@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { createPairingPin, currentPairingPin } from '../../protocol/security.js';
 import { PathOutsideRootError, resolveInsideRoot, serverRootFor } from '../../protocol/paths.js';
 import { FirewallError, type FirewallManager } from '../../system/firewall.js';
+import { programOf } from '../../system/firewall-auto.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig } from '../../types.js';
 
@@ -14,19 +15,6 @@ import type { ServerInstanceConfig } from '../../types.js';
 export interface FirewallRouteDeps {
   registry: ServerRegistry;
   firewall: FirewallManager;
-}
-
-/** Vollstaendiger Pfad des Programms, nur wenn es im Server-Verzeichnis liegt und es die Datei gibt. */
-async function programOf(registry: ServerRegistry, instance: ServerInstanceConfig): Promise<string | null> {
-  try {
-    const root = serverRootFor(registry.dir);
-    const workingDir = await resolveInsideRoot(root, instance.workingDir, 'workingDir');
-    const exe = await resolveInsideRoot(root, instance.executable, 'executable', workingDir);
-    return (await fs.stat(exe)).isFile() ? exe : null;
-  } catch (err) {
-    if (err instanceof PathOutsideRootError || (err as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw err;
-  }
 }
 
 export function registerFirewallRoutes(server: FastifyInstance, deps: FirewallRouteDeps): void {

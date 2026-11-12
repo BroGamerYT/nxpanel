@@ -5,6 +5,7 @@ import type { EventBus } from '../../protocol/events.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { ServerInstanceConfig, ServerStatus } from '../../types.js';
 import { config } from '../../config/index.js';
+import { logger } from '../../logger.js';
 import { createSessionToken, isValidSessionToken, parseCookie, SESSION_TTL_MS } from '../../protocol/security.js';
 import { allocatePort } from '../../protocol/ports.js';
 import type { AccountUser, LocalAccount } from '../../store/account.js';
@@ -25,6 +26,7 @@ import { registerSteamLoginRoutes } from './steam-login.js';
 import { registerSftpPasswordRoutes } from './sftp-passwords.js';
 import { registerFirewallRoutes } from './firewall.js';
 import { FirewallManager } from '../../system/firewall.js';
+import { FirewallAuto } from '../../system/firewall-auto.js';
 import { PasskeyService } from '../../auth/passkeys.js';
 import { registerSystemRoutes } from './system.js';
 import { GamingMode } from '../../gaming/manager.js';
@@ -171,7 +173,10 @@ export function registerApiV1Routes(
   const findServer = (idOrShortId: string): ServerInstanceConfig | undefined => findInstance(registry, idOrShortId);
 
   const discord = new DiscordNotifier({ registry, bus });
-  const power = createPowerOps({ registry, driver, onStopRequested: (id) => discord.expectStop(id) });
+  const firewall = options.firewall ?? new FirewallManager(path.join(registry.dir, 'firewall-rules.json'));
+  // Freigabe in der Windows-Firewall automatisch halten - nur fuer Spiele, die als Prozess dieses Rechners laufen (nicht in Docker)
+  const firewallAuto = new FirewallAuto({ registry, firewall, bus, enabled: config.firewallAuto && driver.name === 'windows-native' });
+  const power = createPowerOps({ registry, driver, onStopRequested: (id) => discord.expectStop(id), beforeStart: (id) => firewallAuto.ensure(id) });
   const gaming = new GamingMode({ registry, driver, power, bus });
   // Backups gibt es im Core noch nicht: dann lehnt der Planer solche Zeitplaene ab.
   const backups = new BackupManager({
@@ -193,6 +198,8 @@ export function registerApiV1Routes(
     },
   });
   if (options.scheduler !== false) {
+    // Regeln fuer Server, die es nicht mehr gibt, aufraeumen
+    void firewallAuto.reconcile().catch((err: unknown) => logger.warn({ err }, 'Aufraeumen der Firewall-Regeln fehlgeschlagen'));
     scheduler.start();
     backups.start();
     players.start();
@@ -225,7 +232,6 @@ export function registerApiV1Routes(
   registerIntegrationRoutes(server, { registry, discord });
   registerAdminFileRoutes(server, { registry });
   registerHostRoutes(server, { registry, driver, dataDir: registry.dir });
-  const firewall = options.firewall ?? new FirewallManager(path.join(registry.dir, 'firewall-rules.json'));
   registerFirewallRoutes(server, { registry, firewall });
   registerUserRoutes(server, { registry, driver, account });
   registerSystemRoutes(server, { registry, driver, gaming });
