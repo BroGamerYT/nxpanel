@@ -55,6 +55,10 @@ import { registerServerPowerRoutes } from './server-power.js';
 import { registerLiveRoutes } from './live.js';
 import { registerActivityRoutes } from './activity.js';
 import { registerEggRoutes } from './eggs.js';
+import { registerHealthRoutes } from './health.js';
+import { registerDocsRoutes } from './docs.js';
+import { registerDockerRoutes } from './docker.js';
+import { registerImpersonateRoutes } from './impersonate.js';
 
 // Die Konstanten stehen in api-constants.ts; hier weiter ausgeliefert, damit Importe unveraendert bleiben.
 export { CORE_FEATURES, SERVER_PERMISSIONS } from './api-constants.js';
@@ -310,4 +314,8 @@ export function registerApiV1Routes(
   registerLiveRoutes(ctx);
   registerActivityRoutes(ctx);
   registerEggRoutes(ctx);
+  registerHealthRoutes(server, { registry, driver });
+  registerDocsRoutes(server);
+  registerDockerRoutes(server, { registry, driver });
+  if (account) registerImpersonateRoutes(server, { registry, account, sessionCookie });
 }

@@ -55,6 +55,13 @@ export function registerServerReadRoutes(ctx: ApiContext): void {
     return { servers };
   });
 
+  // Zuteilungen (Ports) des Servers
+  server.get<{ Params: { id: string } }>('/api/v1/servers/:id/allocations', async (req, reply) => {
+    const c = findServer(req.params.id);
+    if (!c) return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
+    return { allocations: c.ports.map((p, idx) => ({ port: p.hostPort, protocol: p.protocol, ref: p.name || null, is_primary: idx === 0 })) };
+  });
+
   // Server Details
   server.get<{ Params: { id: string } }>('/api/v1/servers/:id', async (req, reply) => {
     const c = findServer(req.params.id);

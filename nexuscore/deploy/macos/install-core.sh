@@ -54,10 +54,12 @@ if [ "$DRY" = 0 ]; then docker info >/dev/null 2>&1 || die "Docker Desktop antwo
 
 log "Dateien nach $APP_DIR kopieren"
 run mkdir -p "$APP_DIR" "$DATA_DIR" "$LOG_DIR" "$(dirname "$PLIST")"
-run rm -rf "$APP_DIR/dist" "$APP_DIR/eggs" "$APP_DIR/web"
+run rm -rf "$APP_DIR/dist" "$APP_DIR/eggs" "$APP_DIR/web" "$APP_DIR/docs"
 run cp -R "$CORE_SRC/dist" "$APP_DIR/dist"
 run cp "$CORE_SRC/package.json" "$CORE_SRC/package-lock.json" "$APP_DIR/"
 run cp -R "$REPO_SRC/eggs" "$APP_DIR/eggs"
+# Dokumentation fuer die Hilfe-Seite der Oberflaeche
+run cp -R "$CORE_SRC/docs" "$APP_DIR/docs"
 if [ -d "$REPO_SRC/web/dist" ]; then run mkdir -p "$APP_DIR/web"; run cp -R "$REPO_SRC/web/dist" "$APP_DIR/web/dist"; fi
 if [ "$DRY" = 1 ]; then echo "   (Probelauf) (cd '$APP_DIR' && npm ci --omit=dev)"; else (cd "$APP_DIR" && npm ci --omit=dev --no-audit --no-fund); fi
 

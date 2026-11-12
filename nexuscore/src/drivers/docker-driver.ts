@@ -55,7 +55,8 @@ export interface DockerLike {
   ping(): Promise<unknown>;
   listNetworks(opts?: object): Promise<Array<{ Name: string }>>;
   createNetwork(opts: object): Promise<unknown>;
-  getImage(name: string): { inspect(): Promise<unknown> };
+  getImage(name: string): { inspect(): Promise<unknown>; remove(opts?: { force?: boolean }): Promise<unknown> };
+  listImages(): Promise<Array<{ Id: string; RepoTags: string[] | null; Size: number }>>;
   pull(image: string, cb: (err: Error | null, stream?: NodeJS.ReadableStream) => void): void;
   modem: {
     followProgress(stream: NodeJS.ReadableStream, done: (err: Error | null) => void, onProgress?: (ev: { status?: string; id?: string }) => void): void;
@@ -203,6 +204,40 @@ export class DockerDriver implements HostDriver {
 
   setLogSink(sink: LogSink): void {
     this.logSink = sink;
+  }
+
+  /** Antwortet der Docker-Daemon jetzt? (Auch ein spaeter gestarteter wird erkannt.) */
+  async healthy(): Promise<boolean> {
+    try {
+      await this.docker.ping();
+      this.dockerAvailable = true;
+      return true;
+    } catch {
+      this.dockerAvailable = false;
+      return false;
+    }
+  }
+
+  /**
+   * Images aufraeumen, die der Core selbst benutzt (Spiel- und Installer-Images aus den Eggs) und die gerade kein Container
+   * braucht. Fremde Images auf diesem Rechner fasst er nie an; `remove` ohne `force` lehnt Images in Benutzung ab.
+   */
+  async prune(ownedImages: readonly string[]): Promise<{ imagesDeleted: number; reclaimedMb: number }> {
+    if (!this.dockerAvailable) throw new Error('Kein Docker-Daemon erreichbar.');
+    const owned = new Set(ownedImages);
+    let deleted = 0;
+    let bytes = 0;
+    for (const img of await this.docker.listImages()) {
+      if (!(img.RepoTags ?? []).some((t) => owned.has(t))) continue;
+      try {
+        await this.docker.getImage(img.Id).remove({ force: false });
+        deleted++;
+        bytes += img.Size;
+      } catch {
+        /* in Benutzung (auch durch angehaltene Container) oder mehrfach getaggt: bleibt */
+      }
+    }
+    return { imagesDeleted: deleted, reclaimedMb: Math.round(bytes / 1048576) };
   }
 
   private async ensureNetwork(): Promise<void> {

@@ -1,6 +1,7 @@
 import { logger } from '../../logger.js';
 import { createSessionToken, isValidSessionToken, revokeSessionToken, revokeUserSessions, parseCookie } from '../../protocol/security.js';
 import { runAs } from '../../store/identity.js';
+import { FLAG_LABELS, PRESETS, SERVER_FLAGS } from '../../auth/permissions.js';
 import type { ApiContext } from './api-context.js';
 
 /**
@@ -75,6 +76,12 @@ export function registerSessionRoutes(ctx: ApiContext): void {
       return { accessToken: token };
     },
   );
+
+  // Alle moeglichen Rechte mit Namen und die Vorlagen (fuer die Rechte-Dialoge)
+  server.get('/api/v1/auth/permissions', async () => ({
+    flags: SERVER_FLAGS.map((f) => ({ flag: f, label: FLAG_LABELS[f] })),
+    presets: Object.entries(PRESETS).map(([key, p]) => ({ key, label: p.label, flags: p.flags })),
+  }));
 
   // Eigenes Passwort aendern: altes Passwort noetig, danach gelten alle
   // anderen Sitzungen nicht mehr.

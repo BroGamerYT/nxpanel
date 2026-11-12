@@ -3,6 +3,7 @@ import { config } from '../../config/index.js';
 import { describePlatform } from '../../platform/index.js';
 import { canSeeServer } from '../authz.js';
 import { CORE_FEATURES } from './api-constants.js';
+import { listDocs } from '../../docs.js';
 import type { ApiContext } from './api-context.js';
 
 /**
@@ -28,7 +29,8 @@ export function registerOverviewRoutes(ctx: ApiContext): void {
       changelog: [],
       todo: [],
       devlog: [],
-      docs: [],
+      // Hilfe-Seite: die Dokumente aus den docs-Ordnern
+      docs: await listDocs(),
     };
   });
 

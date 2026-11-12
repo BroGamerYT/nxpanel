@@ -10,6 +10,8 @@ export function registerActivityRoutes(ctx: ApiContext): void {
   // Die Oberflaeche fragt das alle paar Sekunden ab - leer statt 404.
   server.get('/api/v1/notifications', async () => ({ items: [] }));
   server.post('/api/v1/presence/ping', async () => ({ ok: true }));
+  // Wer ist gerade online? Der Core merkt sich das nicht: leere Liste, wie die Oberflaeche sie erwartet
+  server.get('/api/v1/presence', async () => ({ online: [], total: 0 }));
   // Netzwerkverlauf: der Core zeichnet ihn nicht auf. Ohne Punkte zeigt die Oberflaeche nichts an.
   server.get('/api/v1/servers/:id/history', async () => ({ step: 10_000, points: [] }));
 

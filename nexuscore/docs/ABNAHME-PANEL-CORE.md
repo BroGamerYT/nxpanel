@@ -4,8 +4,8 @@ Stand: 12.11.2026. Ziel: Der Core ist das einzige Backend; das alte Panel-Backen
 
 ## Wie das gemessen wurde (und was es nicht sagt)
 
-* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **164** (aus der laufenden Routentabelle), die Oberfläche ruft **145** verschiedene Routen auf.
-* **Ohne Gegenstück im Core: 49 Panel-Routen.** Davon ruft die Oberfläche **36** tatsächlich auf. Der Core hat zusätzlich **12** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
+* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **175** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
+* **Ohne Gegenstück im Core: 40 Panel-Routen.** Davon ruft die Oberfläche **31** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
 * Gleiche Route heißt **nicht** gleiches Verhalten. Das Verhalten ist nur dort geprüft, wo es Tests gibt (856 im Core); ein Vergleich Seite an Seite mit dem Panel (gleiche Anfrage, gleiche Antwort) fehlt noch.
 * Die Oberfläche blendet Bereiche aus, die der Core nicht meldet (`features` in `/api/v1/about`). Fehlende Funktionen sind deshalb **unsichtbar, nicht kaputt**.
 
@@ -16,7 +16,7 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 | Bereich | Was das Panel kann | Fehlende Routen | In der Oberfläche benutzt | Entscheidung | Aufwand |
 | --- | --- | ---: | ---: | --- | :-: |
 | Mitnutzer (Subusers) | Weitere Benutzer je Server mit eigenen Rechten einladen | 5 | 5 | **BAUEN** | M |
-| Benutzer imitieren | Admin meldet sich als anderer Benutzer an, um dessen Sicht zu prüfen | 2 | 2 | **BAUEN** | S |
+| Benutzer imitieren | Admin meldet sich als anderer Benutzer an, um dessen Sicht zu prüfen | 0 | 0 | **ERLEDIGT** | – |
 | Spiele verwalten (Eggs) | Eggs importieren (Datei, URL, Katalog), löschen | 4 | 3 | **BAUEN** | M |
 | Server aus Backup/Upload importieren | Bestehenden Server (Archiv, Backup) in einen neuen Server übernehmen | 7 | 5 | **BAUEN** | L |
 | Spiel aktualisieren | Spieldateien (SteamCMD) auf den neuesten Stand bringen | 1 | 1 | **BAUEN** | M |
@@ -26,10 +26,10 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 | Domain und DNS | Cloudflare-DNS-Einträge je Server, Domain am Server | 5 | 5 | **SPÄTER** | M |
 | Hosts hinzufügen/ändern/löschen | Weitere Rechner (Cores) an das Panel koppeln | 3 | 2 | **BLOCK C** | L |
 | Playit-Integration | Tunnel über playit.gg einrichten | 1 | 1 | **SPÄTER** | S |
-| Docker aufräumen | Ungenutzte Images/Cache löschen (Dashboard) | 1 | 1 | **BAUEN** | S |
-| Hilfe/Dokumentation | Eingebaute Dokumentation anzeigen | 1 | 1 | **BAUEN** | S |
-| Gesundheit | healthz/readyz für Docker-Health-Checks und Überwachung | 2 | 0 | **BAUEN** | S |
-| Kleinigkeiten | presence, auth/permissions, eggs/branding, allocations (Lesen) | 4 | 0 | **BAUEN** | S |
+| Docker aufräumen | Ungenutzte Images/Cache löschen (Dashboard) | 0 | 0 | **ERLEDIGT** | – |
+| Hilfe/Dokumentation | Eingebaute Dokumentation anzeigen | 0 | 0 | **ERLEDIGT** | – |
+| Gesundheit | healthz/readyz für Docker-Health-Checks und Überwachung | 0 | 0 | **ERLEDIGT** | – |
+| Kleinigkeiten | presence, auth/permissions, eggs/branding, allocations (Lesen) | 0 | 0 | **ERLEDIGT** | – |
 
 ### Hinweise je Bereich
 
@@ -49,10 +49,6 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 * **Gesundheit** — Trivial; ohne Anmeldung, ohne interne Angaben.
 * **Kleinigkeiten** — Der Core liefert einzelne Teile schon über andere Routen (z. B. `permissions` in `/auth/me`).
 
-### Sonstiges
-
-* `POST /api/v1/servers/:p/stop` — **Fehler der Oberfläche, nicht des Cores:** `web/src/components/ServerSettings.tsx` (Knopf "Server stoppen" bei den Ports) ruft diese Route auf, das Panel hat sie auch nicht (dort gibt es nur `POST /servers/:id/power` mit `stop`). Der Knopf geht also auch im Panel ins Leere; gehört in der Oberfläche auf `/power` umgestellt.
-
 ## Vorschlag für die Reihenfolge
 
 1. **S-Pakete** zusammen: Gesundheit, Kleinigkeiten, Dokumentation, Docker aufräumen, Benutzer imitieren.
@@ -69,24 +65,14 @@ Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche 
 
 | Methode | Pfad | Bereich | Von der Oberfläche benutzt |
 | --- | --- | --- | :-: |
-| POST | `/api/v1/admin/users/:p/impersonate` | Benutzer imitieren | ja |
-| POST | `/api/v1/auth/impersonate/stop` | Benutzer imitieren | ja |
-| POST | `/api/v1/admin/docker/prune` | Docker aufräumen | ja |
 | GET | `/api/v1/admin/network/dns` | Domain und DNS | ja |
 | PATCH | `/api/v1/admin/network/dns` | Domain und DNS | ja |
 | POST | `/api/v1/admin/network/dns/sync` | Domain und DNS | ja |
 | POST | `/api/v1/admin/network/dns/test` | Domain und DNS | ja |
 | PATCH | `/api/v1/servers/:p/domain` | Domain und DNS | ja |
-| GET | `/api/v1/healthz` | Gesundheit | nein |
-| GET | `/api/v1/readyz` | Gesundheit | nein |
-| GET | `/api/v1/docs/:p` | Hilfe/Dokumentation | ja |
 | POST | `/api/v1/admin/hosts` | Hosts hinzufügen/ändern/löschen | ja |
 | DELETE | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | ja |
 | PATCH | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | nein |
-| GET | `/api/v1/auth/permissions` | Kleinigkeiten | nein |
-| GET | `/api/v1/eggs/branding` | Kleinigkeiten | nein |
-| GET | `/api/v1/presence` | Kleinigkeiten | nein |
-| GET | `/api/v1/servers/:p/allocations` | Kleinigkeiten | nein |
 | GET | `/api/v1/servers/:p/subusers` | Mitnutzer (Subusers) | ja |
 | POST | `/api/v1/servers/:p/subusers` | Mitnutzer (Subusers) | ja |
 | DELETE | `/api/v1/servers/:p/subusers/:p` | Mitnutzer (Subusers) | ja |
@@ -119,4 +105,3 @@ Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche 
 | DELETE | `/api/v1/steam/accounts/:p` | Steam-Konten für Downloads | ja |
 | POST | `/api/v1/steam/accounts/:p/guard` | Steam-Konten für Downloads | ja |
 | POST | `/api/v1/steam/accounts/:p/test` | Steam-Konten für Downloads | ja |
-| POST | `/api/v1/servers/:p/stop` | – | ja |

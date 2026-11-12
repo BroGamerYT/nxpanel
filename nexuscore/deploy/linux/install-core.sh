@@ -66,8 +66,10 @@ log "Dateien nach $APP_DIR kopieren"
 run rm -rf "$APP_DIR/dist"
 run cp -a "$CORE_SRC/dist" "$APP_DIR/dist"
 run cp -a "$CORE_SRC/package.json" "$CORE_SRC/package-lock.json" "$APP_DIR/"
-run rm -rf "$APP_DIR/eggs"
+run rm -rf "$APP_DIR/eggs" "$APP_DIR/docs"
 run cp -a "$REPO_SRC/eggs" "$APP_DIR/eggs"
+# Dokumentation fuer die Hilfe-Seite der Oberflaeche
+run cp -a "$CORE_SRC/docs" "$APP_DIR/docs"
 if [ -d "$REPO_SRC/web/dist" ]; then
   run rm -rf "$APP_DIR/web"
   run install -d "$APP_DIR/web"

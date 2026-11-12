@@ -1,6 +1,7 @@
 import { installPlanFor } from '../../install/manager.js';
 import { loadEggs } from '../../eggs/loader.js';
 import { isValidChoice, readCustomCover, saveCustomCover, steamAppId, steamCover } from '../covers.js';
+import { BRANDING } from '../covers.js';
 import type { ApiContext } from './api-context.js';
 
 /**
@@ -30,6 +31,9 @@ export function registerEggRoutes(ctx: ApiContext): void {
       })),
     };
   });
+
+  // Auswahl fuer den Bild-Dialog: die Panel-Motive
+  server.get('/api/v1/eggs/branding', async () => ({ branding: BRANDING.map((p) => `/branding/${p}`) }));
 
   // Titelbild eines Spiels. Der Browser schickt das Cookie der Sitzung mit,
   // ein <img> braucht keinen Bearer-Token.

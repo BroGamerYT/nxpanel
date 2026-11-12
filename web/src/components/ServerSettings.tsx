@@ -471,7 +471,7 @@ function Ports({ detail, stopped, canAssign }: { detail: ServerDetail; stopped: 
   const host = server.publicHost || location.hostname;
 
   const reallocate = useMutation({ mutationFn: () => api(`/servers/${server.id}/reallocate`, { method: 'POST' }), onSuccess: () => { setConfirm(false); invalidate(); } });
-  const stopServerMut = useMutation({ mutationFn: () => api(`/servers/${server.id}/stop`, { method: 'POST' }), onSuccess: invalidate });
+  const stopServerMut = useMutation({ mutationFn: () => api(`/servers/${server.id}/power`, { method: 'POST', body: { action: 'stop' } }), onSuccess: invalidate });
   const add = useMutation({
     mutationFn: () => {
       const p = portInput.trim() ? parseInt(portInput.trim(), 10) : undefined;

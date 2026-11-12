@@ -207,6 +207,8 @@ export function isPublicRoute(method: string, normalizedPath: string): boolean {
   if (m === 'POST' && (p === '/api/v1/auth/passkeys/login-options' || p === '/api/v1/auth/passkeys/login-verify')) return true;
   // Anmeldung mit Steam: Weiterleitung zu Steam und Rueckkehr (die Rueckkehr prueft Steam selbst)
   if (m === 'GET' && (p === '/api/v1/auth/steam/login' || p === '/api/v1/auth/steam/callback')) return true;
+  // Gesundheit fuer Health-Checks (nur Ja/Nein)
+  if (m === 'GET' && (p === '/api/v1/healthz' || p === '/api/v1/readyz')) return true;
   // Welche Anmeldewege es gibt - die Anmeldeseite fragt das vor der Anmeldung
   if (m === 'GET' && p === '/api/v1/auth/methods') return true;
 

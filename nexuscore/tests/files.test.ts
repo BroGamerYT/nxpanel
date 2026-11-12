@@ -473,11 +473,14 @@ describe('Funktionsliste des Cores', () => {
     expect(res.json.standalone).toBe(true);
     expect(res.json.features).toEqual(expect.arrayContaining(['files', 'settings', 'logfiles', 'schedules', 'backups', 'players']));
     // Nichts davon, was es im Core noch nicht gibt
-    for (const missing of ['subusers', 'help', 'timeline', 'domain']) {
+    for (const missing of ['subusers', 'timeline', 'domain']) {
       expect(res.json.features, missing).not.toContain(missing);
     }
     // Seiten, die diese Listen lesen, duerfen nicht abstuerzen
-    for (const list of ['changelog', 'todo', 'devlog', 'docs']) expect(res.json[list]).toEqual([]);
+    for (const list of ['changelog', 'todo', 'devlog']) expect(res.json[list]).toEqual([]);
+    // Die Hilfe-Seite liest die Dokumente aus den docs-Ordnern
+    expect(Array.isArray(res.json.docs)).toBe(true);
+    expect(res.json.features).toContain('help');
   });
 
   it('meldet je Server nur Rechte, fuer die es Routen gibt', async () => {

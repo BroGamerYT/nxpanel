@@ -77,6 +77,9 @@ export class FakeDocker implements DockerLike {
   networks = new Set<string>();
   pulled: string[] = [];
   pingFails = false;
+  /** Images, die der Daemon kennt: Name -> Groesse in Byte. Aufraeumen entfernt, was nicht in `inUse` steht. */
+  imageSizes = new Map<string, number>();
+  inUse = new Set<string>();
   /** Alle Optionen, mit denen Container angelegt wurden (auch die schon entfernten Installer). */
   created: Array<Record<string, any>> = [];
   /** Ausgabe und Beendigungscode des Installationsskripts. */
@@ -101,7 +104,17 @@ export class FakeDocker implements DockerLike {
     this.networks.add(o.Name);
   }
   getImage(name: string) {
-    return { inspect: async () => (this.images.has(name) ? {} : Promise.reject(new Error('no such image'))) };
+    return {
+      inspect: async () => (this.images.has(name) ? {} : Promise.reject(new Error('no such image'))),
+      remove: async () => {
+        if (this.inUse.has(name)) throw new Error('image is being used by a container');
+        this.images.delete(name);
+        this.imageSizes.delete(name);
+      },
+    };
+  }
+  async listImages() {
+    return [...this.images].map((n) => ({ Id: n, RepoTags: [n], Size: this.imageSizes.get(n) ?? 0 }));
   }
   pull(image: string, cb: (e: Error | null, s?: NodeJS.ReadableStream) => void) {
     this.pulled.push(image);
