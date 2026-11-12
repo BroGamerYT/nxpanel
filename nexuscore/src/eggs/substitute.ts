@@ -30,6 +30,16 @@ function normalizeKey(raw: string): string {
     .replace(/^env\./, '');
 }
 
+/** Findet alle Platzhalter, die kein Wert deckt. Fuer die Pruefung beim Import eines Eggs. */
+export function missingPlaceholders(template: string, known: Set<string>): string[] {
+  const found = new Set<string>();
+  for (const m of template.matchAll(PLACEHOLDER)) {
+    const key = normalizeKey(m[1]!);
+    if (!known.has(key)) found.add(key);
+  }
+  return [...found];
+}
+
 export function substitute(template: string | unknown, ctx: SubstitutionContext): string {
   if (typeof template !== 'string') return String(template ?? '');
 

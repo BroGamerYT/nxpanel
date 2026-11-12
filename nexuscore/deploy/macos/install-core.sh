@@ -60,6 +60,8 @@ run cp "$CORE_SRC/package.json" "$CORE_SRC/package-lock.json" "$APP_DIR/"
 run cp -R "$REPO_SRC/eggs" "$APP_DIR/eggs"
 # Dokumentation fuer die Hilfe-Seite der Oberflaeche
 run cp -R "$CORE_SRC/docs" "$APP_DIR/docs"
+# Kuratierter Katalog fuer die Suche nach Spielen (Admin -> Spiele -> Katalog)
+[ -f "$REPO_SRC/docs/EGG-KATALOG.md" ] && run cp "$REPO_SRC/docs/EGG-KATALOG.md" "$APP_DIR/docs/EGG-KATALOG.md" || true
 if [ -d "$REPO_SRC/web/dist" ]; then run mkdir -p "$APP_DIR/web"; run cp -R "$REPO_SRC/web/dist" "$APP_DIR/web/dist"; fi
 if [ "$DRY" = 1 ]; then echo "   (Probelauf) (cd '$APP_DIR' && npm ci --omit=dev)"; else (cd "$APP_DIR" && npm ci --omit=dev --no-audit --no-fund); fi
 

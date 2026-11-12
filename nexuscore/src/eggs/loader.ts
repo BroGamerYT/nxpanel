@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config } from '../config/index.js';
 import type { SteamArg } from '../types.js';
 
 /**
@@ -87,6 +88,8 @@ export interface LoadedEgg {
   category: string;
   author: string;
   images: Array<{ key: string; label: string; image: string; default: boolean }>;
+  /** true: importiert (Ordner `eggs` im Datenordner), nicht mit dem Core ausgeliefert - nur diese lassen sich loeschen. */
+  custom: boolean;
   consoleMode: string;
   resources: NonNullable<RawEggFile['resources']>;
   servers: number;
@@ -117,10 +120,28 @@ export function resolveEggsDir(): string | null {
   return null;
 }
 
-async function readEggs(): Promise<LoadedEgg[]> {
-  const dir = resolveEggsDir();
-  if (!dir) return [];
+/** Ordner der importierten Eggs: im Datenordner, damit auch eine schreibgeschuetzte Installation Eggs aufnehmen kann. */
+export function customEggsDir(): string {
+  return path.join(config.dataDir, 'eggs');
+}
 
+async function readEggs(): Promise<LoadedEgg[]> {
+  const builtIn = resolveEggsDir();
+  const eggs: LoadedEgg[] = [];
+  const seen = new Set<string>();
+  // Mitgelieferte zuerst: ein importiertes Egg mit gleicher ID ueberschreibt sie nie
+  for (const [dir, custom] of [[builtIn, false], [customEggsDir(), true]] as const) {
+    if (!dir || !existsSync(dir)) continue;
+    for (const egg of await readEggDir(dir, custom)) {
+      if (seen.has(egg.id)) continue;
+      seen.add(egg.id);
+      eggs.push(egg);
+    }
+  }
+  return eggs;
+}
+
+async function readEggDir(dir: string, custom: boolean): Promise<LoadedEgg[]> {
   try {
     const eggs: LoadedEgg[] = [];
     for (const file of await fs.readdir(dir)) {
@@ -139,6 +160,7 @@ async function readEggs(): Promise<LoadedEgg[]> {
             image,
             default: idx === 0,
           })),
+          custom,
           consoleMode: raw.console || 'full',
           resources: raw.resources ?? { base_ram_mb: 1024, min_cpu_percent: 100 },
           servers: 0,

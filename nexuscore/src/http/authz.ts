@@ -190,6 +190,8 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/admin\/integrations(\/|$)/, need: perm('admin.integrations') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/(nodes|allocations|network\/check|hosts|gaming-mode|limits)(\/|$)/, need: perm('admin.nodes') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/eggs\/:id\/cover$/, need: perm('admin.eggs') },
+  // Ein Egg ist Programmcode (Installationsskript, Startkommando): importieren und loeschen nur Administratoren
+  { methods: '*', pattern: /^\/api\/v1\/admin\/eggs(\/|$)/, need: { kind: 'admin' } },
   { methods: '*', pattern: /^\/api\/v1\/admin\/firewall(\/|$)/, need: perm('admin.nodes') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/pairing(\/|$)/, need: { kind: 'admin' } },
   { methods: '*', pattern: /^\/api\/v1\/admin\/docker(\/|$)/, need: { kind: 'admin' } },

@@ -70,6 +70,8 @@ run rm -rf "$APP_DIR/eggs" "$APP_DIR/docs"
 run cp -a "$REPO_SRC/eggs" "$APP_DIR/eggs"
 # Dokumentation fuer die Hilfe-Seite der Oberflaeche
 run cp -a "$CORE_SRC/docs" "$APP_DIR/docs"
+# Kuratierter Katalog fuer die Suche nach Spielen (Admin -> Spiele -> Katalog)
+[ -f "$REPO_SRC/docs/EGG-KATALOG.md" ] && run cp -a "$REPO_SRC/docs/EGG-KATALOG.md" "$APP_DIR/docs/EGG-KATALOG.md" || true
 if [ -d "$REPO_SRC/web/dist" ]; then
   run rm -rf "$APP_DIR/web"
   run install -d "$APP_DIR/web"
