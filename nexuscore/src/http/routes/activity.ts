@@ -40,7 +40,4 @@ export function registerActivityRoutes(ctx: ApiContext): void {
 
   // 5. Hosts: siehe routes/hosts.ts
 
-  server.get('/api/v1/steam/accounts', async () => {
-    return { accounts: [] };
-  });
 }

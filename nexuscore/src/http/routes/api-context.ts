@@ -23,6 +23,7 @@ export interface ApiOptions {
   policy?: AccessPolicy;
   firewall?: FirewallManager;
   /** Tests: Netzzugriff und oeffentliche Adresse des DNS-Abgleichs ersetzen. */
+  steam?: { login?: import('../../steam/accounts.js').SteamLoginRunner };
   dns?: { fetch?: (url: string, init?: RequestInit) => Promise<Response>; publicIp?: () => Promise<string> };
 }
 

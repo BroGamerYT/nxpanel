@@ -107,7 +107,7 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/auth\//, need: { kind: 'user' } },
 
   // ------------------------------------------------- allgemein (filtert selbst)
-  { methods: GET, pattern: /^\/api\/v1\/(about|dashboard|dashboard\/activity|notifications|tasks\/active|steam\/accounts|eggs|eggs\/:id|eggs\/:id\/cover|eggs\/branding|presence|docs|docs\/:slug|modpacks\/search|modpacks\/curseforge)$/, need: { kind: 'user' } },
+  { methods: GET, pattern: /^\/api\/v1\/(about|dashboard|dashboard\/activity|notifications|tasks\/active|eggs|eggs\/:id|eggs\/:id\/cover|eggs\/branding|presence|docs|docs\/:slug|modpacks\/search|modpacks\/curseforge)$/, need: { kind: 'user' } },
   { methods: ['POST'], pattern: /^\/api\/v1\/(presence\/ping|live\/ws-ticket)$/, need: { kind: 'user' } },
   { methods: GET, pattern: /^\/api\/v1\/live\/ws$/, need: { kind: 'user' } },
   { methods: GET, pattern: /^\/api\/v1\/servers$/, need: { kind: 'user' } },
@@ -205,6 +205,8 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/admin\/firewall(\/|$)/, need: perm('admin.nodes') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/pairing(\/|$)/, need: { kind: 'admin' } },
   { methods: '*', pattern: /^\/api\/v1\/admin\/docker(\/|$)/, need: { kind: 'admin' } },
+  // Steam-Konten: jeder Angemeldete; die Besitzpruefung macht die Route
+  { methods: '*', pattern: /^\/api\/v1\/steam\/accounts(\/|$)/, need: { kind: 'user' } },
   // Globale Speicherziele (Zugangsdaten fuer Backups): nur Administratoren
   { methods: '*', pattern: /^\/api\/v1\/admin\/storage-targets(\/|$)/, need: { kind: 'admin' } },
   // Der CurseForge-Schluessel: nur Administratoren
