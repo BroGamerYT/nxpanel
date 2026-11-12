@@ -32,6 +32,16 @@ const LICENSE_HINTS: Record<string, string> = {
   'arma-3': 'Braucht ein Steam-Konto mit Arma-3-Lizenz.',
 };
 
+/** Spiele, die bestimmte CPU-Befehle brauchen: Code 132 (SIGILL) heißt, dem Rechner fehlen sie. */
+const CPU_HINTS: Record<string, string> = {
+  'the-bus': 'Braucht eine CPU mit AVX2/BMI1 (ab Intel Haswell / AMD Zen 1). Auf diesem Rechner (z. B. VM ohne durchgereichte CPU-Befehle) startet der Server nicht.',
+};
+
+function hintFor(eggId: string, summary: string): string | undefined {
+  if (/Code 132/.test(summary) && CPU_HINTS[eggId]) return CPU_HINTS[eggId];
+  return LICENSE_HINTS[eggId];
+}
+
 export type TestStatus = 'SUCCESS' | 'INSTALL_FAILED' | 'START_CRASHED' | 'TIMEOUT';
 export type TestMode = 'resume' | 'fresh' | 'retry-failed';
 
@@ -330,7 +340,7 @@ export class GameTester {
       status,
       installDurationSec: install,
       runtimeDurationSec: runtime,
-      errorSummary: LICENSE_HINTS[testCase.id] ? `${LICENSE_HINTS[testCase.id]} (${summary})` : summary,
+      errorSummary: hintFor(testCase.id, summary) ? `${hintFor(testCase.id, summary)} (${summary})` : summary,
       logExcerpt: this.excerpt(id),
     });
     let installSec = 0;
