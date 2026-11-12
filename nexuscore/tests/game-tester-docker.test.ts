@@ -30,7 +30,7 @@ beforeAll(async () => {
   driver = new DockerDriver(docker);
   await driver.initialize();
   const bus = new EventBus();
-  const installs = new InstallManager(registry, driver, bus, { runtimesDir: path.join(dir, 'runtimes') });
+  const installs = new InstallManager(registry, driver, bus, { runtimesDir: path.join(dir, 'runtimes'), steamRetryDelayMs: 0 });
   tester = new GameTester({
     registry,
     driver,
@@ -104,6 +104,28 @@ describe('Spiele-Testlauf mit Docker', () => {
     expect(r.status).toBe('INSTALL_FAILED');
     expect(r.errorSummary).toContain('Code 7');
     expect(registry.list().filter((c) => c.id.startsWith('selftest-'))).toEqual([]);
+  });
+
+  it('Steam lehnt vorübergehend ab (Code 0 trotz Fehler): drei Versuche, dann klare Meldung statt leerem Ordner', async () => {
+    docker.installer = { lines: ["ERROR! Failed to install app '4020' (Missing configuration)", 'Installation completed...'], code: 0 };
+    const before = docker.created.filter((o) => o.Labels?.['nexuscore.installer'] === 'selftest-the-bus').length;
+    await tester.start({ only: 'the-bus', mode: 'fresh' });
+    await tester.whenDone();
+    const r = (await results()).find((x) => x.eggId === 'the-bus')!;
+    expect(r.status).toBe('INSTALL_FAILED');
+    expect(r.errorSummary).toContain('Steam konnte App 4020 nicht installieren');
+    expect(docker.created.filter((o) => o.Labels?.['nexuscore.installer'] === 'selftest-the-bus').length - before).toBe(3);
+  });
+
+  it('ein dauerhafter Steam-Fehler (Invalid platform) wird nicht wiederholt', async () => {
+    docker.installer = { lines: ["ERROR! Failed to install app '222860' (Invalid platform)"], code: 0 };
+    const before = docker.created.filter((o) => o.Labels?.['nexuscore.installer'] === 'selftest-the-bus').length;
+    await tester.start({ only: 'the-bus', mode: 'fresh' });
+    await tester.whenDone();
+    const r = (await results()).find((x) => x.eggId === 'the-bus')!;
+    expect(r.status).toBe('INSTALL_FAILED');
+    expect(r.errorSummary).toContain('Invalid platform');
+    expect(docker.created.filter((o) => o.Labels?.['nexuscore.installer'] === 'selftest-the-bus').length - before).toBe(1);
   });
 
   it('Minecraft (Paper/Vanilla): Container mit Typ und Ping als Bereitschaft', async () => {

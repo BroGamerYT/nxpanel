@@ -54,7 +54,13 @@ export interface InstallManagerOptions {
   /** Nur fuer Tests: ersetzt SteamCMD. */
   steamRunner?: SteamRunner;
   steamExe?: string;
+  /** Wartezeit vor einem erneuten Versuch, wenn Steam vorübergehend ablehnt (Standard 20 s, Tests 0). */
+  steamRetryDelayMs?: number;
 }
+
+/** Steam-Fehler, die von selbst weggehen (Steam lehnt gleichzeitige anonyme Anmeldungen derselben Adresse zeitweise ab). */
+const STEAM_TRANSIENT = /Missing configuration|No connection|Timeout|Connection (?:reset|refused)|Service unavailable|Rate limit/i;
+const STEAM_APP_ERROR = /ERROR! Failed to install app '(\d+)' \(([^)]*)\)/;
 
 /** Welche Installationsart zu einem Egg gehoert - null = der Core kann es (noch) nicht installieren. */
 export function installKindFor(eggId: string, variables: Record<string, string>): InstallSpec['kind'] | null {
@@ -212,13 +218,29 @@ export class InstallManager {
     progress(0.05, `Installationsskript läuft (${image})`);
     const started = Date.now();
     let lines = 0;
-    const code = await this.driver.runInstaller({ serverId, image, shell, script, env, hostDir: config.workingDir }, (line) => {
-      lines++;
-      this.say(serverId, login ? line.split(login.password).join('***') : line);
-      // Fortschritt ist unbekannt: langsam gegen 90 % kriechen, damit die Oberflaeche nicht stehen bleibt
-      progress(Math.min(0.9, 0.05 + lines / 400), `Installationsskript läuft (${lines} Zeilen)`);
-    });
-    if (code !== 0) throw new Error(`Das Installationsskript endete mit Code ${code}.`);
+    const attempts = 3;
+    const retryDelay = this.options.steamRetryDelayMs ?? 20_000;
+    for (let attempt = 1; ; attempt++) {
+      let steamError: { app: string; reason: string } | null = null;
+      const code = await this.driver.runInstaller({ serverId, image, shell, script, env, hostDir: config.workingDir }, (line) => {
+        lines++;
+        const m = STEAM_APP_ERROR.exec(line);
+        if (m) steamError = { app: m[1]!, reason: m[2]!.trim() };
+        this.say(serverId, login ? line.split(login.password).join('***') : line);
+        // Fortschritt ist unbekannt: langsam gegen 90 % kriechen, damit die Oberflaeche nicht stehen bleibt
+        progress(Math.min(0.9, 0.05 + lines / 400), `Installationsskript läuft (${lines} Zeilen)`);
+      });
+      if (code !== 0) throw new Error(`Das Installationsskript endete mit Code ${code}.`);
+      // SteamCMD meldet einen gescheiterten Download oft nur im Text; das Skript endet trotzdem mit Code 0
+      if (!steamError) break;
+      const { app, reason } = steamError as { app: string; reason: string };
+      if (attempt < attempts && STEAM_TRANSIENT.test(reason)) {
+        this.say(serverId, `Steam lehnt App ${app} gerade ab (${reason}) - neuer Versuch ${attempt + 1} von ${attempts}`, 'stderr');
+        if (retryDelay > 0) await new Promise((r) => setTimeout(r, retryDelay * attempt));
+        continue;
+      }
+      throw new Error(`Steam konnte App ${app} nicht installieren (${reason}).${STEAM_TRANSIENT.test(reason) ? ' Später erneut versuchen.' : ''}`);
+    }
     const seconds = Math.round((Date.now() - started) / 1000);
     return {
       executable: config.executable,
