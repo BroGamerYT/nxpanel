@@ -1,0 +1,15 @@
+[package]
+name = "nxsvc"
+version = "0.1.0"
+edition = "2021"
+description = "Windows-Dienst-Hülle für NexusCore: startet den Core, startet ihn nach einem Absturz neu und beendet ihn sauber"
+publish = false
+
+# Bewusst keine Abhängigkeiten: nichts aus dem Netz, nichts, was geprüft werden müsste.
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

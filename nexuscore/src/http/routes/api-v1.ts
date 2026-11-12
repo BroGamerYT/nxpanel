@@ -36,6 +36,8 @@ import { registerNetworkRoutes } from './network.js';
 import { registerPasskeyRoutes } from './passkeys.js';
 import { registerSteamLoginRoutes } from './steam-login.js';
 import { registerSftpPasswordRoutes } from './sftp-passwords.js';
+import { registerFirewallRoutes } from './firewall.js';
+import { FirewallManager } from '../../system/firewall.js';
 import { PasskeyService } from '../../auth/passkeys.js';
 import { registerSystemRoutes } from './system.js';
 import { GamingMode } from '../../gaming/manager.js';
@@ -74,7 +76,7 @@ import {
  * Funktion. Neue Funktionen kommen erst dazu, wenn es die Routen dafuer gibt.
  */
 /** Funktionsbereiche der Oberflaeche, die der Core unterstuetzt (siehe web/src/lib/features.ts). */
-export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys', 'steam', 'sftp'];
+export const CORE_FEATURES: string[] = ['files', 'settings', 'logfiles', 'schedules', 'backups', 'players', 'admin', 'audit', 'account', 'configs', 'motd', 'testreport', 'hostlogs', 'network', 'integrations', 'adminfiles', 'hosts', 'users', 'gaming', 'limits', 'passkeys', 'steam', 'sftp', 'firewall'];
 
 export const SERVER_PERMISSIONS = [
   'control.console',
@@ -114,7 +116,7 @@ export function registerApiV1Routes(
   registry: ServerRegistry,
   account: LocalAccount | null = null,
   installs: InstallManager | null = null,
-  options: { fetchImpl?: Fetcher; scheduler?: boolean; ping?: (host: string, port: number) => Promise<SlpResult>; policy?: AccessPolicy } = {},
+  options: { fetchImpl?: Fetcher; scheduler?: boolean; ping?: (host: string, port: number) => Promise<SlpResult>; policy?: AccessPolicy; firewall?: FirewallManager } = {},
 ): void {
   // Ohne Angabe die vorsichtige Regel des Treibers
   const policy = options.policy ?? accessPolicyFor(driver.name);
@@ -268,6 +270,8 @@ export function registerApiV1Routes(
   registerIntegrationRoutes(server, { registry, discord });
   registerAdminFileRoutes(server, { registry });
   registerHostRoutes(server, { registry, driver, dataDir: registry.dir });
+  const firewall = options.firewall ?? new FirewallManager(path.join(registry.dir, 'firewall-rules.json'));
+  registerFirewallRoutes(server, { registry, firewall });
   registerUserRoutes(server, { registry, driver, account });
   registerSystemRoutes(server, { registry, driver, gaming });
   registerNetworkRoutes(server, { registry, driver, defaultRange: config.portRange });
@@ -285,7 +289,7 @@ export function registerApiV1Routes(
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
-  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: async (id) => { await backups.purgeServer(id); removeServerAccess(registry, id); } });
+  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: async (id) => { await backups.purgeServer(id); removeServerAccess(registry, id); await firewall.closeServer(id).catch(() => {}); } });
   registerLogFileRoutes(server, { registry, find: findServer, eggs: loadEggs });
 
   // 1. Authentifizierung & Sitzung

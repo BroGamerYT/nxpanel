@@ -31,6 +31,7 @@ import type { SlpResult } from '../games/minecraft.js';
 import { registerWebRoutes } from './routes/web.js';
 import { LocalAccount } from '../store/account.js';
 import { startSftp } from '../sftp/server.js';
+import type { FirewallManager } from '../system/firewall.js';
 import { MASTER_ACTOR, accessPolicyFor, authorize, classify } from './authz.js';
 import { setIdentity } from '../store/identity.js';
 import { findInstance } from '../store/find.js';
@@ -44,6 +45,8 @@ export async function createCoreServer(
   options: { installs?: InstallManager | null; fetchImpl?: Fetcher; ping?: (host: string, port: number) => Promise<SlpResult>;
     /** SFTP: aus = null; ohne Angabe gilt die Einstellung NEXUSCORE_SFTP_ENABLED (Tests geben Port 0 an). */
     sftp?: { host: string; port: number } | null;
+    /** Firewall-Verwaltung; Tests geben eine mit Attrappe statt netsh an. */
+    firewall?: FirewallManager;
   } = {},
 ): Promise<FastifyInstance> {
   // Fastify loggt nicht selbst: der Core bringt seinen eigenen pino-Logger
@@ -286,6 +289,7 @@ export async function createCoreServer(
     policy,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.ping ? { ping: options.ping } : {}),
+    ...(options.firewall ? { firewall: options.firewall } : {}),
   });
   // SFTP gibt es nur mit Benutzerkonten (Standalone) und nur, wenn es eingeschaltet ist
   const sftpWanted = options.sftp !== undefined ? options.sftp : config.sftpEnabled ? { host: config.sftpHost, port: config.sftpPort } : null;

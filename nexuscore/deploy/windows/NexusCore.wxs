@@ -25,6 +25,32 @@
                   WorkingDirectory="INSTALLFOLDER" 
                   Advertise="yes" />
       </Component>
+      <!-- Dienst-Huelle: startet den Core, startet ihn nach einem Absturz neu, beendet ihn sauber -->
+      <Component Id="NexusCoreServiceHost" Guid="5c1d7a52-0b6e-4f3a-9d0a-7e2b1f4c8a10">
+        <File Id="NxsvcExeFile" Source="nexuscore\helper\nxsvc\target\release\nxsvc.exe" KeyPath="yes" />
+        <ServiceInstall Id="NexusCoreService"
+                        Name="NexusCore"
+                        DisplayName="NexusCore Host Daemon"
+                        Description="NexusCore: verwaltet Spielserver auf diesem Rechner (Oberflaeche, Kopplung mit dem Panel)."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Arguments="service --name NexusCore --workdir &quot;[INSTALLFOLDER]&quot; --log &quot;[CommonAppDataFolder]NexusCore\logs\core.log&quot; --grace 100 -- &quot;[INSTALLFOLDER]nexuscore.exe&quot;">
+          <!-- Absturz des Cores faengt nxsvc selbst ab (Neustart nach 2 s, dann 4, 8 ... bis 60 s). Wiederherstellungsaktionen der Dienststeuerung
+               fuer nxsvc selbst setzt scripts/install-service.ps1 (sc failure); im MSI braeuchte es die Util-Erweiterung. -->
+        </ServiceInstall>
+        <ServiceControl Id="NexusCoreServiceControl" Name="NexusCore" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+      <!-- Hilfsprogramm fuer harte Grenzen (Job Objects) -->
+      <Component Id="NexusCoreJobHelper" Guid="b7e3f2a8-6d41-4c19-8a55-3f0c9e1d2b67">
+        <File Id="NxjobExeFile" Source="nexuscore\helper\nxjob\target\release\nxjob.exe" KeyPath="yes" />
+      </Component>
+      <!-- Systray-Symbol, startet bei der Anmeldung jedes Benutzers -->
+      <Component Id="NexusCoreTray" Guid="d2a94c6e-1f08-4b7d-b3e1-6a5c0f8e9d34">
+        <File Id="TrayScriptFile" Source="nexuscore\scripts\nexuscore-tray.ps1" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run" Name="NexusCoreTray" Type="string"
+                       Value="powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]nexuscore-tray.ps1&quot;" />
+      </Component>
       <Component Id="NexusCoreEnvExample" Guid="319a3b90-1c02-4fc8-9f06-99cf80197d10">
         <File Id="EnvExampleFile" Source="nexuscore\.env.example" KeyPath="yes" />
       </Component>

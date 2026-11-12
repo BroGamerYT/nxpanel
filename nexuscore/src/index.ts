@@ -8,6 +8,7 @@ import type { HostDriver } from './drivers/interface.js';
 import { createCoreServer } from './http/server.js';
 import { EventBus } from './protocol/events.js';
 import { currentPairingPin, tokenFingerprint } from './protocol/security.js';
+import { watchServiceStdin } from './system/service-mode.js';
 import { ServerRegistry, RegistryCorruptError } from './store/registry.js';
 import { DatabaseCorruptError } from './store/database.js';
 import type { ServerInstanceConfig } from './types.js';
@@ -171,6 +172,8 @@ async function main(): Promise<void> {
 
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  // Als Windows-Dienst beendet die Huelle den Core ueber das Stdin-Rohr (siehe system/service-mode.ts)
+  if (process.env.NEXUSCORE_SERVICE === '1') watchServiceStdin(process.stdin, () => void shutdown('SERVICE_STOP'));
 }
 
 main().catch((err) => {

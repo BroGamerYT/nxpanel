@@ -46,6 +46,10 @@ $targetWeb = Join-Path $NexusCoreDir 'dist\web'
 if (Test-Path $targetWeb) { Remove-Item $targetWeb -Recurse -Force }
 Copy-Item (Join-Path $ProjectRoot 'web\dist') $targetWeb -Recurse -Force
 
+Write-Host "`n[3.8/4] Hilfsprogramme bauen (nxjob: harte Grenzen, nxsvc: Dienst-Huelle)..." -ForegroundColor Yellow
+npm run build:helper
+npm run build:service
+
 Write-Host "`n[4/4] Windows Installer MSI (WiX v5) erstellen..." -ForegroundColor Yellow
 wix build -arch x64 -b $ProjectRoot deploy\windows\NexusCore.wxs -o dist\NexusCore-Setup.msi
 

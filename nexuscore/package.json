@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:helper": "cargo build --release --manifest-path helper/nxjob/Cargo.toml"
+    "build:helper": "cargo build --release --manifest-path helper/nxjob/Cargo.toml",
+    "build:service": "cargo build --release --manifest-path helper/nxsvc/Cargo.toml"
   },
   "keywords": [
     "gameserver",
