@@ -79,6 +79,8 @@ NEXUSCORE_HOST=$CORE_HOST
 NEXUSCORE_PORT=$CORE_PORT
 NEXUSCORE_DATA_DIR=$DATA_DIR
 NEXUSCORE_TOKEN=$TOKEN
+# PIN fuer die Kopplung (der Production-Modus verlangt mindestens 6 Zeichen)
+NEXUSCORE_PAIRING_PIN=$(openssl rand -hex 4)
 # Hauptschluessel fuer gespeicherte Zugangsdaten: getrennt vom Datenordner halten
 NEXUSCORE_SECRET_KEY=$(openssl rand -hex 32)
 NEXUSCORE_PORT_RANGE=$PORT_RANGE

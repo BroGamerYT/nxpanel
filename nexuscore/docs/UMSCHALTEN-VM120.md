@@ -9,6 +9,20 @@ Ordner: `/var/lib/panel/volumes/<kurz-id>` (TeamSpeak gehört `1000:1000`, ARK `
 Der Plan hat zwei Teile: **A** läuft nebenher ohne Auswirkung auf die Spieler und lässt sich folgenlos abbrechen,
 **B** ist das eigentliche Umschalten mit kurzer Unterbrechung (ARK und TeamSpeak sind einige Minuten aus).
 
+## Stand: Teil A ist erledigt (12.11.2026, mit Freigabe)
+
+- Sicherung: `/root/panel-db-2026-11-12.sql.gz` und `/root/panel-env-2026-11-12.bak` (beide nur für `root` lesbar).
+- Node.js 26.13.1 (Prüfsumme geprüft) unter `/opt/node`, verlinkt nach `/usr/bin/node`; dazu das Debian-Paket `libatomic1`, das Node braucht.
+- Core unter `/opt/nexuscore`, Dienst `nexuscore` **eingerichtet, aber ausgeschaltet** (`disabled`), vorläufig auf Port 8081;
+  `NEXUSCORE_SERVER_ROOT=/var/lib/panel/volumes`, Port-Spanne `28000-28998`, Override-Datei mit `CAP_DAC_OVERRIDE` und
+  Schreibrecht auf die Spiel-Ordner. Probestart: läuft als Benutzer `nexuscore` mit den erwarteten Rechten, Docker erreichbar,
+  `healthz`/`readyz` in Ordnung; danach wieder gestoppt und der Datenordner geleert.
+- Trockenlauf auf der VM mit dem echten Export, Schlüssel, den echten Ordnern und Backups: **0 Fehler, 0 Hinweise** (3 Benutzer,
+  3 Server, 2 Steam-Konten, 4 Backups). Die Spiele liefen die ganze Zeit ungestört weiter.
+- `/root/panel-export.json` liegt noch dort (enthält Hashes und Geheimnisse) - **vor dem Umschalten neu erzeugen**, danach löschen.
+- Beim Aufbau gefunden und im Installer behoben: Er setzte keine `NEXUSCORE_PAIRING_PIN` (der Production-Modus verlangt sie, der
+  Dienst wäre nicht gestartet) und trug den Node-Pfad nicht in den Dienst ein.
+
 ## Was vor dem Start zu klären ist
 
 1. **Node.js ≥ 24.7 installieren** (offizielles Tarball von nodejs.org nach `/opt/node`, Symlink `/usr/bin/node`). Nötig, weil die
@@ -56,8 +70,9 @@ Der Plan hat zwei Teile: **A** läuft nebenher ohne Auswirkung auf die Spieler u
    ./scripts/export-panel.sh > /root/panel-export.json && chmod 600 /root/panel-export.json
    export PANEL_ENCRYPTION_KEY=$(grep ^ENCRYPTION_KEY= /opt/nxpanel/.env | cut -d= -f2)
    set -a; . /etc/nexuscore/nexuscore.env; set +a
-   node dist/cli/import-panel.js --export /root/panel-export.json
+   mkdir -p /tmp/nx-dry && NEXUSCORE_DATA_DIR=/tmp/nx-dry node /opt/nexuscore/dist/cli/import-panel.js --export /root/panel-export.json; rm -rf /tmp/nx-dry
    ```
+   (Der Trockenlauf öffnet die Core-Datenbank und legt dabei Dateien an - darum mit einem Wegwerf-Datenordner, nie mit `/var/lib/nexuscore`.)
    Erwartet: **0 Fehler**; Hinweise zu Steam Guard, Wiederherstellungscodes und Auto-Sleep sind normal. Erst weiter, wenn der Bericht
    sauber ist. (Der Trockenlauf gegen den echten Export war schon sauber: 3 Benutzer, 3 Server, 2 Steam-Konten.)
 6. **Prüfen, dass `zstd` da ist** (`zstd --version`, auf der VM vorhanden) und dass Panel- und Core-Ordner auf demselben Datenträger
