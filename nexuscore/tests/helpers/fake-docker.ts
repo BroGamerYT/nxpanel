@@ -18,7 +18,9 @@ export class FakeContainer implements ContainerLike {
     this.id = `id-${name}`;
   }
   onStart: (() => void) | null = null;
+  started = false;
   async start() {
+    this.started = true;
     this.calls.push('start');
     this.onStart?.();
   }
@@ -52,6 +54,12 @@ export class FakeContainer implements ContainerLike {
     }) as unknown as NodeJS.ReadWriteStream;
   }
   logs(_o: object, cb: (err: Error | null, s?: NodeJS.ReadableStream) => void) {
+    // Wie Docker: bei einem noch nicht gestarteten Container ist das Log leer und "follow" endet sofort
+    if (!this.started) {
+      const empty = new PassThrough();
+      empty.end();
+      return cb(null, empty);
+    }
     cb(null, this.logStream);
   }
   async stats(): Promise<DockerStats> {

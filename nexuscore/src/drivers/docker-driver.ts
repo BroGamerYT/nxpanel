@@ -402,6 +402,9 @@ export class DockerDriver implements HostDriver {
       },
     });
     try {
+      await container.start();
+      // Das Log erst nach dem Start abrufen: bei einem noch nicht gestarteten Container beendet Docker "follow" sofort,
+      // und es kaemen nie Zeilen an. Bei einem schon beendeten Container liefert Docker das ganze Log und schliesst dann.
       const done = new Promise<void>((resolve) => {
         container.logs({ follow: true, stdout: true, stderr: true }, (err, stream) => {
           if (err || !stream) return resolve();
@@ -412,10 +415,9 @@ export class DockerDriver implements HostDriver {
           stream.on('error', () => resolve());
         });
       });
-      await container.start();
       const result = await container.wait();
       // Die letzten Zeilen des Logs noch abwarten (hoechstens kurz)
-      await Promise.race([done, new Promise<void>((r) => setTimeout(r, 2000))]);
+      await Promise.race([done, new Promise<void>((r) => setTimeout(r, 5000))]);
       return result.StatusCode;
     } finally {
       await container.remove({ force: true }).catch(() => {});
