@@ -281,7 +281,9 @@ Endlosschleife läuft. Nichts wird installiert.
 * Konzept Abschnitt 5.1 braucht später Deltas der Spielstände – Backupformat jetzt so wählen,
   dass sich Deltas später ergänzen lassen, statt es zweimal zu bauen.
 
-### B5 – Windows-Dienst und Systray (Konzept Abschnitt 6)
+### B5 – Windows-Dienst und Systray (Konzept Abschnitt 6) – gebaut 12.11.2026, noch nicht unter echter Dienststeuerung abgenommen
+
+> **Stand:** `helper/nxsvc` (Dienst-Hülle), `scripts/install-service.ps1`, `uninstall-service.ps1`, `nexuscore-tray.ps1`, `src/system/firewall.ts`, MSI-Definition erweitert. Offen: Abnahme als echter Dienst (Administrator nötig), Symbol auf dem Bildschirm, echte Firewall-Regeln, Freigabe automatisch beim Installieren eines Servers (jetzt nur per Route), Seite für die Firewall im Web.
 
 * `nexuscored` als echter Windows-Dienst, Autostart, Neustart bei Absturz.
 * Systray-Symbol mit Status, Adresse der Oberfläche und Kopplungs-PIN zum Kopieren.

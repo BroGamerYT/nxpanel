@@ -47,6 +47,21 @@ npm run typecheck  # tsc --noEmit
 
 ---
 
+## Als Windows-Dienst
+
+Mit Administratorrechten (PowerShell → „Als Administrator ausführen“) im Ordner `nexuscore`:
+
+```powershell
+npm run build; npm run build:service
+powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1 -DryRun   # nur ansehen
+powershell -ExecutionPolicy Bypass -File scripts\install-service.ps1           # einrichten
+```
+
+Der Dienst startet verzögert mit Windows, startet den Core nach einem Absturz neu und beendet ihn beim Stoppen
+sauber. Das Log liegt in `%ProgramData%\NexusCore\logs\core.log`. Das Systray-Symbol (`scripts\nexuscore-tray.ps1`)
+zeigt den Status und kopiert die Kopplungs-PIN. Entfernen: `scripts\uninstall-service.ps1`. Der Core braucht
+`NEXUSCORE_TOKEN` in der `.env` im Core-Ordner.
+
 ## Voraussetzungen
 
 * Node.js 22 oder neuer (`node --version`)
