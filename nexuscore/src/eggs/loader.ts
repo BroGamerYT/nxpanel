@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config/index.js';
+import { normalizeForeignEgg } from './import.js';
 import type { SteamArg } from '../types.js';
 
 /**
@@ -147,7 +148,12 @@ async function readEggDir(dir: string, custom: boolean): Promise<LoadedEgg[]> {
     for (const file of await fs.readdir(dir)) {
       if (!file.endsWith('.json') || file.startsWith('_')) continue;
       try {
-        const raw = JSON.parse(await fs.readFile(path.join(dir, file), 'utf-8')) as RawEggFile;
+        const parsed = JSON.parse(await fs.readFile(path.join(dir, file), 'utf-8')) as RawEggFile;
+        // Mitgelieferte Eggs bekommen dieselbe Aufbereitung wie im Panel beim Einspielen: Pterodactyl-/Pelican-Images laufen als
+        // Benutzer 1000 (run_as), Wine/Proton bekommt /tmp auf der Festplatte, leere Pflichtfelder werden gelockert. Ohne sie
+        // starten viele Spiele nicht (Dateien des Installers gehoeren root, SteamCMD meldet "Missing file permissions").
+        // Eigene (importierte) Eggs sind schon beim Import aufbereitet worden.
+        const raw = custom ? parsed : (normalizeForeignEgg(parsed as never).raw as unknown as RawEggFile);
         const id = file.replace(/\.json$/, '');
         eggs.push({
           id,

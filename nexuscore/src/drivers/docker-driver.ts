@@ -112,7 +112,8 @@ export function buildContainerOptions(config: ServerInstanceConfig, opts: { netw
     // Beim Image-Namen-Betrieb (ohne Egg) kommen die Startargumente aus der Konfiguration
     ...(config.container ? {} : config.args.length ? { Cmd: config.args } : {}),
     Env: Object.entries(config.env ?? {}).map(([k, v]) => `${k}=${v}`),
-    WorkingDir: spec.dataDir || undefined,
+    // Kein WorkingDir: wie im Panel gilt das Arbeitsverzeichnis des Images (WORKDIR). Spiele wie 7 Days to Die starten sonst ihre
+    // Skripte im falschen Ordner (./sdtdserver: No such file or directory).
     // Konsole: der Core schreibt Befehle ueber stdin
     OpenStdin: true,
     StdinOnce: false,

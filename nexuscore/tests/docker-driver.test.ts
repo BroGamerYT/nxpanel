@@ -36,7 +36,7 @@ describe('Container-Optionen (wie im Panel)', () => {
     const o = buildContainerOptions(base(), { network: 'nexuscore-games' }) as Record<string, any>;
     expect(o.name).toBe('nxc-mc-1');
     expect(o.Image).toBe('itzg/minecraft-server:java21');
-    expect(o.WorkingDir).toBe('/data');
+    expect(o.WorkingDir).toBeUndefined(); // wie im Panel: das Arbeitsverzeichnis des Images gilt
     expect(o.OpenStdin).toBe(true);
     expect(o.Env).toEqual(['EULA=TRUE']);
     expect(o.Cmd).toBeUndefined();
