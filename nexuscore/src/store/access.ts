@@ -12,6 +12,8 @@ export interface ServerAccessRecord {
   ownerId: string | null;
   /** Benutzer-ID -> Flags (Mitnutzer). */
   subusers: Record<string, string[]>;
+  /** Benutzer-ID -> seit wann (ISO). Fehlt bei aelteren Eintraegen. */
+  since: Record<string, string>;
 }
 
 const key = (serverId: string): string => `access.${serverId}`;
@@ -21,6 +23,7 @@ export function getAccess(registry: ServerRegistry, serverId: string): ServerAcc
   return {
     ownerId: typeof raw?.ownerId === 'string' ? raw.ownerId : null,
     subusers: raw?.subusers && typeof raw.subusers === 'object' ? raw.subusers : {},
+    since: raw?.since && typeof raw.since === 'object' ? raw.since : {},
   };
 }
 
@@ -40,13 +43,19 @@ export function setOwner(registry: ServerRegistry, serverId: string, ownerId: st
 export function setSubuserFlags(registry: ServerRegistry, serverId: string, userId: string, flags: string[] | null): void {
   const cur = getAccess(registry, serverId);
   const subusers = { ...cur.subusers };
-  if (flags === null) delete subusers[userId];
-  else subusers[userId] = flags;
-  put(registry, serverId, { ...cur, subusers });
+  const since = { ...cur.since };
+  if (flags === null) {
+    delete subusers[userId];
+    delete since[userId];
+  } else {
+    if (!(userId in subusers)) since[userId] = new Date().toISOString();
+    subusers[userId] = flags;
+  }
+  put(registry, serverId, { ...cur, subusers, since });
 }
 
 export function removeServerAccess(registry: ServerRegistry, serverId: string): void {
-  put(registry, serverId, { ownerId: null, subusers: {} });
+  put(registry, serverId, { ownerId: null, subusers: {}, since: {} });
 }
 
 /** Ein Benutzer wird geloescht: seine Server werden herrenlos (Administrator), Mitnutzer-Rechte verfallen. */
@@ -55,8 +64,10 @@ export function removeUserAccess(registry: ServerRegistry, userId: string): void
     const cur = getAccess(registry, c.id);
     if (cur.ownerId !== userId && !(userId in cur.subusers)) continue;
     const subusers = { ...cur.subusers };
+    const since = { ...cur.since };
     delete subusers[userId];
-    put(registry, c.id, { ownerId: cur.ownerId === userId ? null : cur.ownerId, subusers });
+    delete since[userId];
+    put(registry, c.id, { ownerId: cur.ownerId === userId ? null : cur.ownerId, subusers, since });
   }
 }
 

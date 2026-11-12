@@ -4,8 +4,8 @@ Stand: 12.11.2026. Ziel: Der Core ist das einzige Backend; das alte Panel-Backen
 
 ## Wie das gemessen wurde (und was es nicht sagt)
 
-* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **175** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
-* **Ohne Gegenstück im Core: 40 Panel-Routen.** Davon ruft die Oberfläche **31** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
+* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **180** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
+* **Ohne Gegenstück im Core: 35 Panel-Routen.** Davon ruft die Oberfläche **26** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
 * Gleiche Route heißt **nicht** gleiches Verhalten. Das Verhalten ist nur dort geprüft, wo es Tests gibt (856 im Core); ein Vergleich Seite an Seite mit dem Panel (gleiche Anfrage, gleiche Antwort) fehlt noch.
 * Die Oberfläche blendet Bereiche aus, die der Core nicht meldet (`features` in `/api/v1/about`). Fehlende Funktionen sind deshalb **unsichtbar, nicht kaputt**.
 
@@ -15,7 +15,7 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 
 | Bereich | Was das Panel kann | Fehlende Routen | In der Oberfläche benutzt | Entscheidung | Aufwand |
 | --- | --- | ---: | ---: | --- | :-: |
-| Mitnutzer (Subusers) | Weitere Benutzer je Server mit eigenen Rechten einladen | 5 | 5 | **BAUEN** | M |
+| Mitnutzer (Subusers) | Weitere Benutzer je Server mit eigenen Rechten einladen | 0 | 0 | **ERLEDIGT** | – |
 | Benutzer imitieren | Admin meldet sich als anderer Benutzer an, um dessen Sicht zu prüfen | 0 | 0 | **ERLEDIGT** | – |
 | Spiele verwalten (Eggs) | Eggs importieren (Datei, URL, Katalog), löschen | 4 | 3 | **BAUEN** | M |
 | Server aus Backup/Upload importieren | Bestehenden Server (Archiv, Backup) in einen neuen Server übernehmen | 7 | 5 | **BAUEN** | L |
@@ -73,11 +73,6 @@ Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche 
 | POST | `/api/v1/admin/hosts` | Hosts hinzufügen/ändern/löschen | ja |
 | DELETE | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | ja |
 | PATCH | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | nein |
-| GET | `/api/v1/servers/:p/subusers` | Mitnutzer (Subusers) | ja |
-| POST | `/api/v1/servers/:p/subusers` | Mitnutzer (Subusers) | ja |
-| DELETE | `/api/v1/servers/:p/subusers/:p` | Mitnutzer (Subusers) | ja |
-| PATCH | `/api/v1/servers/:p/subusers/:p` | Mitnutzer (Subusers) | ja |
-| GET | `/api/v1/servers/:p/subusers/permissions` | Mitnutzer (Subusers) | ja |
 | DELETE | `/api/v1/admin/modpacks/curseforge` | Modpacks (Minecraft) | ja |
 | PUT | `/api/v1/admin/modpacks/curseforge` | Modpacks (Minecraft) | ja |
 | GET | `/api/v1/modpacks/curseforge` | Modpacks (Minecraft) | ja |

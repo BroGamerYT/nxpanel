@@ -473,7 +473,7 @@ describe('Funktionsliste des Cores', () => {
     expect(res.json.standalone).toBe(true);
     expect(res.json.features).toEqual(expect.arrayContaining(['files', 'settings', 'logfiles', 'schedules', 'backups', 'players']));
     // Nichts davon, was es im Core noch nicht gibt
-    for (const missing of ['subusers', 'timeline', 'domain']) {
+    for (const missing of ['timeline', 'domain']) {
       expect(res.json.features, missing).not.toContain(missing);
     }
     // Seiten, die diese Listen lesen, duerfen nicht abstuerzen
@@ -486,11 +486,11 @@ describe('Funktionsliste des Cores', () => {
   it('meldet je Server nur Rechte, fuer die es Routen gibt', async () => {
     const list = await call('GET', '/api/v1/servers');
     const permissions: string[] = list.json.servers.find((s: { id: string }) => s.id === 'fs-1').permissions;
-    for (const wanted of ['control.console', 'control.start', 'file.read', 'file.write', 'file.delete', 'settings.rename', 'startup.read', 'startup.update', 'allocation.read', 'allocation.assign']) {
+    for (const wanted of ['control.console', 'control.start', 'file.read', 'file.write', 'file.delete', 'settings.rename', 'startup.read', 'startup.update', 'allocation.read', 'allocation.assign', 'file.sftp', 'subuser.read', 'subuser.create']) {
       expect(permissions, wanted).toContain(wanted);
     }
     // Ohne diese Rechte blendet die Oberflaeche Tabs und Schaltflaechen aus
-    for (const missing of ['file.sftp', 'subuser.read', 'startup.image']) {
+    for (const missing of ['startup.image']) {
       expect(permissions, missing).not.toContain(missing);
     }
   });

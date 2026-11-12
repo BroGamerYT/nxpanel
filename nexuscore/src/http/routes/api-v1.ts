@@ -59,6 +59,7 @@ import { registerHealthRoutes } from './health.js';
 import { registerDocsRoutes } from './docs.js';
 import { registerDockerRoutes } from './docker.js';
 import { registerImpersonateRoutes } from './impersonate.js';
+import { registerSubuserRoutes } from './subusers.js';
 
 // Die Konstanten stehen in api-constants.ts; hier weiter ausgeliefert, damit Importe unveraendert bleiben.
 export { CORE_FEATURES, SERVER_PERMISSIONS } from './api-constants.js';
@@ -317,5 +318,8 @@ export function registerApiV1Routes(
   registerHealthRoutes(server, { registry, driver });
   registerDocsRoutes(server);
   registerDockerRoutes(server, { registry, driver });
-  if (account) registerImpersonateRoutes(server, { registry, account, sessionCookie });
+  if (account) {
+    registerImpersonateRoutes(server, { registry, account, sessionCookie });
+    registerSubuserRoutes(server, { registry, account, find: findServer });
+  }
 }

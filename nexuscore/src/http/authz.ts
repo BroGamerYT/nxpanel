@@ -166,6 +166,13 @@ const RULES: readonly Rule[] = [
     need: { kind: 'body-server', pick: (b) => { const f = PLAYER_FLAG[String(bodyOf(b)['action'])]; return f ? [f] : 'all'; } },
   },
 
+  // -------------------------------------------------------------- Mitnutzer
+  { methods: GET, pattern: new RegExp(`${S}/subusers(/permissions)?$`), need: flag('subuser.read') },
+  { methods: ['POST'], pattern: new RegExp(`${S}/subusers$`), need: flag('subuser.create') },
+  { methods: ['PATCH'], pattern: new RegExp(`${S}/subusers/:userId$`), need: flag('subuser.update') },
+  // Entfernen: ein Mitnutzer darf selbst austreten - das Recht fuer andere prueft die Route
+  { methods: ['DELETE'], pattern: new RegExp(`${S}/subusers/:userId$`), need: { kind: 'server', any: 'see' } },
+
   // ----------------------------------------------------- Start und Ports
   { methods: GET, pattern: new RegExp(`${S}/startup$`), need: flag('startup.read') },
   { methods: ['PATCH'], pattern: new RegExp(`${S}/startup$`), need: flag('startup.update') },
