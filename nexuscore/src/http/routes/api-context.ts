@@ -24,6 +24,7 @@ export interface ApiOptions {
   firewall?: FirewallManager;
   /** Tests: Netzzugriff und oeffentliche Adresse des DNS-Abgleichs ersetzen. */
   steam?: { login?: import('../../steam/accounts.js').SteamLoginRunner };
+  hosts?: { fetch?: (url: string, init?: RequestInit) => Promise<Response> };
   dns?: { fetch?: (url: string, init?: RequestInit) => Promise<Response>; publicIp?: () => Promise<string> };
 }
 

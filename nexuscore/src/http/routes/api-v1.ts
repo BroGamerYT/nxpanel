@@ -64,6 +64,8 @@ import { registerImportRoutes } from './imports.js';
 import { registerModpackRoutes } from './modpacks.js';
 import { registerStorageTargetRoutes } from './storage-targets.js';
 import { registerDnsRoutes } from './dns.js';
+import { RemoteHosts } from '../../hosts/remote.js';
+import { tokenFingerprint } from '../../protocol/security.js';
 import { registerSteamAccountRoutes } from './steam-accounts.js';
 import { SteamAccounts } from '../../steam/accounts.js';
 import { createLoginRunner } from '../../steam/login.js';
@@ -196,6 +198,7 @@ export function registerApiV1Routes(
   const steamAccounts = new SteamAccounts(registry, secrets, () => options.steam?.login ?? createLoginRunner(driver, registry.dir));
   // Installationen holen Name und Passwort des Kontos selbst (die Konfiguration des Servers speichert nur die Kennung)
   installs?.setSteamLogin((accountId) => steamAccounts.credentials({ id: null, username: 'core', admin: true }, accountId));
+  const remoteHosts = new RemoteHosts(registry, secrets, { ...(options.hosts?.fetch ? { fetch: options.hosts.fetch } : {}), ownFingerprint: tokenFingerprint });
   const dns = new DnsService(registry, secrets, options.dns ?? {});
   const imports = new ImportService({ registry, bus, installs });
   const power = createPowerOps({
@@ -233,11 +236,13 @@ export function registerApiV1Routes(
     players.start();
     discord.start();
     dns.start();
+    remoteHosts.start();
     gaming.start();
     server.addHook('onClose', async () => {
       gaming.stop();
       discord.stop();
       dns.stop();
+      remoteHosts.stop();
       scheduler.stop();
       backups.stop();
       players.stop();
@@ -261,7 +266,7 @@ export function registerApiV1Routes(
   registerAdminRoutes(server, { registry, driver, tester, account });
   registerIntegrationRoutes(server, { registry, discord, secrets });
   registerAdminFileRoutes(server, { registry });
-  registerHostRoutes(server, { registry, driver, dataDir: registry.dir });
+  registerHostRoutes(server, { registry, driver, dataDir: registry.dir, remote: remoteHosts });
   registerFirewallRoutes(server, { registry, firewall });
   registerUserRoutes(server, { registry, driver, account });
   registerSystemRoutes(server, { registry, driver, gaming });

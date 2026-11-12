@@ -51,6 +51,7 @@ export async function createCoreServer(
     /** Tests: Netzzugriff und Adresse des DNS-Abgleichs ersetzen. */
     dns?: ApiOptions['dns'];
     steam?: ApiOptions['steam'];
+    hosts?: ApiOptions['hosts'];
   } = {},
 ): Promise<FastifyInstance> {
   // Fastify loggt nicht selbst: der Core bringt seinen eigenen pino-Logger
@@ -296,6 +297,7 @@ export async function createCoreServer(
     ...(options.firewall ? { firewall: options.firewall } : {}),
     ...(options.dns ? { dns: options.dns } : {}),
     ...(options.steam ? { steam: options.steam } : {}),
+    ...(options.hosts ? { hosts: options.hosts } : {}),
   });
   // SFTP gibt es nur mit Benutzerkonten (Standalone) und nur, wenn es eingeschaltet ist
   const sftpWanted = options.sftp !== undefined ? options.sftp : config.sftpEnabled ? { host: config.sftpHost, port: config.sftpPort } : null;
