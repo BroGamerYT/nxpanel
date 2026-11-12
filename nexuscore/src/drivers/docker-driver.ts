@@ -303,6 +303,17 @@ export class DockerDriver implements HostDriver {
       /* nicht da: holen */
     }
     this.emit(serverId, `[Docker] Lade Image ${image} ...`);
+    await this.pull(image, (line) => this.emit(serverId, line));
+    this.emit(serverId, '[Docker] Image geladen.');
+  }
+
+  /** Das neueste Image holen, auch wenn es schon da ist. */
+  async pullImage(image: string, onLog: (line: string) => void = () => {}): Promise<void> {
+    if (!this.dockerAvailable) throw new Error('Kein Docker-Daemon erreichbar.');
+    await this.pull(image, onLog);
+  }
+
+  private async pull(image: string, say: (line: string) => void): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       this.docker.pull(image, (err, stream) => {
         if (err || !stream) return reject(err ?? new Error('Kein Datenstrom vom Docker-Daemon'));
@@ -314,12 +325,11 @@ export class DockerDriver implements HostDriver {
             // Nicht jede Fortschrittszeile melden: je Schicht und Zustand genuegt, hoechstens alle 2 Sekunden
             if (!ev.status || Date.now() - last < 2000) return;
             last = Date.now();
-            this.emit(serverId, `[Docker] ${ev.id ? `${ev.id}: ` : ''}${ev.status}`);
+            say(`[Docker] ${ev.id ? `${ev.id}: ` : ''}${ev.status}`);
           },
         );
       });
     });
-    this.emit(serverId, '[Docker] Image geladen.');
   }
 
   /** Datenordner anlegen; mit run_as (z. B. 1000:1000) und Root-Rechten dem Benutzer uebergeben. */

@@ -37,6 +37,8 @@ export interface HostDriver {
   sendCommand?(serverId: string, command: string): Promise<void>;
   /** Laeuft die Instanz mit niedriger oder normaler Prioritaet (Gaming-Modus)? Ganzer Prozessbaum. */
   setPriority?(serverId: string, level: 'normal' | 'low'): Promise<number>;
+  /** Das neueste Image holen, auch wenn es schon da ist (Update). */
+  pullImage?(image: string, onLog?: (line: string) => void): Promise<void>;
   /** Antwortet der Treiber (Docker-Daemon erreichbar)? Fuer /readyz. */
   healthy?(): Promise<boolean>;
   /** Nicht mehr benutzte Images aufraeumen - nur die uebergebenen (die des Cores), nie fremde. */

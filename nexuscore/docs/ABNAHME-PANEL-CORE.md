@@ -4,8 +4,8 @@ Stand: 12.11.2026. Ziel: Der Core ist das einzige Backend; das alte Panel-Backen
 
 ## Wie das gemessen wurde (und was es nicht sagt)
 
-* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **180** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
-* **Ohne Gegenstück im Core: 35 Panel-Routen.** Davon ruft die Oberfläche **26** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
+* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **181** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
+* **Ohne Gegenstück im Core: 34 Panel-Routen.** Davon ruft die Oberfläche **25** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
 * Gleiche Route heißt **nicht** gleiches Verhalten. Das Verhalten ist nur dort geprüft, wo es Tests gibt (856 im Core); ein Vergleich Seite an Seite mit dem Panel (gleiche Anfrage, gleiche Antwort) fehlt noch.
 * Die Oberfläche blendet Bereiche aus, die der Core nicht meldet (`features` in `/api/v1/about`). Fehlende Funktionen sind deshalb **unsichtbar, nicht kaputt**.
 
@@ -19,7 +19,7 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 | Benutzer imitieren | Admin meldet sich als anderer Benutzer an, um dessen Sicht zu prüfen | 0 | 0 | **ERLEDIGT** | – |
 | Spiele verwalten (Eggs) | Eggs importieren (Datei, URL, Katalog), löschen | 4 | 3 | **BAUEN** | M |
 | Server aus Backup/Upload importieren | Bestehenden Server (Archiv, Backup) in einen neuen Server übernehmen | 7 | 5 | **BAUEN** | L |
-| Spiel aktualisieren | Spieldateien (SteamCMD) auf den neuesten Stand bringen | 1 | 1 | **BAUEN** | M |
+| Spiel aktualisieren | Spieldateien (SteamCMD) auf den neuesten Stand bringen | 0 | 0 | **ERLEDIGT** | – |
 | Modpacks (Minecraft) | CurseForge/Modrinth suchen und installieren/aktualisieren | 5 | 5 | **BAUEN** | L |
 | Speicherziele (Backups extern) | Backups auf externe Ziele (S3, SFTP ...) | 5 | 0 | **BAUEN** | L |
 | Steam-Konten für Downloads | SteamCMD-Anmeldung mit Konto und Steam Guard | 4 | 4 | **SPÄTER** | L |
@@ -91,7 +91,6 @@ Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche 
 | POST | `/api/v1/servers/:p/storage-targets` | Speicherziele (Backups extern) | nein |
 | DELETE | `/api/v1/servers/:p/storage-targets/:p` | Speicherziele (Backups extern) | nein |
 | POST | `/api/v1/servers/:p/storage-targets/:p/test` | Speicherziele (Backups extern) | nein |
-| POST | `/api/v1/servers/:p/update-game` | Spiel aktualisieren | ja |
 | POST | `/api/v1/admin/eggs` | Spiele verwalten (Eggs) | ja |
 | DELETE | `/api/v1/admin/eggs/:p` | Spiele verwalten (Eggs) | nein |
 | GET | `/api/v1/admin/eggs/catalog` | Spiele verwalten (Eggs) | ja |

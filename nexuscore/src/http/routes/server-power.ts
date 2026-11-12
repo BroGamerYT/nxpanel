@@ -1,4 +1,7 @@
+import { z } from 'zod';
 import { installSpecOf } from '../../install/manager.js';
+import { createGameUpdater, UpdateError } from '../../ops/update-game.js';
+import { flagsFor } from '../authz.js';
 import { PowerError } from '../../ops/power.js';
 import type { ApiContext } from './api-context.js';
 
@@ -6,7 +9,8 @@ import type { ApiContext } from './api-context.js';
  * Server steuern: Start, Stopp, Neustart, Abbruch, Konsolenbefehl, Neuinstallation.
  */
 export function registerServerPowerRoutes(ctx: ApiContext): void {
-  const { server, driver, registry, installs, power, findServer, stateOf } = ctx;
+  const { server, driver, bus, registry, installs, power, backups, policy, findServer, stateOf } = ctx;
+  const updater = createGameUpdater({ registry, driver, power, installs, backups, bus });
 
   // Server Power Actions (start, stop, restart, kill)
   server.post<{ Params: { id: string }; Body: { action: 'start' | 'stop' | 'restart' | 'kill' } }>(
@@ -64,6 +68,27 @@ export function registerServerPowerRoutes(ctx: ApiContext): void {
       }
     },
   );
+
+  // 1-Klick-Update: stoppen, optional Sicherheits-Backup, neuestes Image/Spieldateien, wieder starten
+  server.post<{ Params: { id: string }; Body: unknown }>('/api/v1/servers/:id/update-game', async (req, reply) => {
+    const c = findServer(req.params.id);
+    if (!c) return reply.status(404).send({ error: 'Server nicht gefunden', code: 'not_found' });
+    const body = z.object({ backup: z.boolean().default(true), startAfter: z.boolean().default(true) }).safeParse(req.body ?? {});
+    if (!body.success) return reply.status(400).send({ error: 'Ungültige Anfrage', code: 'invalid_request' });
+    const actor = req.actor!;
+    // Das Sicherheits-Backup braucht sein eigenes Recht
+    if (body.data.backup && !flagsFor(registry, c.id, actor, policy).includes('backup.create')) {
+      return reply.status(403).send({ error: 'Fehlendes Recht für das Sicherheits-Backup: backup.create', code: 'forbidden' });
+    }
+    try {
+      const task = await updater.start(c.id, body.data);
+      registry.audit('server.update_game', c.id, 'standalone', body.data);
+      return reply.status(202).send({ accepted: true, taskId: task.id });
+    } catch (err) {
+      if (err instanceof UpdateError) return reply.status(err.statusCode).send({ error: err.message, code: err.code });
+      throw err;
+    }
+  });
 
   // Neuinstallation: laedt Spiel und Java erneut, Welt und Einstellungen bleiben liegen.
   server.post<{ Params: { id: string } }>('/api/v1/servers/:id/reinstall', async (req, reply) => {

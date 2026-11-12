@@ -178,6 +178,7 @@ const RULES: readonly Rule[] = [
   { methods: ['PATCH'], pattern: new RegExp(`${S}/startup$`), need: flag('startup.update') },
   { methods: GET, pattern: new RegExp(`${S}/allocations$`), need: flag('allocation.read') },
   { methods: ['POST'], pattern: new RegExp(`${S}/(allocations|reallocate)$`), need: flag('allocation.assign') },
+  { methods: ['POST'], pattern: new RegExp(`${S}/update-game$`), need: flag('control.restart') },
   { methods: ['PATCH', 'DELETE'], pattern: new RegExp(`${S}/allocations/:port$`), need: flag('allocation.assign') },
 
   // ------------------------------------------------------------------ Admin

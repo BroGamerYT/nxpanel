@@ -77,6 +77,8 @@ export class FakeDocker implements DockerLike {
   networks = new Set<string>();
   pulled: string[] = [];
   pingFails = false;
+  /** Image-Download schlaegt fehl (kein Netz). */
+  pullFails = false;
   /** Images, die der Daemon kennt: Name -> Groesse in Byte. Aufraeumen entfernt, was nicht in `inUse` steht. */
   imageSizes = new Map<string, number>();
   inUse = new Set<string>();
@@ -118,6 +120,7 @@ export class FakeDocker implements DockerLike {
   }
   pull(image: string, cb: (e: Error | null, s?: NodeJS.ReadableStream) => void) {
     this.pulled.push(image);
+    if (this.pullFails) return cb(new Error('network unreachable'));
     const s = new PassThrough();
     cb(null, s);
     setImmediate(() => {
