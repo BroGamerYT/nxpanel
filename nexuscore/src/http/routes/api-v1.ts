@@ -62,6 +62,8 @@ import { registerDocsRoutes } from './docs.js';
 import { registerEggAdminRoutes } from './egg-admin.js';
 import { registerImportRoutes } from './imports.js';
 import { registerModpackRoutes } from './modpacks.js';
+import { registerStorageTargetRoutes } from './storage-targets.js';
+import { StorageTargets } from '../../store/storage-targets.js';
 import { SecretStore } from '../../store/secrets.js';
 import { createModpackUpdater } from '../../servers/modpack-update.js';
 import { ImportService } from '../../servers/import-service.js';
@@ -185,6 +187,7 @@ export function registerApiV1Routes(
   // Zugangsdaten (API-Schluessel ...) verschluesselt ablegen; Klartext aus aelteren Staenden wird umgezogen
   const secrets = new SecretStore(registry, { envKey: config.secretKey });
   if (secrets.migrateFromPlain('modpacks.curseforgeKey', 'curseforge')) logger.info('CurseForge-Schlüssel verschlüsselt');
+  const storageTargets = new StorageTargets(registry, secrets);
   const imports = new ImportService({ registry, bus, installs });
   const power = createPowerOps({
     registry,
@@ -266,7 +269,7 @@ export function registerApiV1Routes(
   registerExtraRoutes(server, { registry, find: findServer, eggs: loadEggs });
   registerPlayerRoutes(server, { find: findServer, players });
   registerFileRoutes(server, { registry, find: findServer });
-  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: async (id) => { await backups.purgeServer(id); removeServerAccess(registry, id); await firewall.closeServer(id).catch(() => {}); } });
+  registerSettingsRoutes(server, { registry, driver, find: findServer, installs, eggs: loadEggs, onServerDeleted: async (id) => { await backups.purgeServer(id); removeServerAccess(registry, id); storageTargets.deleteForServer(id); await firewall.closeServer(id).catch(() => {}); } });
   registerLogFileRoutes(server, { registry, find: findServer, eggs: loadEggs });
 
   /** Rechte an einem Server, soweit der Core die Funktion hat - alles andere bleibt in der Oberflaeche verborgen. */
@@ -345,6 +348,7 @@ export function registerApiV1Routes(
   registerImportRoutes(server, { registry, imports, policy, find: findServer, stateOf, isOwnerOf });
   const modpacks = createModpackUpdater({ registry, driver, power, backups, bus });
   registerModpackRoutes(server, { registry, secrets, updater: modpacks, policy, find: findServer });
+  registerStorageTargetRoutes(server, { registry, targets: storageTargets, find: findServer });
   registerDockerRoutes(server, { registry, driver });
   if (account) {
     registerImpersonateRoutes(server, { registry, account, sessionCookie });

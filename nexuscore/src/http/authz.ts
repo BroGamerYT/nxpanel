@@ -185,6 +185,8 @@ const RULES: readonly Rule[] = [
   { methods: GET, pattern: new RegExp(`${S}/allocations$`), need: flag('allocation.read') },
   { methods: ['POST'], pattern: new RegExp(`${S}/(allocations|reallocate)$`), need: flag('allocation.assign') },
   { methods: ['POST'], pattern: new RegExp(`${S}/update-game$`), need: flag('control.restart') },
+  // Speicherziele fuer Backups: wer Backups anlegen darf
+  { methods: '*', pattern: new RegExp(`${S}/storage-targets(/:targetId(/test)?)?$`), need: flag('backup.create') },
   { methods: ['POST'], pattern: new RegExp(`${S}/modpack/update$`), need: flag('startup.update') },
   { methods: ['PATCH', 'DELETE'], pattern: new RegExp(`${S}/allocations/:port$`), need: flag('allocation.assign') },
 
@@ -202,6 +204,8 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/admin\/firewall(\/|$)/, need: perm('admin.nodes') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/pairing(\/|$)/, need: { kind: 'admin' } },
   { methods: '*', pattern: /^\/api\/v1\/admin\/docker(\/|$)/, need: { kind: 'admin' } },
+  // Globale Speicherziele (Zugangsdaten fuer Backups): nur Administratoren
+  { methods: '*', pattern: /^\/api\/v1\/admin\/storage-targets(\/|$)/, need: { kind: 'admin' } },
   // Der CurseForge-Schluessel: nur Administratoren
   { methods: '*', pattern: /^\/api\/v1\/admin\/modpacks(\/|$)/, need: { kind: 'admin' } },
   { methods: GET, pattern: /^\/api\/v1\/admin\/(overview|host-logs)$/, need: { kind: 'admin' } },
