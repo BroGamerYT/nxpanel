@@ -46,6 +46,8 @@ export interface ServerMeta {
   bandwidthDownloadKbps?: number | null;
   bandwidthUploadKbps?: number | null;
   /** Domain: Subdomain unter der Hauptdomain, eigene Domain, SRV-Eintrag. */
+  /** Nach einem Absturz automatisch neu starten (siehe ops/auto-restart.ts). */
+  autoRestart?: boolean;
   subdomain?: string | null;
   customDomain?: string | null;
   srvRecordEnabled?: boolean;
@@ -180,9 +182,6 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
     if (!body.success) return invalidRequest(reply, body.error);
 
     // Was der Core nicht kann, wird abgelehnt statt still gemerkt.
-    if (body.data.autoRestart === true) {
-      return fail(reply, 400, 'Automatischer Neustart nach einem Absturz gibt es im Core noch nicht.', 'not_supported');
-    }
     if (body.data.autoSleepMinutes !== undefined && body.data.autoSleepMinutes > 0) {
       return fail(reply, 400, 'Auto-Sleep (Ruhemodus bei Leerlauf) gibt es im Core noch nicht.', 'not_supported');
     }
@@ -190,6 +189,7 @@ export function registerSettingsRoutes(server: FastifyInstance, deps: SettingsDe
     const patch: Partial<ServerMeta> = {};
     if (body.data.tags) patch.tags = Array.from(new Set(body.data.tags));
     if (body.data.isFavorite !== undefined) patch.isFavorite = body.data.isFavorite;
+    if (body.data.autoRestart !== undefined) patch.autoRestart = body.data.autoRestart;
     if (Object.keys(patch).length > 0) saveServerMeta(registry, c.id, patch);
 
     if (body.data.name !== undefined && body.data.name !== c.name) {

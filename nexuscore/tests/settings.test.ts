@@ -173,9 +173,6 @@ describe('Einstellungen - Allgemein', () => {
   it('lehnt ab, was der Core noch nicht kann, statt es still zu speichern', async () => {
     const t = await setup();
     await t.paper();
-    const restart = await t.call('PATCH', '/api/v1/servers/set-1', { autoRestart: true });
-    expect(restart.statusCode).toBe(400);
-    expect(restart.json().code).toBe('not_supported');
     expect((await t.call('PATCH', '/api/v1/servers/set-1', { autoSleepMinutes: 30 })).statusCode).toBe(400);
     // Ausschalten ist immer erlaubt
     expect((await t.call('PATCH', '/api/v1/servers/set-1', { autoRestart: false, autoSleepMinutes: 0 })).statusCode).toBe(200);

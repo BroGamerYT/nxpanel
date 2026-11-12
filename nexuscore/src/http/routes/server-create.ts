@@ -12,6 +12,7 @@ import { initialValue, isUserVariable, validateVariables } from '../../eggs/rule
 import { loadEggs } from '../../eggs/loader.js';
 import { mayUseImportFile, type PendingImport } from '../../servers/import-service.js';
 import { importRoot } from '../../servers/importer.js';
+import { saveServerMeta } from './settings.js';
 import { steamActorOf } from '../../steam/accounts.js';
 import type { ApiContext } from './api-context.js';
 
@@ -102,6 +103,8 @@ export function registerServerCreateRoutes(ctx: ApiContext): void {
       pendingImport = { path: full, name, removeAfter: name.startsWith('upload-') };
     }
     const created = (id: string): void => {
+      // Wie im Panel: neue Server starten nach einem Absturz von selbst neu (abschaltbar in den Einstellungen)
+      saveServerMeta(registry, id, { autoRestart: true });
       if (pendingImport) imports.afterCreate(id, pendingImport, creator.username);
     };
     const knownEgg = (await loadEggs()).find((e) => e.id === eggId);

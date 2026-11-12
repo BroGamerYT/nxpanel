@@ -64,6 +64,7 @@ import { registerImportRoutes } from './imports.js';
 import { registerModpackRoutes } from './modpacks.js';
 import { registerStorageTargetRoutes } from './storage-targets.js';
 import { registerDnsRoutes } from './dns.js';
+import { AutoRestart } from '../../ops/auto-restart.js';
 import { RemoteHosts } from '../../hosts/remote.js';
 import { tokenFingerprint } from '../../protocol/security.js';
 import { registerSteamAccountRoutes } from './steam-accounts.js';
@@ -219,6 +220,12 @@ export function registerApiV1Routes(
     gameName: async (c) => (await loadEggs()).find((e) => e.id === c.game)?.name ?? c.game,
   });
   const players = new PlayerManager({ registry, driver, bus, ...(options.ping ? { ping: options.ping } : {}) });
+  const autoRestart = new AutoRestart({
+    registry,
+    bus,
+    start: (id) => power.start(id),
+    isCrashed: async (id) => (await stateOf(id))?.status === 'error',
+  });
   const scheduler = new Scheduler(registry, {
     restart: async (id) => void (await power.restart(id)),
     command: (id, line) => power.command(id, line),
@@ -236,12 +243,14 @@ export function registerApiV1Routes(
     players.start();
     discord.start();
     dns.start();
+    autoRestart.start();
     remoteHosts.start();
     gaming.start();
     server.addHook('onClose', async () => {
       gaming.stop();
       discord.stop();
       dns.stop();
+      autoRestart.stop();
       remoteHosts.stop();
       scheduler.stop();
       backups.stop();

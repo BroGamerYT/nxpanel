@@ -124,7 +124,6 @@ describe('Übernahme', () => {
     const text = lines.join('\n');
     expect(text).toContain('Das Spiel "Gibt es im Core nicht" kennt der Core nicht');
     expect(text).toContain('Port 28099 (seltsam)');
-    expect(text).toContain('Automatischer Neustart');
     expect(text).toContain('2 Backups werden noch nicht übernommen');
     expect(text).toContain('Wiederherstellungscodes');
     expect(text).toContain('Einstellung "komische_einstellung"');

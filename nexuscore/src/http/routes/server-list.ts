@@ -100,7 +100,7 @@ export function registerServerReadRoutes(ctx: ApiContext): void {
           bandwidthUploadKbps: meta.bandwidthUploadKbps ?? null,
         },
         diskUsedMb: 1024,
-        autoRestart: false,
+        autoRestart: meta.autoRestart ?? false,
         autoSleepMinutes: 0,
         tags: meta.tags ?? [],
         isFavorite: meta.isFavorite ?? false,

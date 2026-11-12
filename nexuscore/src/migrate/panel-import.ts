@@ -327,6 +327,7 @@ export async function importPanelData(data: PanelExport, deps: ImportDeps, opts:
       saveServerMeta(registry, short, {
         tags: arr(s.tags),
         isFavorite: s.is_favorite === true,
+        autoRestart: s.auto_restart === true,
         diskMb: num(s.disk_mb, 10240),
         ...(s.bandwidth_download_kbps != null ? { bandwidthDownloadKbps: num(s.bandwidth_download_kbps) } : {}),
         ...(s.bandwidth_upload_kbps != null ? { bandwidthUploadKbps: num(s.bandwidth_upload_kbps) } : {}),
@@ -363,7 +364,6 @@ export async function importPanelData(data: PanelExport, deps: ImportDeps, opts:
       say('ok', 'Zeitpläne', `${sc.name} auf ${label}.`);
     }
     // Was der Core (noch) nicht kann
-    if (s.auto_restart === true) say('warn', 'Server', `${label}: Automatischer Neustart nach einem Absturz gibt es im Core noch nicht.`);
     if (num(s.auto_sleep_minutes) > 0) say('warn', 'Server', `${label}: Auto-Sleep gibt es im Core noch nicht.`);
     if (s.auto_backup_enabled === true) say('warn', 'Server', `${label}: Automatische Backups bitte als Zeitplan im Core neu einrichten.`);
     counts.servers = (counts.servers ?? 0) + 1;
