@@ -62,6 +62,11 @@ sauber. Das Log liegt in `%ProgramData%\NexusCore\logs\core.log`. Das Systray-Sy
 zeigt den Status und kopiert die Kopplungs-PIN. Entfernen: `scripts\uninstall-service.ps1`. Der Core braucht
 `NEXUSCORE_TOKEN` in der `.env` im Core-Ordner.
 
+## Als Linux-Dienst (Docker)
+
+Auf Debian/Ubuntu mit Docker und Node.js ≥ 22.13: `sudo bash nexuscore/deploy/linux/install-core.sh` (vorher bauen, mit `--dry-run` nur ansehen).
+Schritt für Schritt, Selbsttest und Fehlerbilder: [docs/LINUX-VM-TEST.md](docs/LINUX-VM-TEST.md).
+
 ## Voraussetzungen
 
 * Node.js 22 oder neuer (`node --version`)

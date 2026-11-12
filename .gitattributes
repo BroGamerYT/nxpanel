@@ -1,0 +1,4 @@
+# Skripte fuer Linux muessen LF-Zeilenenden haben, auch wenn sie unter Windows ausgecheckt werden
+*.sh text eol=lf
+nexuscore/deploy/linux/* text eol=lf
+nexuscore/scripts/*.sh text eol=lf

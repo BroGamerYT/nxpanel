@@ -1,0 +1,42 @@
+[Unit]
+Description=NexusCore Host Daemon (Spielserver in Docker)
+Documentation=file:///opt/nexuscore/README.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=nexuscore
+Group=nexuscore
+# Der Core steuert Docker ueber den Socket: wer in der Gruppe "docker" ist, hat damit praktisch Root-Rechte
+# auf diesem Rechner. Deshalb gehoert dieser Rechner dem Core und den Spielen - nichts anderes darauf betreiben.
+SupplementaryGroups=docker
+WorkingDirectory=/opt/nexuscore
+EnvironmentFile=/etc/nexuscore/nexuscore.env
+ExecStart=/usr/bin/node dist/index.js
+
+# Neustart nach einem Absturz; ein sauberes Beenden (systemctl stop) bleibt beendet
+Restart=on-failure
+RestartSec=5
+# Beim Stoppen beendet der Core zuerst alle Spiele sauber (Stop-Befehl, Speichern): dafuer Zeit lassen
+KillSignal=SIGTERM
+TimeoutStopSec=180
+
+# Haertung: nur der Datenordner ist beschreibbar
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/nexuscore
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+LockPersonality=true
+# Egg-Einstellung "run_as": der Core uebergibt den Datenordner an den Spielbenutzer (chown) - nur das, sonst keine Rechte
+AmbientCapabilities=CAP_CHOWN CAP_FOWNER
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER
+
+[Install]
+WantedBy=multi-user.target
