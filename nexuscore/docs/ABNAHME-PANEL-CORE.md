@@ -4,8 +4,8 @@ Stand: 12.11.2026. Ziel: Der Core ist das einzige Backend; das alte Panel-Backen
 
 ## Wie das gemessen wurde (und was es nicht sagt)
 
-* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **192** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
-* **Ohne Gegenstück im Core: 23 Panel-Routen.** Davon ruft die Oberfläche **17** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
+* **Routen verglichen**, nicht Verhalten: Panel **183** Routen (aus dem Quelltext), Core **197** (aus der laufenden Routentabelle), die Oberfläche ruft **144** verschiedene Routen auf.
+* **Ohne Gegenstück im Core: 18 Panel-Routen.** Davon ruft die Oberfläche **12** tatsächlich auf. Der Core hat zusätzlich **14** Routen, die das Panel nicht hat (Passkeys, Steam-Anmeldung, SFTP, Firewall, Plattform ...).
 * Gleiche Route heißt **nicht** gleiches Verhalten. Das Verhalten ist nur dort geprüft, wo es Tests gibt (856 im Core); ein Vergleich Seite an Seite mit dem Panel (gleiche Anfrage, gleiche Antwort) fehlt noch.
 * Die Oberfläche blendet Bereiche aus, die der Core nicht meldet (`features` in `/api/v1/about`). Fehlende Funktionen sind deshalb **unsichtbar, nicht kaputt**.
 
@@ -20,7 +20,7 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 | Spiele verwalten (Eggs) | Eggs importieren (Datei, URL, Katalog), löschen | 0 | 0 | **ERLEDIGT** | – |
 | Server aus Backup/Upload importieren | Bestehenden Server (Archiv, Backup) in einen neuen Server übernehmen | 0 | 0 | **ERLEDIGT** | – |
 | Spiel aktualisieren | Spieldateien (SteamCMD) auf den neuesten Stand bringen | 0 | 0 | **ERLEDIGT** | – |
-| Modpacks (Minecraft) | CurseForge/Modrinth suchen und installieren/aktualisieren | 5 | 5 | **BAUEN** | L |
+| Modpacks (Minecraft) | CurseForge/Modrinth suchen und installieren/aktualisieren | 0 | 0 | **ERLEDIGT** | – |
 | Speicherziele (Backups extern) | Backups auf externe Ziele (S3, SFTP ...) | 5 | 0 | **BAUEN** | L |
 | Steam-Konten für Downloads | SteamCMD-Anmeldung mit Konto und Steam Guard | 4 | 4 | **SPÄTER** | L |
 | Domain und DNS | Cloudflare-DNS-Einträge je Server, Domain am Server | 5 | 5 | **SPÄTER** | M |
@@ -73,11 +73,6 @@ Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche 
 | POST | `/api/v1/admin/hosts` | Hosts hinzufügen/ändern/löschen | ja |
 | DELETE | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | ja |
 | PATCH | `/api/v1/admin/hosts/:p` | Hosts hinzufügen/ändern/löschen | nein |
-| DELETE | `/api/v1/admin/modpacks/curseforge` | Modpacks (Minecraft) | ja |
-| PUT | `/api/v1/admin/modpacks/curseforge` | Modpacks (Minecraft) | ja |
-| GET | `/api/v1/modpacks/curseforge` | Modpacks (Minecraft) | ja |
-| GET | `/api/v1/modpacks/search` | Modpacks (Minecraft) | ja |
-| POST | `/api/v1/servers/:p/modpack/update` | Modpacks (Minecraft) | ja |
 | POST | `/api/v1/admin/integrations/playit` | Playit-Integration | ja |
 | GET | `/api/v1/admin/storage-targets` | Speicherziele (Backups extern) | nein |
 | GET | `/api/v1/servers/:p/storage-targets` | Speicherziele (Backups extern) | nein |

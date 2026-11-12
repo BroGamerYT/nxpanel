@@ -61,6 +61,8 @@ import { registerHealthRoutes } from './health.js';
 import { registerDocsRoutes } from './docs.js';
 import { registerEggAdminRoutes } from './egg-admin.js';
 import { registerImportRoutes } from './imports.js';
+import { registerModpackRoutes } from './modpacks.js';
+import { createModpackUpdater } from '../../servers/modpack-update.js';
 import { ImportService } from '../../servers/import-service.js';
 import { registerDockerRoutes } from './docker.js';
 import { registerImpersonateRoutes } from './impersonate.js';
@@ -336,6 +338,8 @@ export function registerApiV1Routes(
   registerDocsRoutes(server);
   registerEggAdminRoutes(server, { registry, fetchImpl: options.fetchImpl });
   registerImportRoutes(server, { registry, imports, policy, find: findServer, stateOf, isOwnerOf });
+  const modpacks = createModpackUpdater({ registry, driver, power, backups, bus });
+  registerModpackRoutes(server, { registry, updater: modpacks, policy, find: findServer });
   registerDockerRoutes(server, { registry, driver });
   if (account) {
     registerImpersonateRoutes(server, { registry, account, sessionCookie });

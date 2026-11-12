@@ -107,7 +107,7 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/auth\//, need: { kind: 'user' } },
 
   // ------------------------------------------------- allgemein (filtert selbst)
-  { methods: GET, pattern: /^\/api\/v1\/(about|dashboard|dashboard\/activity|notifications|tasks\/active|steam\/accounts|eggs|eggs\/:id|eggs\/:id\/cover|eggs\/branding|presence|docs|docs\/:slug)$/, need: { kind: 'user' } },
+  { methods: GET, pattern: /^\/api\/v1\/(about|dashboard|dashboard\/activity|notifications|tasks\/active|steam\/accounts|eggs|eggs\/:id|eggs\/:id\/cover|eggs\/branding|presence|docs|docs\/:slug|modpacks\/search|modpacks\/curseforge)$/, need: { kind: 'user' } },
   { methods: ['POST'], pattern: /^\/api\/v1\/(presence\/ping|live\/ws-ticket)$/, need: { kind: 'user' } },
   { methods: GET, pattern: /^\/api\/v1\/live\/ws$/, need: { kind: 'user' } },
   { methods: GET, pattern: /^\/api\/v1\/servers$/, need: { kind: 'user' } },
@@ -185,6 +185,7 @@ const RULES: readonly Rule[] = [
   { methods: GET, pattern: new RegExp(`${S}/allocations$`), need: flag('allocation.read') },
   { methods: ['POST'], pattern: new RegExp(`${S}/(allocations|reallocate)$`), need: flag('allocation.assign') },
   { methods: ['POST'], pattern: new RegExp(`${S}/update-game$`), need: flag('control.restart') },
+  { methods: ['POST'], pattern: new RegExp(`${S}/modpack/update$`), need: flag('startup.update') },
   { methods: ['PATCH', 'DELETE'], pattern: new RegExp(`${S}/allocations/:port$`), need: flag('allocation.assign') },
 
   // ------------------------------------------------------------------ Admin
@@ -201,6 +202,8 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/admin\/firewall(\/|$)/, need: perm('admin.nodes') },
   { methods: '*', pattern: /^\/api\/v1\/admin\/pairing(\/|$)/, need: { kind: 'admin' } },
   { methods: '*', pattern: /^\/api\/v1\/admin\/docker(\/|$)/, need: { kind: 'admin' } },
+  // Der CurseForge-Schluessel: nur Administratoren
+  { methods: '*', pattern: /^\/api\/v1\/admin\/modpacks(\/|$)/, need: { kind: 'admin' } },
   { methods: GET, pattern: /^\/api\/v1\/admin\/(overview|host-logs)$/, need: { kind: 'admin' } },
 
   // Schnittstelle fuer das Panel und die aeltere Standalone-Schnittstelle: nur Master-Token oder Administrator

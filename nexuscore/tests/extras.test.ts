@@ -178,10 +178,11 @@ describe('Server-Icon', () => {
 });
 
 describe('Modpack und Aktivität', () => {
-  it('Modpack-Zustand ist leer statt 404', async () => {
+  it('Modpack-Zustand: ohne Pack leer statt 404', async () => {
     const res = await call('GET', '/api/v1/servers/ex-1/modpack');
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ source: null, job: null, updateAvailable: false });
+    // Ein Server ohne Modpack: kein Pack (die Oberfläche zeigt dann nichts an)
+    expect(res.json()).toEqual({ pack: null });
     expect((await call('GET', '/api/v1/servers/gibt-es-nicht/modpack')).statusCode).toBe(404);
   });
 

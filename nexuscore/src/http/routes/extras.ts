@@ -216,12 +216,6 @@ export function registerExtraRoutes(server: FastifyInstance, deps: ExtrasDeps): 
 
   // ------------------------------------------------------------ Modpack und Aktivitaet
 
-  // Modpacks kennt der Core nicht: leerer Zustand statt 404 (die Seite fragt bei jedem Oeffnen).
-  server.get<{ Params: { id: string } }>('/api/v1/servers/:id/modpack', async (req, reply) => {
-    if (!find(req.params.id)) return fail(reply, 404, 'Server nicht gefunden', 'not_found');
-    return { source: null, pack: null, current: null, job: null, updateAvailable: false };
-  });
-
   server.get('/api/v1/dashboard/activity', async (req) => {
     const actor = req.actor!;
     const names = new Map(registry.list().map((c) => [c.id, c.name]));
