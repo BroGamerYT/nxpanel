@@ -23,6 +23,22 @@ Der Plan hat zwei Teile: **A** läuft nebenher ohne Auswirkung auf die Spieler u
 - Beim Aufbau gefunden und im Installer behoben: Er setzte keine `NEXUSCORE_PAIRING_PIN` (der Production-Modus verlangt sie, der
   Dienst wäre nicht gestartet) und trug den Node-Pfad nicht in den Dienst ein.
 
+## Stand: Teil B ist erledigt (12.11.2026, 16:00-16:10 UTC)
+
+Der Core läuft seit 16:02 auf Port 8080 (`https://nxp.brogameryt.de`), die drei Server stehen mit Besitzer, Mitnutzer Simon, Ports und
+4 Backups drin; TeamSpeak (`nxc-5753f82f`) und ARK (`nxc-c4bf23f2`) laufen wieder - ARK meldete „Server has completed startup and is
+now advertising“ mit dem alten Spielstand. Gesamte Unterbrechung der Spiele: ca. 6 Minuten (TeamSpeak) bzw. 7 Minuten bis ARK wieder bereit war.
+Dabei gelernt:
+- **Das Panel startet Spiele nach `docker stop` selbst wieder** (sein Auto-Restart zählt das als Absturz): beide Container liefen 3 s später
+  erneut. Reihenfolge deshalb: erst Panel stoppen, dann die Spiele - oder die Spiele im Panel stoppen. (Am Ende lief alles sauber, ARK
+  hat dabei nur 37 s geladen.)
+- Das `chown -R nexuscore` auf den Datenordner hat auch die **Besitzer der Panel-Backups** geändert (harte Verknüpfung = gleiche Datei). Für
+  den Rückweg unschädlich (das Panel läuft als root).
+- Der vom Core automatisch angelegte Benutzer `admin` wurde entfernt, die Datei mit seinem Passwort ebenso.
+- `nxpanel.service` ist **deaktiviert**, sonst würde ein Neustart der VM das Panel wieder auf Port 8080 hochfahren. Postgres und Redis laufen
+  weiter (Rückweg, spätere Auswertung).
+- Der Export `/root/panel-export.json` wurde vernichtet; die Sicherungen `/root/panel-db-2026-11-12.sql.gz` und `/root/panel-env-2026-11-12.bak` bleiben.
+
 ## Was vor dem Start zu klären ist
 
 1. **Node.js ≥ 24.7 installieren** (offizielles Tarball von nodejs.org nach `/opt/node`, Symlink `/usr/bin/node`). Nötig, weil die
@@ -112,7 +128,7 @@ Der Plan hat zwei Teile: **A** läuft nebenher ohne Auswirkung auf die Spieler u
 ## Rückweg (jederzeit bis Schritt 8)
 
 ```bash
-systemctl stop nexuscore                    # beendet die Spiele sauber (kann bis 3 Minuten dauern)
+systemctl disable --now nexuscore   # beendet die Spiele sauber (bis 3 Minuten); `nxpanel.service` wieder einschalten: systemctl enable nxpanel                    # beendet die Spiele sauber (kann bis 3 Minuten dauern)
 docker ps -a --format '{{.Names}}' | grep '^nxc-'   # Core-Container ggf. mit docker stop/rm entfernen - die Daten liegen in den Ordnern
 cd /opt/nxpanel && docker compose up -d panel
 ```
