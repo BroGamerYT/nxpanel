@@ -138,6 +138,19 @@ describe('Installieren', () => {
     expect((await u.status()).state).toBe('installing');
   });
 
+  it('zeigt Fortschritt und führt ein Update-Protokoll; Installer-Protokoll wird UTF-16-fest gelesen', async () => {
+    const { u } = updater({}, [release('0.3.8')]);
+    await u.install();
+    const st = await u.status();
+    expect(st.progress?.phase).toBe('install');
+    expect(st.progress?.installStartedAt).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 50));
+    const lines = await u.logs('update');
+    expect(lines.join('\n')).toContain('Prüfsumme stimmt');
+    await fs.writeFile(path.join(dir, 'updates', 'install-0.3.8.log'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('Zeile eins\r\nZeile zwei\r\n', 'utf16le')]));
+    expect(await u.logs('installer')).toEqual(['# install-0.3.8.log', 'Zeile eins', 'Zeile zwei']);
+  });
+
   it('sichert den Core vor dem Installer; schlägt die Sicherung fehl, wird nicht aktualisiert', async () => {
     const order: string[] = [];
     const ok = updater({ beforeInstall: async () => void order.push('sicherung'), runner: { launch: async () => void order.push('installer') } }, [release('0.3.8')]);

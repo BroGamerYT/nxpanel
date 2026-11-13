@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { z } from 'zod';
+import { recentLogLines } from '../../logger.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { CoreUpdater, UpdateError, type FetchLike } from '../../update/core-update.js';
 import type { ServerRegistry } from '../../store/registry.js';
@@ -28,6 +30,30 @@ export function registerCoreUpdateRoutes(
   };
 
   server.get<{ Querystring: { refresh?: string } }>('/api/v1/admin/core-update', async (req) => updater.status(req.query.refresh === '1'));
+
+  const logsQuery = z.object({ source: z.enum(['update', 'installer', 'core', 'audit']), lines: z.coerce.number().int().min(10).max(1000).default(200) });
+  /** Die Protokolle zum Update (feste Quellen, kein frei waehlbarer Pfad). */
+  server.get('/api/v1/admin/core-update/logs', async (req, reply) => {
+    const q = logsQuery.safeParse(req.query);
+    if (!q.success) return reply.status(400).send({ error: q.error.issues[0]?.message ?? 'Ungültige Anfrage', code: 'invalid_request' });
+    const { source, lines } = q.data;
+    let out: string[];
+    if (source === 'update' || source === 'installer') out = await updater.logs(source, lines);
+    else if (source === 'core') {
+      const own = (l: string) => l.includes('/api/v1/admin/core-update');
+      out = recentLogLines(lines * 2).filter((l) => !own(l)).slice(-lines).map((l) => {
+        try {
+          const j = JSON.parse(l) as { time?: number; msg?: string; err?: { message?: string } };
+          return `${j.time ? new Date(j.time).toISOString() : ''} ${j.msg ?? l}${j.err?.message ? ` - ${j.err.message}` : ''}`.trim();
+        } catch {
+          return l;
+        }
+      });
+    } else {
+      out = registry.queryAudit({ limit: lines }).reverse().map((e) => `${e.ts} ${e.action} ${e.actorName ?? e.actor}${e.detail ? ' ' + JSON.stringify(e.detail) : ''}`);
+    }
+    return { source, lines: out };
+  });
 
   server.post('/api/v1/admin/core-update/install', async (_req, reply) => {
     try {

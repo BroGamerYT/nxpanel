@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -51,6 +51,40 @@ export interface UpdateStatus {
   error: string | null;
   state: UpdateState;
   message: string | null;
+  /** Fortschritt des laufenden Updates (null, wenn keins laeuft). */
+  progress: UpdateProgress | null;
+}
+
+export type UpdatePhase = 'check' | 'download' | 'verify' | 'backup' | 'install';
+
+export interface UpdateProgress {
+  phase: UpdatePhase;
+  /** 0-100, nur beim Download bekannt. */
+  percent: number | null;
+  bytes: number;
+  total: number;
+  startedAt: string;
+  /** Seit wann der Installer laeuft (der Core ist dann kurz weg). */
+  installStartedAt: string | null;
+  version: string | null;
+}
+
+export interface UpdateLogLine { ts: string; text: string }
+
+/** Liest die letzten Zeilen einer Textdatei (auch UTF-16 vom Windows Installer). */
+export async function tailFile(file: string, lines: number): Promise<string[]> {
+  let buf: Buffer;
+  try {
+    buf = await readFile(file);
+  } catch {
+    return [];
+  }
+  let text: string;
+  if (buf[0] === 0xff && buf[1] === 0xfe) text = buf.subarray(2).toString('utf16le');
+  else if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) text = buf.subarray(3).toString('utf8');
+  else text = buf.toString('utf8');
+  const all = text.split(/\r?\n/).filter((l) => l.length > 0);
+  return all.slice(-lines);
 }
 
 export class UpdateError extends Error {
@@ -148,6 +182,8 @@ export class CoreUpdater {
   private cache: { at: number; release: ReleaseInfo | null; error: string | null } | null = null;
   private state: UpdateState = 'idle';
   private message: string | null = null;
+  private progress: UpdateProgress | null = null;
+  private readonly lines: UpdateLogLine[] = [];
 
   constructor(private readonly o: CoreUpdaterOptions) {
     this.f = o.fetchImpl ?? fetch;
@@ -193,7 +229,40 @@ export class CoreUpdater {
       error: this.cache?.error ?? null,
       state: this.state,
       message: this.message,
+      progress: this.progress,
     };
+  }
+
+  private log(text: string): void {
+    const ts = new Date().toISOString();
+    this.lines.push({ ts, text });
+    if (this.lines.length > 500) this.lines.shift();
+    void mkdir(this.o.dir, { recursive: true })
+      .then(() => appendFile(path.join(this.o.dir, 'update.log'), `${ts} ${text}\n`))
+      .catch(() => undefined);
+  }
+
+  private step(phase: UpdatePhase, message: string, extra: Partial<UpdateProgress> = {}): void {
+    this.message = message;
+    this.progress = { ...(this.progress ?? { phase, percent: null, bytes: 0, total: 0, startedAt: new Date().toISOString(), installStartedAt: null, version: null }), phase, ...extra };
+    this.log(message);
+  }
+
+  /** Protokoll des Updates: das Update selbst (auch nach dem Neustart aus der Datei), das Installer-Protokoll der neuesten Version. */
+  async logs(source: 'update' | 'installer', lines = 300): Promise<string[]> {
+    if (source === 'update') {
+      const fromFile = await tailFile(path.join(this.o.dir, 'update.log'), lines);
+      return fromFile.length ? fromFile : this.lines.slice(-lines).map((l) => `${l.ts} ${l.text}`);
+    }
+    let names: string[] = [];
+    try {
+      names = (await readdir(this.o.dir)).filter((n) => /^install-\d+\.\d+\.\d+\.log$/.test(n));
+    } catch {
+      return [];
+    }
+    names.sort((a, b) => compareVersions(a.slice(8, -4), b.slice(8, -4)));
+    const last = names.at(-1);
+    return last ? [`# ${last}`, ...(await tailFile(path.join(this.o.dir, last), lines))] : [];
   }
 
   /** Laedt den neuesten Installer, prueft die Pruefsumme und startet ihn. Kehrt zurueck, sobald der Installer laeuft (der Core wird dabei neu gestartet). */
@@ -203,7 +272,8 @@ export class CoreUpdater {
     if (!supported) throw new UpdateError(reason ?? 'Update nicht möglich.', 409, 'not_supported');
     // Sofort belegen: ein zweiter Aufruf waehrend der Abfrage von GitHub darf nicht auch loslaufen
     this.state = 'downloading';
-    this.message = 'Prüfe die neueste Version …';
+    this.progress = null;
+    this.step('check', 'Prüfe die neueste Version …');
     let latest: ReleaseInfo | null;
     let asset: NonNullable<ReleaseInfo['asset']>;
     try {
@@ -216,10 +286,12 @@ export class CoreUpdater {
     } catch (err) {
       this.state = 'idle';
       this.message = null;
+      this.progress = null;
+      this.log(`Abgebrochen: ${err instanceof Error ? err.message : String(err)}`);
       throw err;
     }
 
-    this.message = `Lade ${ASSET_NAME} ${latest.version} …`;
+    this.step('download', `Lade ${ASSET_NAME} ${latest.version} …`, { version: latest.version, total: asset.size, percent: 0 });
     const file = path.join(this.o.dir, `NexusCore-${latest.version}.msi`);
     try {
       await mkdir(this.o.dir, { recursive: true });
@@ -232,28 +304,36 @@ export class CoreUpdater {
       const body = Readable.fromWeb(res.body as never);
       body.on('data', (chunk: Buffer) => {
         size += chunk.length;
+        const total = asset.size || declared;
+        if (this.progress) { this.progress.bytes = size; if (total) this.progress.percent = Math.min(100, Math.round((size / total) * 100)); }
         if (size > MAX_DOWNLOAD_BYTES) body.destroy(new Error('Der Installer ist unerwartet groß.'));
         hash.update(chunk);
       });
       await pipeline(body, createWriteStream(file));
+      this.step('verify', 'Prüfe die Prüfsumme …', { percent: 100 });
       const digest = hash.digest('hex');
       if (digest !== asset.sha256) throw new Error('Die Prüfsumme des Installers stimmt nicht - er wird nicht installiert.');
 
-      this.message = 'Sichere den Core vor dem Update …';
+      this.log('Prüfsumme stimmt.');
+      this.step('backup', 'Sichere den Core vor dem Update …', { percent: null });
       try {
         await this.o.beforeInstall?.();
       } catch (err) {
         throw new Error(`Sicherung vor dem Update fehlgeschlagen - es wird nicht aktualisiert: ${err instanceof Error ? err.message : String(err)}`);
       }
+      this.log('Sicherung fertig.');
       this.state = 'installing';
-      this.message = `Installiere Version ${latest.version} - der Core startet gleich neu.`;
+      this.step('install', `Installiere Version ${latest.version} - der Core startet gleich neu.`, { installStartedAt: new Date().toISOString() });
       this.o.audit?.('core.update', { from: this.current, to: latest.version, sha256: digest });
       await this.runner.launch(file, path.join(this.o.dir, `install-${latest.version}.log`), this.o.dir);
+      this.log('Installer gestartet (Aufgabenplaner, SYSTEM). Der Core wird beendet und neu gestartet.');
       return { version: latest.version };
     } catch (err) {
       await rm(file, { force: true }).catch(() => undefined);
       this.state = 'failed';
       this.message = err instanceof Error ? err.message : String(err);
+      this.progress = null;
+      this.log(`Fehler: ${this.message}`);
       throw new UpdateError(this.message, 502, 'update_failed');
     }
   }

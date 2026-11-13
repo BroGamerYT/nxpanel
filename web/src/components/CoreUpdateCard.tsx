@@ -4,6 +4,7 @@ import { Download, RefreshCw } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { Button, ErrorBox } from './ui';
 import type { ActiveTask } from '../lib/types';
+import { CoreUpdateModal, type UpdateProgress } from './CoreUpdateModal';
 
 interface UpdateStatus {
   current: string;
@@ -16,6 +17,7 @@ interface UpdateStatus {
   error: string | null;
   state: 'idle' | 'downloading' | 'installing' | 'failed';
   message: string | null;
+  progress: UpdateProgress | null;
 }
 
 /** Core-Update (nur Administratoren): neueste Version von GitHub, ein Klick laedt und installiert sie (Windows). */
@@ -23,11 +25,12 @@ export function CoreUpdateCard() {
   const qc = useQueryClient();
   // Nach dem Start des Installers ist der Core kurz weg: so lange immer wieder fragen, bis die neue Version antwortet
   const [target, setTarget] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   const status = useQuery<UpdateStatus>({
     queryKey: ['core-update'],
     queryFn: () => api('/admin/core-update'),
-    refetchInterval: target ? 3000 : false,
+    refetchInterval: target || open ? 2000 : false,
     retry: false,
     staleTime: 60_000,
   });
@@ -78,10 +81,7 @@ export function CoreUpdateCard() {
               variant="primary"
               busy={install.isPending || !!target}
               disabled={!!target}
-              onClick={() => {
-                const busy = running.length ? `\n\nAchtung, es läuft gerade:\n${running.map((t) => `• ${t.title} (${t.serverName}${t.progressPercent != null ? `, ${Math.round(t.progressPercent)} %` : ''})`).join('\n')}\nDas wird durch den Neustart abgebrochen.` : '';
-                if (window.confirm(`Version ${data.latest!.version} installieren?\n\nDer Core startet dabei neu, laufende Spiele werden kurz beendet. Das dauert einige Minuten.${busy}`)) install.mutate();
-              }}
+              onClick={() => { install.reset(); setOpen(true); }}
             >
               Jetzt aktualisieren{mb}
             </Button>
@@ -106,6 +106,20 @@ export function CoreUpdateCard() {
       {data.error && <p className="text-xs text-dim">GitHub nicht erreichbar: {data.error}</p>}
       {data.state === 'failed' && data.message && <ErrorBox>{data.message}</ErrorBox>}
       {err && <ErrorBox>{err}</ErrorBox>}
+      {open && data.latest && (
+        <CoreUpdateModal
+          version={data.latest.version}
+          sizeMb={mb}
+          running={running}
+          data={data}
+          started={!!target}
+          starting={install.isPending}
+          error={err}
+          coreDown={!!target && status.isError}
+          onStart={() => install.mutate()}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </section>
   );
 }

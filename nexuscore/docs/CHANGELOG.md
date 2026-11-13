@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [Unveröffentlicht]
+
+### Neu
+- **Update-Fenster:** „Jetzt aktualisieren“ öffnet ein Fenster mit Schritten (prüfen, laden, Prüfsumme, sichern, installieren, neu starten), Download-Balken, Zähler während der Core weg ist und vier Protokollen (Update, Installer, Core, Audit). Nach dem Neustart lädt sich die Seite selbst neu.
+
 ## [0.3.11] – 2026-11-14 – Update-Reparatur (Windows)
 
 ### Behoben
