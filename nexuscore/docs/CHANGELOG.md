@@ -2,6 +2,12 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn Dominik den Core für fertig erklärt.
 
+## [0.3.6] – 2026-11-13 – Oberfläche als App
+
+### Neu
+- Die Oberfläche lässt sich als App installieren (Web-App-Manifest und Symbole): in Chrome, Edge oder Opera erscheint „Als App installieren“; sie öffnet sich dann in einem eigenen Fenster ohne Adressleiste.
+- Windows-Installer: Startmenü-Eintrag „NexusCore öffnen“ öffnet die Oberfläche mit Edge im App-Modus.
+
 ## [0.3.5] – 2026-11-13 – Windows-Dienst startet
 
 ### Behoben

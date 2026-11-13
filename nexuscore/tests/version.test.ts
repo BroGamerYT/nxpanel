@@ -17,6 +17,17 @@ describe('Versionsnummer', () => {
     expect(parseChangelog(md)[0]?.version).toBe(CORE_VERSION);
   });
 
+  it('die Oberfläche lässt sich als App installieren (Manifest, Symbole) und der Installer legt eine App-Verknüpfung an', () => {
+    const web = path.resolve(root, '..', 'web');
+    const manifest = JSON.parse(fs.readFileSync(path.join(web, 'public', 'manifest.webmanifest'), 'utf8')) as { display: string; start_url: string; icons: Array<{ src: string; sizes: string }> };
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.start_url).toBe('/');
+    expect(manifest.icons.map((i) => i.sizes)).toEqual(expect.arrayContaining(['256x256', '512x512']));
+    for (const icon of manifest.icons) expect(fs.existsSync(path.join(web, 'public', icon.src)), icon.src).toBe(true);
+    expect(fs.readFileSync(path.join(web, 'index.html'), 'utf8')).toContain('rel="manifest"');
+    expect(fs.readFileSync(path.join(root, 'deploy', 'windows', 'NexusCore.wxs'), 'utf8')).toContain('--app=http://127.0.0.1:8443');
+  });
+
   it('der MSI-Bau nimmt die Version aus package.json statt einer festen Zahl', () => {
     const wxs = fs.readFileSync(path.join(root, 'deploy', 'windows', 'NexusCore.wxs'), 'utf8');
     expect(wxs).toContain('Version="$(CoreVersion)"');

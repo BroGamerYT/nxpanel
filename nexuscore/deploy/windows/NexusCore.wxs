@@ -78,6 +78,14 @@
 
     <Component Id="ProgramMenuDir" Directory="ApplicationProgramsFolder" Guid="724b0193-2940-410a-8bf6-11f87920ab32">
       <RemoveFolder Id="CleanUpProgramMenuDir" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <!-- "NexusCore öffnen": die Oberfläche in einem eigenen Fenster (Edge im App-Modus, ohne Adressleiste) -->
+      <Shortcut Id="NexusCoreOpenShortcut"
+                Directory="ApplicationProgramsFolder"
+                Name="NexusCore öffnen"
+                Description="Die NexusCore-Oberfläche als eigenes Fenster öffnen"
+                Target="[ProgramFilesFolder]Microsoft\Edge\Application\msedge.exe"
+                Arguments="--app=http://127.0.0.1:8443"
+                WorkingDirectory="INSTALLFOLDER" />
       <RegistryValue Root="HKCU" Key="Software\NexusPanel\NexusCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
