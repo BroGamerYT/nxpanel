@@ -19,7 +19,7 @@
     "ghcr.io/parkervcp/steamcmd:debian": "ghcr.io/parkervcp/steamcmd:debian"
   },
   "file_denylist": [],
-  "startup": "mkdir -p ~/.steam/sdk32 /home/container/.steam/sdk32 && (cp -f ./linux32/steamclient.so ~/.steam/sdk32/ 2>/dev/null || cp -f /home/container/steamcmd/linux32/steamclient.so ~/.steam/sdk32/ 2>/dev/null || true); ./svends_run -console -port {{SERVER_PORT}} +maxplayers {{SC_PLAYERS}} +map {{SC_MAP}} +ip 0.0.0.0 -strictportbind -norestart",
+  "startup": "rm -f ./steamclient.so; mkdir -p ~/.steam/sdk32 /home/container/.steam/sdk32 && (cp -f ./linux32/steamclient.so ~/.steam/sdk32/ 2>/dev/null || cp -f /home/container/steamcmd/linux32/steamclient.so ~/.steam/sdk32/ 2>/dev/null || true); ./svends_run -console -port {{SERVER_PORT}} +maxplayers {{SC_PLAYERS}} +map {{SC_MAP}} +ip 0.0.0.0 -strictportbind -norestart",
   "config": {
     "files": "{\r\n    \"svencoop/server.cfg\": {\r\n        \"parser\": \"file\",\r\n        \"find\": {\r\n            \"hostname\": \"hostname \\\"{{env.SC_NAME}}\\\"\",\r\n            \"sv_password\": \"sv_password \\\"{{env.SC_PASSWORD}}\\\"\",\r\n            \"//sv_password\": \"sv_password \\\"{{env.SC_PASSWORD}}\\\"\",\r\n            \"sv_region\": \"sv_region {{env.SC_REGION}}\"\r\n        }\r\n    }\r\n}",
     "startup": "{\r\n    \"done\": \"Connection to Steam servers successful.\"\r\n}",

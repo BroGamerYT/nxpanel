@@ -2,6 +2,14 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn Dominik den Core für fertig erklärt.
 
+## [0.3.2] – 2026-11-13 – Sven Co-op startet wieder
+
+### Behoben
+- Sven Co-op stürzte beim Start ab (Segfault, Code 130): Die Steam-Aktualisierung beim Start legt eine `steamclient.so` in den Spielordner, die der Server nicht verträgt. Das Egg löscht sie jetzt vor dem Start; der Server nutzt die Datei aus `.steam/sdk32`.
+
+### Offen
+- Astroneer beendet sich unter Proton still mit Code 0 (kein Spiel-Log). Ursache auf der Test-VM nicht geklärt; möglicherweise die CPU ohne AVX2 oder ein Proton-Problem. Test auf einem anderen Rechner steht aus.
+
 ## [0.3.1] – 2026-11-13 – Steam-Wiederholung auch beim Start
 
 ### Neu
