@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.10] – 2026-11-14 – Testversion für das Update-Verfahren
+
+### Geändert
+- Keine Funktionsänderung: diese Version dient nur dazu, das Update per Knopf (Admin-Hub → Core-Update) von 0.3.9 aus durchzuspielen.
+
 ## [0.3.9] – 2026-11-14 – Core-Sicherung, Reparatur und Sandbox-Test
 
 ### Neu
