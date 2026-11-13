@@ -30,6 +30,7 @@ const LICENSE_HINTS: Record<string, string> = {
   'left-4-dead-2': 'Braucht ein Steam-Konto mit L4D2-Lizenz - Valve erlaubt dafür keinen anonymen Download.',
   'farming-simulator-25': 'Braucht ein Steam-Konto mit FS25-Lizenz oder die GIANTS-Dateien im Ordner game/.',
   'arma-3': 'Braucht ein Steam-Konto mit Arma-3-Lizenz.',
+  'assetto-corsa': 'Braucht ein Steam-Konto mit Assetto-Corsa-Lizenz - der Server-Download ist nicht anonym (Steam: No subscription).',
 };
 
 /** Spiele, die bestimmte CPU-Befehle brauchen: Code 132 (SIGILL) heißt, dem Rechner fehlen sie. */
