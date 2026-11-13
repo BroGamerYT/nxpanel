@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { CORE_VERSION } from '../../version.js';
 import { config } from '../../config/index.js';
 import { describePlatform } from '../../platform/index.js';
 import { canSeeServer } from '../authz.js';
@@ -18,7 +19,7 @@ export function registerOverviewRoutes(ctx: ApiContext): void {
   server.get('/api/v1/about', async () => {
     return {
       name: 'NexusPanel Standalone (NexusCore)',
-      version: '0.2.0',
+      version: CORE_VERSION,
       build: 'standalone-native',
       sftp: { enabled: config.sftpEnabled && account !== null, port: config.sftpPort },
       // Welches System, welche Treiber, was es hier gibt (Firewall, Dienst) - die Oberflaeche blendet Unmoegliches aus

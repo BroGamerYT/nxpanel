@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="NexusCore Host Daemon" 
            Manufacturer="NexusPanel Team" 
-           Version="0.2.0" 
+           Version="$(CoreVersion)" 
            UpgradeCode="e38f6b01-5764-4e3a-92ea-df73cf763291" 
            Scope="perMachine">
     

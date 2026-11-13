@@ -51,7 +51,8 @@ npm run build:helper
 npm run build:service
 
 Write-Host "`n[4/4] Windows Installer MSI (WiX v5) erstellen..." -ForegroundColor Yellow
-wix build -arch x64 -b $ProjectRoot deploy\windows\NexusCore.wxs -o dist\NexusCore-Setup.msi
+$coreVersion = (Get-Content (Join-Path $NexusCoreDir 'package.json') -Raw | ConvertFrom-Json).version
+wix build -arch x64 -d CoreVersion=$coreVersion -b $ProjectRoot deploy\windows\NexusCore.wxs -o dist\NexusCore-Setup.msi
 
 Write-Host "`n=============================================" -ForegroundColor Green
 Write-Host "  Build erfolgreich abgeschlossen!" -ForegroundColor Green

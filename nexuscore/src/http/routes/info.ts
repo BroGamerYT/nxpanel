@@ -4,7 +4,9 @@ import { config } from '../../config/index.js';
 import { tokenFingerprint } from '../../protocol/security.js';
 import { getSystemMetrics } from '../../system/monitor.js';
 
-export const CORE_VERSION = '0.2.0';
+import { CORE_VERSION } from '../../version.js';
+
+export { CORE_VERSION };
 
 /**
  * Host-Status.

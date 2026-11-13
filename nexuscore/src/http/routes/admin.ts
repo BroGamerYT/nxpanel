@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { CORE_VERSION } from '../../version.js';
 import { z } from 'zod';
 import type { HostDriver } from '../../drivers/interface.js';
 import type { ServerRegistry } from '../../store/registry.js';
@@ -12,7 +13,7 @@ import { TesterError, type GameTester } from '../../testing/game-tester.js';
  * kein Rechtesystem: wer angemeldet ist, ist Admin.
  */
 
-export const CORE_VERSION = '0.2.0';
+export { CORE_VERSION };
 
 const auditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(2000).default(100),

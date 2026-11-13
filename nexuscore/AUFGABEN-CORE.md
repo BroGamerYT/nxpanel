@@ -1,7 +1,7 @@
 # NexusCore – Aufgabenliste für die Weiterentwicklung
 
 **Für:** die KI, die am Core weiterarbeitet
-**Stand:** 10.11.2026, 23:40 – Core 0.2.0, Panel 0.26.1 (Build 106)
+**Stand:** 13.11.2026 – Core 0.3.0 (Versionsnummer siehe `src/version.ts`), Panel 0.26.1 (Build 106). Die Abschnitte darunter stammen vom 10.11.; was seitdem fertig wurde, steht in `CHANGELOG.md` und `docs/ABNAHME-PANEL-CORE.md`.
 **Grundlage:** `docs/KONZEPT-NEXUSCORE-ECOSYSTEM.md` (v1.1.0), `nexuscore/CORE_PROTOCOL.md`, `docs/TODO.md`
 
 ---

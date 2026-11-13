@@ -12,7 +12,7 @@ wird und was die Firewall kann. Nichts sonst im Core hängt vom System ab (ein T
 | **Einrichten** | `scripts\install-service.ps1` | `sudo bash deploy/linux/install-core.sh` | `bash deploy/macos/install-core.sh` |
 | **Entfernen** | `scripts\uninstall-service.ps1` | `deploy/linux/uninstall-core.sh` | `deploy/macos/uninstall-core.sh` |
 | **Firewall je Spielprogramm** | ja (`netsh`) | nein — Docker umgeht die Rechner-Firewall, die Ports regelt die Firewall des Rechners | nein |
-| **Getestet** | ja, auf diesem PC (Dienst-Einrichtung braucht Administrator: nicht live geprüft) | Skripte per Probelauf; Docker-Weg gegen Docker Desktop. **Noch kein Lauf auf einer Linux-VM** | Skripte nur per Probelauf. **Noch kein Lauf auf einem Mac** |
+| **Getestet** | ja, auf diesem PC (Dienst-Einrichtung braucht Administrator: nicht live geprüft) | Auf einer echten Debian-12-VM (Docker) getestet: Dienst, Updates und ein Gesamtlauf über alle 47 Spiele (39 bestanden, Stand 13.11.2026; der Rest braucht eine Steam-Lizenz, eine CPU mit AVX2 oder wird noch geprüft). **Noch kein Lauf auf einer frischen Hyper-V-VM mit dem Installer** | Skripte nur per Probelauf. **Noch kein Lauf auf einem Mac** |
 
 ## Gemeinsam auf allen Systemen
 
