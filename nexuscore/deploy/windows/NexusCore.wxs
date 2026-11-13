@@ -39,8 +39,10 @@
                         Type="ownProcess"
                         Start="auto"
                         ErrorControl="normal"
-                        Arguments="service --name NexusCore --workdir &quot;[INSTALLFOLDER]&quot; --log &quot;[CommonAppDataFolder]NexusCore\logs\core.log&quot; --grace 100 -- &quot;[INSTALLFOLDER]nexuscore.exe&quot;">
-          <!-- Absturz des Cores faengt nxsvc selbst ab (Neustart nach 2 s, dann 4, 8 ... bis 60 s). Wiederherstellungsaktionen der Dienststeuerung
+                        Arguments="service --name NexusCore --workdir &quot;[INSTALLFOLDER]\&quot; --log &quot;[CommonAppDataFolder]NexusCore\logs\core.log&quot; --grace 100 -- &quot;[INSTALLFOLDER]nexuscore.exe&quot;">
+          <!-- ACHTUNG: [INSTALLFOLDER] endet mit \ - vor dem schliessenden Anfuehrungszeichen muss er verdoppelt werden (\\"), sonst gilt \" als
+               Anfuehrungszeichen im Text und nxsvc meldet "Es fehlt das Programm" (Dienst startet nicht).
+               Absturz des Cores faengt nxsvc selbst ab (Neustart nach 2 s, dann 4, 8 ... bis 60 s). Wiederherstellungsaktionen der Dienststeuerung
                fuer nxsvc selbst setzt scripts/install-service.ps1 (sc failure); im MSI braeuchte es die Util-Erweiterung. -->
         </ServiceInstall>
         <ServiceControl Id="NexusCoreServiceControl" Name="NexusCore" Start="install" Stop="both" Remove="uninstall" Wait="yes" />

@@ -24,6 +24,8 @@ describe('Versionsnummer', () => {
     for (const dir of ['WebFolder', 'EggsFolder', 'DocsFolder']) expect(wxs).toContain(`Directory="${dir}"`);
     const script = fs.readFileSync(path.join(root, 'scripts', 'build-windows-package.ps1'), 'utf8');
     expect(script).toContain('-d CoreVersion=');
+    // Ordner mit \ am Ende vor dem Anfuehrungszeichen verdoppeln, sonst zerlegt Windows die Befehlszeile des Dienstes falsch
+    expect(wxs).toContain('--workdir &quot;[INSTALLFOLDER]\\&quot;');
     // Im gebuendelten Code (Node SEA) gibt es kein import.meta.url - ohne diesen Ersatz stuerzt die nexuscore.exe beim Start ab
     expect(script).toContain('--define:import.meta.url=__IMPORT_META_URL');
     expect(fs.readFileSync(path.join(root, 'scripts', 'sea-shim.js'), 'utf8')).toContain('__IMPORT_META_URL');

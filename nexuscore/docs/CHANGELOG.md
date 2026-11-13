@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn Dominik den Core für fertig erklärt.
 
+## [0.3.5] – 2026-11-13 – Windows-Dienst startet
+
+### Behoben
+- Der Dienst „NexusCore Host Daemon“ startete nach der Installation nicht: der Arbeitsordner `[INSTALLFOLDER]` endet mit `\`, und `\"` zerlegte die Befehlszeile des Dienstes (`nxsvc`: „Es fehlt das Programm“). Der Backslash wird jetzt verdoppelt.
+
 ## [0.3.4] – 2026-11-13 – Windows-Installer enthält Oberfläche und Spielvorlagen
 
 ### Neu
