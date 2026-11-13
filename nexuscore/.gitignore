@@ -4,3 +4,7 @@ data/
 *.log
 .env
 
+
+ERSTES-PASSWORT.txt
+panel-export*.json
+*.sql.gz
