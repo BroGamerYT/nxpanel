@@ -2,6 +2,15 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn Dominik den Core für fertig erklärt.
 
+## [0.3.1] – 2026-11-13 – Steam-Wiederholung auch beim Start
+
+### Neu
+- Testlauf: Steam meldet beim anonymen Start oft erst beim 2. oder 3. Versuch Erfolg („Missing configuration“). Der Test startet das Spiel deshalb bis zu dreimal (Satisfactory und V Rising laufen damit durch).
+- Testbericht nennt die fehlende Lizenz bei Assetto Corsa.
+
+### Offen
+- Astroneer (beendet sich unter Proton still mit Code 0) und Sven Co-op (Absturz in `svends`, Code 130) scheitern weiterhin; Ursache noch unklar.
+
 ## [0.3.0] – 2026-11-13 – Linux-Test auf echter VM, Installer-Log, Steam-Wiederholung
 
 ### Neu

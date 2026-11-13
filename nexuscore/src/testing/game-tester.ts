@@ -43,6 +43,9 @@ function hintFor(eggId: string, summary: string): string | undefined {
   return LICENSE_HINTS[eggId];
 }
 
+/** Steam-Fehler beim Start, die ein erneuter Versuch meist behebt. */
+const STEAM_START_TRANSIENT = /Failed to install app '\d+' \((?:Missing configuration|No connection|Timeout|Connection (?:reset|refused)|Service unavailable|Rate limit)/i;
+
 export type TestStatus = 'SUCCESS' | 'INSTALL_FAILED' | 'START_CRASHED' | 'TIMEOUT';
 export type TestMode = 'resume' | 'fresh' | 'retry-failed';
 
@@ -412,14 +415,19 @@ export class GameTester {
       if (this.stopRequested) return fail('INSTALL_FAILED', 'Angehalten', installSec, 0);
 
       // 2) Start und Bereitschaft
-      const t1 = Date.now();
-      await power.start(id);
+      let t1 = Date.now();
       const timeoutMs = (options.timeout ?? 20) * 60_000;
       const settleMs = this.deps.settleMs ?? 60_000;
       const poll = this.deps.pollMs ?? 3000;
       const port = installed.ports[0]?.hostPort ?? firstPort;
       let outcome: TestResult | null = null;
+      // Viele Eggs laden den Server beim Start per steamcmd; Steam antwortet anonym oft erst beim 2. oder 3. Versuch
+      // ("Missing configuration"). Das ist kein Fehler des Spiels, deshalb startet der Test bis zu dreimal.
+      for (let attempt = 1; ; attempt++) {
+      t1 = Date.now();
+      outcome = null;
       let runningSince: number | null = null;
+      await power.start(id);
       while (!outcome) {
         await this.sleep(poll);
         const elapsed = Date.now() - t1;
@@ -442,6 +450,13 @@ export class GameTester {
         if (!outcome && elapsed > timeoutMs) {
           outcome = fail('TIMEOUT', `Nach ${options.timeout ?? 20} Minuten nicht bereit`, installSec, Math.round(elapsed / 1000));
         }
+      }
+      if (outcome.status === 'START_CRASHED' && attempt < 3 && STEAM_START_TRANSIENT.test(this.excerpt(id))) {
+        await this.log(`${testCase.name}: Steam meldet einen vorübergehenden Fehler beim Start - Versuch ${attempt + 1} von 3`);
+        await this.sleep(this.deps.settleMs === undefined ? 20_000 : 0);
+        continue;
+      }
+      break;
       }
       // 3) Stoppen (das Ergebnis steht fest, auch wenn das Stoppen holpert)
       await power.stop(id).catch(() => {});
