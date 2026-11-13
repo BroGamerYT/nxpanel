@@ -2,6 +2,12 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.11] – 2026-11-14 – Update-Reparatur (Windows)
+
+### Behoben
+- Das Update per Knopf hat die neue `nexuscore.exe` nicht installiert (MSI hielt die alte Exe wegen der Node-Versionsnummer für gleich/neuer); der Dienst startete nicht und die Installation wurde zurückgerollt, nachdem die alte Version schon entfernt war.
+- Die Exe-Komponente hat je Version eine eigene GUID, die alte Version wird erst nach erfolgreicher Neuinstallation entfernt (bei Fehlern bleibt sie erhalten), und der Installer wartet nicht mehr auf den Dienststart.
+
 ## [0.3.10] – 2026-11-14 – Testversion für das Update-Verfahren
 
 ### Geändert

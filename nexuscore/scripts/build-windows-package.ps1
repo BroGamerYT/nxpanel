@@ -52,7 +52,12 @@ npm run build:service
 
 Write-Host "`n[4/4] Windows Installer MSI (WiX v5) erstellen..." -ForegroundColor Yellow
 $coreVersion = (Get-Content (Join-Path $NexusCoreDir 'package.json') -Raw | ConvertFrom-Json).version
-wix build -arch x64 -ext WixToolset.UI.wixext -culture de-DE -d CoreVersion=$coreVersion -b $ProjectRoot -b (Join-Path $NexusCoreDir 'deploy\windows') deploy\windows\NexusCore.wxs -o dist\NexusCore-Setup.msi
+# Die Exe traegt eine Node-Versionsnummer: bei gleicher Komponenten-GUID haelt MSI die alte Exe fuer gleich/neuer und installiert die neue nicht.
+# Darum bekommt die Komponente je Version eine eigene, aus der Version abgeleitete GUID.
+$md5 = [System.Security.Cryptography.MD5]::Create()
+$exeGuid = [guid]::new($md5.ComputeHash([Text.Encoding]::UTF8.GetBytes("nexuscore-exe-$coreVersion"))).ToString()
+
+wix build -arch x64 -ext WixToolset.UI.wixext -culture de-DE -d CoreVersion=$coreVersion -d ExeGuid=$exeGuid -b $ProjectRoot -b (Join-Path $NexusCoreDir 'deploy\windows') deploy\windows\NexusCore.wxs -o dist\NexusCore-Setup.msi
 if ($LASTEXITCODE -ne 0) { throw "wix build ist fehlgeschlagen (Code $LASTEXITCODE) - die MSI ist nicht aktuell." }
 
 Write-Host "`n=============================================" -ForegroundColor Green

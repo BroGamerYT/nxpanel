@@ -5,7 +5,7 @@
            UpgradeCode="e38f6b01-5764-4e3a-92ea-df73cf763291" 
            Scope="perMachine">
     
-    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von NexusCore ist bereits installiert." />
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von NexusCore ist bereits installiert." Schedule="afterInstallExecute" />
 
     <!-- Das NexusPanel-Symbol: in "Apps & Features" und an den Verknuepfungen (erzeugt von scripts/make-icon.py) -->
     <Icon Id="NexusIcon" SourceFile="nexuscore.ico" />
@@ -27,7 +27,7 @@
     </StandardDirectory>
 
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <Component Id="NexusCoreExe" Guid="9a8e742a-1163-4482-bb34-8c01b44ec401">
+      <Component Id="NexusCoreExe" Guid="$(ExeGuid)">
         <File Id="NexusCoreExeFile" Source="nexuscore\dist\nexuscore.exe" KeyPath="yes" />
         <Shortcut Id="NexusCoreStartMenuShortcut" 
                   Directory="ApplicationProgramsFolder" 
@@ -51,7 +51,7 @@
                Absturz des Cores faengt nxsvc selbst ab (Neustart nach 2 s, dann 4, 8 ... bis 60 s). Wiederherstellungsaktionen der Dienststeuerung
                fuer nxsvc selbst setzt scripts/install-service.ps1 (sc failure); im MSI braeuchte es die Util-Erweiterung. -->
         </ServiceInstall>
-        <ServiceControl Id="NexusCoreServiceControl" Name="NexusCore" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+        <ServiceControl Id="NexusCoreServiceControl" Name="NexusCore" Start="install" Stop="both" Remove="uninstall" Wait="no" />
       </Component>
       <!-- Hilfsprogramm fuer harte Grenzen (Job Objects) -->
       <Component Id="NexusCoreJobHelper" Guid="b7e3f2a8-6d41-4c19-8a55-3f0c9e1d2b67">
