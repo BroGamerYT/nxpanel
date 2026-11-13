@@ -4,7 +4,12 @@ Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, we
 
 ## [0.3.4] – 2026-11-13 – Windows-Installer enthält Oberfläche und Spielvorlagen
 
+### Neu
+- Der Windows-Installer hat jetzt ein Installationsfenster mit Willkommensseite, Zielordner, Fortschrittsbalken und Fertig-Seite (Deutsch).
+
 ### Behoben
+- Die `nexuscore.exe` stürzte beim Start sofort ab (`fileURLToPath(undefined)`): im gebündelten Code fehlte `import.meta.url`. Der Dienst „NexusCore Host Daemon“ konnte deshalb nach der Installation nie starten. Der Bau setzt jetzt den Ort der Programmdatei dafür ein.
+- Der Bau-Skript meldete „erfolgreich“, auch wenn der MSI-Bau fehlschlug; jetzt bricht es ab.
 - Der Windows-Installer (MSI) enthielt nur die Programme, aber weder die Weboberfläche noch die Spielvorlagen (`eggs`) noch die Doku. Ein damit installierter Core hätte keine Oberfläche und keine Spiele gehabt. Jetzt liegen `web`, `eggs` und `docs` neben `nexuscore.exe`.
 
 ## [0.3.3] – 2026-11-13 – Schnelleres Dashboard, Modpack-Version wählbar, Hilfe gefüllt

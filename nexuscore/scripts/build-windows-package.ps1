@@ -24,7 +24,7 @@ npm run build
 
 Write-Host "`n[2/4] Standalone Bundle mit ESBuild schnüren..." -ForegroundColor Yellow
 $esbuild = Join-Path $ProjectRoot 'node_modules\.bin\esbuild.cmd'
-& $esbuild dist/index.js --bundle --platform=node --target=node22 --outfile=dist/bundle.cjs --format=cjs --define:process.env.NEXUSCORE_STANDALONE='"1"'
+& $esbuild dist/index.js --bundle --platform=node --target=node22 --outfile=dist/bundle.cjs --format=cjs --define:process.env.NEXUSCORE_STANDALONE='"1"' --inject:scripts/sea-shim.js --define:import.meta.url=__IMPORT_META_URL
 
 Write-Host "`n[3/4] Native nexuscore.exe (Node SEA) erzeugen..." -ForegroundColor Yellow
 Set-Content -Path dist\sea-config.json -Value '{"main": "dist/bundle.cjs", "output": "dist/sea-prep.blob", "disableExperimentalSEAWarning": true}'
@@ -52,7 +52,8 @@ npm run build:service
 
 Write-Host "`n[4/4] Windows Installer MSI (WiX v5) erstellen..." -ForegroundColor Yellow
 $coreVersion = (Get-Content (Join-Path $NexusCoreDir 'package.json') -Raw | ConvertFrom-Json).version
-wix build -arch x64 -d CoreVersion=$coreVersion -b $ProjectRoot deploy\windows\NexusCore.wxs -o dist\NexusCore-Setup.msi
+wix build -arch x64 -ext WixToolset.UI.wixext -culture de-DE -d CoreVersion=$coreVersion -b $ProjectRoot -b (Join-Path $NexusCoreDir 'deploy\windows') deploy\windows\NexusCore.wxs -o dist\NexusCore-Setup.msi
+if ($LASTEXITCODE -ne 0) { throw "wix build ist fehlgeschlagen (Code $LASTEXITCODE) - die MSI ist nicht aktuell." }
 
 Write-Host "`n=============================================" -ForegroundColor Green
 Write-Host "  Build erfolgreich abgeschlossen!" -ForegroundColor Green

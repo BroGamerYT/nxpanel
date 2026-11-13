@@ -1,4 +1,4 @@
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="NexusCore Host Daemon" 
            Manufacturer="NexusPanel Team" 
            Version="$(CoreVersion)" 
@@ -78,6 +78,10 @@
       <RemoveFolder Id="CleanUpProgramMenuDir" Directory="ApplicationProgramsFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\NexusPanel\NexusCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
     </Component>
+
+    <!-- Installationsfenster: Willkommen, Zielordner, Fortschrittsbalken mit Dateinamen, Fertig-Seite -->
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
 
     <Feature Id="MainFeature" Title="NexusCore Host Daemon" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
