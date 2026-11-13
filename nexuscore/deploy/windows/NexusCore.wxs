@@ -6,6 +6,10 @@
            Scope="perMachine">
     
     <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von NexusCore ist bereits installiert." />
+
+    <!-- Das NexusPanel-Symbol: in "Apps & Features" und an den Verknuepfungen (erzeugt von scripts/make-icon.py) -->
+    <Icon Id="NexusIcon" SourceFile="nexuscore.ico" />
+    <Property Id="ARPPRODUCTICON" Value="NexusIcon" />
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
@@ -15,6 +19,8 @@
         <Directory Id="DocsFolder" Name="docs" />
       </Directory>
     </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
 
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="ApplicationProgramsFolder" Name="NexusCore" />
@@ -85,7 +91,8 @@
                 Description="Die NexusCore-Oberfläche als eigenes Fenster öffnen"
                 Target="[ProgramFilesFolder]Microsoft\Edge\Application\msedge.exe"
                 Arguments="--app=http://127.0.0.1:8443"
-                WorkingDirectory="INSTALLFOLDER" />
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="NexusIcon" />
       <RegistryValue Root="HKCU" Key="Software\NexusPanel\NexusCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
@@ -93,12 +100,25 @@
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
 
+    <!-- Verknuepfung auf dem Desktop: die Oberflaeche im eigenen Fenster -->
+    <Component Id="DesktopShortcutComponent" Directory="DesktopFolder" Guid="8c3f5e21-4b7a-4d19-a0e6-2f9d1b7c3a54">
+      <Shortcut Id="NexusCoreDesktopShortcut"
+                Name="NexusCore"
+                Description="Die NexusCore-Oberfläche als eigenes Fenster öffnen"
+                Target="[ProgramFilesFolder]Microsoft\Edge\Application\msedge.exe"
+                Arguments="--app=http://127.0.0.1:8443"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="NexusIcon" />
+      <RegistryValue Root="HKCU" Key="Software\NexusPanel\NexusCore" Name="desktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
     <Feature Id="MainFeature" Title="NexusCore Host Daemon" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
       <ComponentGroupRef Id="WebFiles" />
       <ComponentGroupRef Id="EggFiles" />
       <ComponentGroupRef Id="DocFiles" />
       <ComponentRef Id="ProgramMenuDir" />
+      <ComponentRef Id="DesktopShortcutComponent" />
     </Feature>
   </Package>
 </Wix>

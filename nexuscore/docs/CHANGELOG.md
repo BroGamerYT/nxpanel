@@ -2,6 +2,12 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.7] – 2026-11-13 – Desktop-Symbol und eigenes Icon
+
+### Neu
+- Der Windows-Installer legt ein Symbol „NexusCore“ auf dem Desktop an (öffnet die Oberfläche im eigenen Fenster).
+- Das NexusPanel-Symbol gehört jetzt zu Desktop- und Startmenü-Verknüpfungen und zum Eintrag unter „Apps & Features“ (`deploy/windows/nexuscore.ico`, erzeugt mit `scripts/make-icon.py`).
+
 ## [0.3.6] – 2026-11-13 – Oberfläche als App
 
 ### Neu

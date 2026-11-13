@@ -25,7 +25,12 @@ describe('Versionsnummer', () => {
     expect(manifest.icons.map((i) => i.sizes)).toEqual(expect.arrayContaining(['256x256', '512x512']));
     for (const icon of manifest.icons) expect(fs.existsSync(path.join(web, 'public', icon.src)), icon.src).toBe(true);
     expect(fs.readFileSync(path.join(web, 'index.html'), 'utf8')).toContain('rel="manifest"');
-    expect(fs.readFileSync(path.join(root, 'deploy', 'windows', 'NexusCore.wxs'), 'utf8')).toContain('--app=http://127.0.0.1:8443');
+    const wxs = fs.readFileSync(path.join(root, 'deploy', 'windows', 'NexusCore.wxs'), 'utf8');
+    expect(wxs).toContain('--app=http://127.0.0.1:8443');
+    // Symbol auf dem Desktop und im Startmenue, eigenes Icon statt dem von Edge
+    expect(wxs).toContain('NexusCoreDesktopShortcut');
+    expect(wxs).toContain('ARPPRODUCTICON');
+    expect(fs.statSync(path.join(root, 'deploy', 'windows', 'nexuscore.ico')).size).toBeGreaterThan(1000);
   });
 
   it('der MSI-Bau nimmt die Version aus package.json statt einer festen Zahl', () => {
