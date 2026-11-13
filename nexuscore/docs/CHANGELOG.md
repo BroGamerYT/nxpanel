@@ -2,6 +2,16 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn Dominik den Core für fertig erklärt.
 
+## [0.3.3] – 2026-11-13 – Schnelleres Dashboard, Modpack-Version wählbar, Hilfe gefüllt
+
+### Neu
+- Modpack-Version beim Anlegen wählbar: Unter „Leistung“ steht eine Liste aller Versionen (neueste vorausgewählt); die Java-Version stellt sich passend ein (`GET /api/v1/modpacks/versions`).
+- „Hilfe & Doku“: „Was ist neu“, „Geplant“ und „Entwickler-Log“ sind nicht mehr leer, sie lesen `CHANGELOG.md`, `TODO.md` und `ENTWICKLUNGSLOG.md` aus den docs-Ordnern.
+
+### Geändert
+- Server-Übersicht (Dashboard) lädt viel schneller: die Auslastung der Server wird gleichzeitig statt nacheinander gemessen (vorher rund 5 s bei 3 Servern), gleichzeitige Anfragen teilen sich eine Messung und frische Werte kommen aus einem kurzen Zwischenspeicher.
+- Der Changelog des Cores liegt jetzt in `docs/CHANGELOG.md`.
+
 ## [0.3.2] – 2026-11-13 – Sven Co-op startet wieder
 
 ### Behoben

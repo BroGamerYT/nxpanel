@@ -178,7 +178,7 @@ Bei jeder Änderung, die man als Nutzer merkt, in dieser Reihenfolge:
 
 1. Versionsnummer erhöhen: `src/version.ts` **und** `package.json` (ein Test prüft, dass beide gleich sind).
    Neue Funktion: mittlere Zahl, Fehlerbehebung: letzte Zahl.
-2. Eintrag oben in `CHANGELOG.md` schreiben.
+2. Eintrag oben in `docs/CHANGELOG.md` schreiben.
 3. Betroffene Doku anpassen (`docs/INSTALLATION.md`, `docs/ABNAHME-PANEL-CORE.md`, diese Datei).
 4. Tests und Typecheck: `npm test` und `npx tsc --noEmit`.
 5. Windows-Installer neu bauen: `pwsh scripts/build-windows-package.ps1` (die MSI-Version kommt automatisch aus `package.json`).

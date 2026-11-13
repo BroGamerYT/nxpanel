@@ -107,7 +107,7 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/auth\//, need: { kind: 'user' } },
 
   // ------------------------------------------------- allgemein (filtert selbst)
-  { methods: GET, pattern: /^\/api\/v1\/(about|dashboard|dashboard\/activity|notifications|tasks\/active|eggs|eggs\/:id|eggs\/:id\/cover|eggs\/branding|presence|docs|docs\/:slug|modpacks\/search|modpacks\/curseforge)$/, need: { kind: 'user' } },
+  { methods: GET, pattern: /^\/api\/v1\/(about|dashboard|dashboard\/activity|notifications|tasks\/active|eggs|eggs\/:id|eggs\/:id\/cover|eggs\/branding|presence|docs|docs\/:slug|modpacks\/search|modpacks\/versions|modpacks\/curseforge)$/, need: { kind: 'user' } },
   { methods: ['POST'], pattern: /^\/api\/v1\/(presence\/ping|live\/ws-ticket)$/, need: { kind: 'user' } },
   { methods: GET, pattern: /^\/api\/v1\/live\/ws$/, need: { kind: 'user' } },
   { methods: GET, pattern: /^\/api\/v1\/servers$/, need: { kind: 'user' } },

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { checkCurseForgeKey, packOf, packStatus, presetFor, searchPacks, type PackSource } from '../../games/modpacks.js';
+import { checkCurseForgeKey, packOf, packStatus, packVersionChoices, presetFor, searchPacks, type PackSource } from '../../games/modpacks.js';
 import type { ModpackUpdater } from '../../servers/modpack-update.js';
 import type { ServerRegistry } from '../../store/registry.js';
 import type { SecretStore } from '../../store/secrets.js';
@@ -20,6 +20,11 @@ const CURSEFORGE_SECRET = 'curseforge';
 const searchQuery = z.object({
   q: z.string().trim().min(2).max(80),
   source: z.enum(['all', 'curseforge', 'modrinth', 'ftb']).default('all'),
+});
+
+const versionsQuery = z.object({
+  source: z.enum(['curseforge', 'modrinth', 'ftb']),
+  ref: z.string().trim().min(1).max(120),
 });
 
 export interface ModpackRouteDeps {
@@ -44,6 +49,17 @@ export function registerModpackRoutes(server: FastifyInstance, deps: ModpackRout
     if (!q.success) return fail(reply, 400, 'Suchbegriff: 2 bis 80 Zeichen', 'invalid_request');
     const r = await searchPacks(q.data.q, { sources: q.data.source === 'all' ? [] : [q.data.source as PackSource], cfKey: key() });
     return { ...r, hits: r.hits.map((h) => ({ ...h, preset: presetFor(h) })) };
+  });
+
+  /** Alle Versionen eines Packs (neueste zuerst) - fuer die Auswahl beim Anlegen. */
+  server.get<{ Querystring: unknown }>('/api/v1/modpacks/versions', async (req, reply) => {
+    const q = versionsQuery.safeParse(req.query);
+    if (!q.success) return fail(reply, 400, 'Quelle und Pack-Kennung angeben', 'invalid_request');
+    try {
+      return { versions: await packVersionChoices({ source: q.data.source, ref: q.data.ref }, key()) };
+    } catch (err) {
+      return fail(reply, 502, err instanceof Error ? err.message : 'Versionen nicht abrufbar', 'upstream_error');
+    }
   });
 
   /** Ist ein CurseForge-Schluessel hinterlegt? (Der Schluessel selbst geht nie raus.) */

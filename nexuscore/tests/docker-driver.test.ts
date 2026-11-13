@@ -248,6 +248,24 @@ describe('DockerDriver', () => {
     expect(stats.status).toBe('running');
   });
 
+  it('Kennzahlen: gleichzeitige Anfragen teilen sich eine Messung, frische Werte kommen aus dem Zwischenspeicher', async () => {
+    const { docker, driver } = await setup();
+    await driver.startServer('mc-1');
+    const container = docker.containers.get('nxc-mc-1')!;
+    let calls = 0;
+    const real = container.stats.bind(container);
+    container.stats = async () => {
+      calls++;
+      await new Promise((r) => setTimeout(r, 30));
+      return real();
+    };
+    const [a, b, c] = await Promise.all([driver.getServerStats('mc-1'), driver.getServerStats('mc-1'), driver.getServerStats('mc-1')]);
+    expect(calls).toBe(1);
+    expect([a.cpuPercent, b.cpuPercent, c.cpuPercent]).toEqual([80, 80, 80]);
+    await driver.getServerStats('mc-1'); // unter 2 s alt: keine neue Messung
+    expect(calls).toBe(1);
+  });
+
   it('Gaming-Modus: weniger CPU-Anteil und wieder normal', async () => {
     const { docker, driver } = await setup();
     expect(await driver.setPriority!('mc-1', 'low')).toBe(0); // läuft nicht: nichts zu tun

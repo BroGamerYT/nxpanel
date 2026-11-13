@@ -122,6 +122,18 @@ describe('Suche und Schlüssel', () => {
     expect(urls.some((u) => u.includes('api.curseforge.com'))).toBe(false);
   });
 
+  it('liefert alle Versionen eines Packs zum Auswählen, mit passender Java-Version', async () => {
+    fakeNet();
+    clearPackCache();
+    expect((await call('GET', '/api/v1/modpacks/versions?source=modrinth&ref=cool-pack', {})).statusCode).toBe(401);
+    expect((await call('GET', '/api/v1/modpacks/versions?source=gibtsnicht&ref=x')).statusCode).toBe(400);
+    expect((await call('GET', '/api/v1/modpacks/versions?source=modrinth')).statusCode).toBe(400);
+    const res = (await call('GET', '/api/v1/modpacks/versions?source=modrinth&ref=cool-pack')).json();
+    expect(res.versions.map((v: { id: string }) => v.id)).toEqual(['v2', 'v1']);
+    expect(res.versions[0]).toMatchObject({ mcVersion: '1.21', java: 21 });
+    expect(res.versions[1]).toMatchObject({ mcVersion: '1.20.1', java: 17 });
+  });
+
   it('fällt Modrinth aus, kommt eine Meldung statt eines Absturzes', async () => {
     fakeNet();
     modrinthDown = true;

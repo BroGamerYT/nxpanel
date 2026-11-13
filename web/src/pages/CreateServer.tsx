@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, FileArchive, Image as ImageIcon, LayoutGrid, List as ListIcon, Package, Search } from 'lucide-react';
@@ -11,7 +11,7 @@ import { FromBackup, sourceLabel, type BackupPreset } from '../components/FromBa
 import { t, tn } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { CoverPicker, GameCover } from '../components/GameCover';
-import { ModpackSearch, type ModpackChoice } from '../components/ModpackSearch';
+import { ModpackSearch, type ModpackChoice, type PackVersionChoice } from '../components/ModpackSearch';
 import { EggImport } from '../components/EggImport';
 
 /**
@@ -234,6 +234,30 @@ function Form({ egg, step, setStep, preset, pack }: { egg: EggDetail; step: numb
   const defaultImage = egg.images.find((i) => i.default)?.key ?? egg.images[0]?.key ?? '';
   // Modpack: Java passend zur Minecraft-Version des Packs
   const [imageKey, setImageKey] = useState(() => (pack && egg.images.find((i) => i.image.includes(`java${pack.java}`))?.key) || defaultImage);
+  // Modpack: alle Versionen zur Auswahl (Standard: die neueste, schon eingetragen)
+  const packVersions = useQuery({
+    queryKey: ['pack-versions', pack?.source, pack?.ref],
+    queryFn: () => api<{ versions: PackVersionChoice[] }>(`/modpacks/versions?source=${pack!.source}&ref=${encodeURIComponent(pack!.ref!)}`),
+    enabled: !!pack?.source && !!pack?.ref && !!pack?.versionVar,
+    staleTime: 15 * 60_000,
+    retry: false,
+  });
+  function pickPackVersion(id: string) {
+    const varName = pack?.versionVar;
+    if (!varName) return;
+    setVals((cur) => ({ ...cur, [varName]: id }));
+    const v = packVersions.data?.versions.find((x) => x.id === id);
+    const image = v && egg.images.find((i) => i.image.includes(`java${v.java}`));
+    if (image) setImageKey(image.key);
+  }
+  // Die Suche nennt manchmal eine Version, die nicht in der Liste steht (z. B. eine Vorabversion): dann die neueste der Liste einstellen
+  useEffect(() => {
+    const list = packVersions.data?.versions;
+    const varName = pack?.versionVar;
+    if (!list?.length || !varName) return;
+    if (!list.some((v) => v.id === vals[varName])) pickPackVersion(list[0]!.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packVersions.data]);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -291,6 +315,19 @@ function Form({ egg, step, setStep, preset, pack }: { egg: EggDetail; step: numb
             <p>{tn('pack.banner', { pack: <span className="font-medium">{pack.label}</span> })}</p>
             <p className="text-dim">{pack.file ? t('pack.bannerFile') : t('pack.bannerText')}</p>
           </div>
+        )}
+        {pack?.versionVar && (
+          <Field label={t('pack.chooseVersion')} htmlFor="pack-version"
+            hint={packVersions.isLoading ? t('pack.versionLoading') : packVersions.isError ? t('pack.versionError') : t('pack.versionHint')}>
+            <Select id="pack-version" value={vals[pack.versionVar] ?? ''} disabled={!packVersions.data?.versions.length} onChange={(e) => pickPackVersion(e.target.value)}>
+              {(packVersions.data?.versions ?? []).map((v, i) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}{v.mcVersion ? ` · Minecraft ${v.mcVersion}` : ''}{v.date ? ` · ${v.date.slice(0, 10)}` : ''}{i === 0 ? ` (${t('pack.versionLatest')})` : ''}
+                </option>
+              ))}
+              {!packVersions.data?.versions.some((v) => v.id === vals[pack.versionVar!]) && <option value={vals[pack.versionVar] ?? ''}>{vals[pack.versionVar] || '…'}</option>}
+            </Select>
+          </Field>
         )}
         <Field label={t('settings.name')} htmlFor="name" hint={t('create.nameHint')}>
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus />

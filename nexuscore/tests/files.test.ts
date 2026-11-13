@@ -477,7 +477,7 @@ describe('Funktionsliste des Cores', () => {
       expect(res.json.features, missing).not.toContain(missing);
     }
     // Seiten, die diese Listen lesen, duerfen nicht abstuerzen
-    for (const list of ['changelog', 'todo', 'devlog']) expect(res.json[list]).toEqual([]);
+    for (const list of ['changelog', 'todo', 'devlog']) expect(Array.isArray(res.json[list]), list).toBe(true);
     // Die Hilfe-Seite liest die Dokumente aus den docs-Ordnern
     expect(Array.isArray(res.json.docs)).toBe(true);
     expect(res.json.features).toContain('help');

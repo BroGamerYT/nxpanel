@@ -350,7 +350,8 @@ export interface PackStatus {
 
 const statusCache = new Map<string, { at: number; data: { pack: PackHit | null; versions: PackVersion[] } }>();
 
-export async function packStatus(p: InstalledPack, cfKey: string | null, f: Fetcher = fetch): Promise<PackStatus> {
+/** Pack und alle Versionen (neueste zuerst), 15 Minuten gemerkt. */
+export async function loadPack(p: Pick<InstalledPack, 'source' | 'ref'>, cfKey: string | null, f: Fetcher = fetch): Promise<{ pack: PackHit | null; versions: PackVersion[] }> {
   const key = `${p.source}:${p.ref}`;
   let data = statusCache.get(key);
   if (!data || Date.now() - data.at > 15 * 60_000) {
@@ -370,7 +371,19 @@ export async function packStatus(p: InstalledPack, cfKey: string | null, f: Fetc
     data = { at: Date.now(), data: fresh };
     statusCache.set(key, data);
   }
-  const { pack, versions } = data.data;
+  return data.data;
+}
+
+/** Version zum Auswaehlen: mit dem Wert fuers Egg-Feld und der passenden Java-Version. */
+export interface PackVersionChoice extends PackVersion { java: number }
+
+export async function packVersionChoices(p: Pick<InstalledPack, 'source' | 'ref'>, cfKey: string | null, f: Fetcher = fetch): Promise<PackVersionChoice[]> {
+  const { versions } = await loadPack(p, cfKey, f);
+  return versions.map((v) => ({ ...v, java: javaFor(v.mcVersion) }));
+}
+
+export async function packStatus(p: InstalledPack, cfKey: string | null, f: Fetcher = fetch): Promise<PackStatus> {
+  const { pack, versions } = await loadPack(p, cfKey, f);
   const latest = versions[0] ?? null;
   const current = p.version ? versions.find((v) => v.id === p.version) ?? { id: p.version, name: p.version, mcVersion: null, date: null } : null;
   const updateAvailable = !!latest && !!current && latest.id !== current.id

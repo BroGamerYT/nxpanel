@@ -5,6 +5,7 @@ import { describePlatform } from '../../platform/index.js';
 import { canSeeServer } from '../authz.js';
 import { CORE_FEATURES } from './api-constants.js';
 import { listDocs } from '../../docs.js';
+import { aboutData } from '../../about-data.js';
 import type { ApiContext } from './api-context.js';
 
 /**
@@ -26,10 +27,8 @@ export function registerOverviewRoutes(ctx: ApiContext): void {
       platform: describePlatform(config.runtime),
       standalone: true,
       features: CORE_FEATURES.filter((f) => f !== 'firewall' || firewall.available),
-      // Leere Listen, damit Seiten, die sie lesen, nicht abstuerzen.
-      changelog: [],
-      todo: [],
-      devlog: [],
+      // "Was ist neu", "Geplant" und "Entwickler-Log" aus den Markdown-Dateien der docs-Ordner
+      ...(await aboutData()),
       // Hilfe-Seite: die Dokumente aus den docs-Ordnern
       docs: await listDocs(),
     };
@@ -46,23 +45,26 @@ export function registerOverviewRoutes(ctx: ApiContext): void {
     const perServer: Record<string, { cpuPercent: number; memMb: number; rxRate: number; txRate: number }> = {};
     const diskUsed: Record<string, number> = {};
 
-    for (const s of states) {
-      if (s.status === 'running') {
-        try {
-          const stats = await driver.getServerStats(s.id);
-          perServer[s.id] = {
-            cpuPercent: stats.cpuPercent,
-            memMb: stats.memoryMb,
-            rxRate: 0,
-            txRate: 0,
-          };
-          totalRamMb += stats.memoryMb;
-        } catch {
-          perServer[s.id] = { cpuPercent: 0, memMb: 0, rxRate: 0, txRate: 0 };
+    // Alle laufenden Server gleichzeitig messen (je Messung dauert mit Docker 1-2 s)
+    await Promise.all(
+      states.map(async (s) => {
+        if (s.status === 'running') {
+          try {
+            const stats = await driver.getServerStats(s.id);
+            perServer[s.id] = {
+              cpuPercent: stats.cpuPercent,
+              memMb: stats.memoryMb,
+              rxRate: 0,
+              txRate: 0,
+            };
+            totalRamMb += stats.memoryMb;
+          } catch {
+            perServer[s.id] = { cpuPercent: 0, memMb: 0, rxRate: 0, txRate: 0 };
+          }
         }
-      }
-      diskUsed[s.id] = 1024; // MB Dummy
-    }
+        diskUsed[s.id] = 1024; // MB Dummy
+      }),
+    );
 
     const hostRamTotalMb = Math.round(os.totalmem() / (1024 * 1024));
     const hostRamUsedMb = Math.round((os.totalmem() - os.freemem()) / (1024 * 1024));

@@ -601,7 +601,35 @@ export class DockerDriver implements HostDriver {
     return entry.state;
   }
 
+  // `docker stats` braucht 1-2 s je Container (Docker misst zwei Zeitpunkte). Damit das Dashboard nicht darauf wartet:
+  // frische Werte (unter 2 s) kommen direkt, aeltere (bis 30 s) sofort und werden im Hintergrund erneuert; gleichzeitige Anfragen teilen sich eine Messung.
+  private readonly statsCache = new Map<string, { value: ServerStats; at: number; inflight?: Promise<ServerStats> }>();
+
   async getServerStats(serverId: string): Promise<ServerStats> {
+    const cached = this.statsCache.get(serverId);
+    const age = cached ? Date.now() - cached.at : Infinity;
+    if (cached && age < 2000) return cached.value;
+    if (cached?.inflight) return age < 30_000 ? cached.value : cached.inflight;
+    const inflight = this.measureStats(serverId).then(
+      (value) => {
+        this.statsCache.set(serverId, { value, at: Date.now() });
+        return value;
+      },
+      (err) => {
+        const c = this.statsCache.get(serverId);
+        if (c) delete c.inflight;
+        throw err;
+      },
+    );
+    this.statsCache.set(serverId, { value: cached?.value ?? ({} as ServerStats), at: cached?.at ?? 0, inflight });
+    if (cached && cached.at > 0 && age < 30_000) {
+      inflight.catch(() => undefined);
+      return cached.value;
+    }
+    return inflight;
+  }
+
+  private async measureStats(serverId: string): Promise<ServerStats> {
     const entry = this.require(serverId);
     const state = await this.getServerState(serverId);
     const startedAt = entry.state.startedAt;

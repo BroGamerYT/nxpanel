@@ -24,7 +24,16 @@ export interface ModpackChoice {
   ramMb: number;
   /** Eigene Pack-Datei, die nach dem Anlegen hochgeladen wird. */
   file?: File;
+  /** Woher das Pack kommt - damit beim Anlegen die Version gewaehlt werden kann. */
+  source?: PackSource;
+  ref?: string;
+  /** Feld im Egg, das die Version haelt (z. B. CF_FILE_ID). */
+  versionVar?: string;
 }
+
+export const VERSION_VAR: Record<PackSource, string> = { curseforge: 'CF_FILE_ID', modrinth: 'MODRINTH_VERSION', ftb: 'FTB_MODPACK_VERSION_ID' };
+
+export interface PackVersionChoice { id: string; name: string; mcVersion: string | null; date: string | null; java: number }
 
 export const SOURCE_LABEL: Record<PackSource, string> = { curseforge: 'CurseForge', modrinth: 'Modrinth', ftb: 'FTB' };
 const SOURCE_COLOR: Record<PackSource, string> = {
@@ -106,7 +115,7 @@ export function ModpackSearch({ onPick }: { onPick: (c: ModpackChoice) => void }
                   {h.manualDownload && <p className="text-xs text-led-install mt-1 flex items-center gap-1"><AlertTriangle className="size-3" aria-hidden />{t('pack.manualDownload')}</p>}
                 </div>
                 <Button variant="primary" className="self-center shrink-0" disabled={!h.latest}
-                  onClick={() => onPick({ name: h.name.slice(0, 64), label: `${h.name} (${SOURCE_LABEL[h.source]}${h.latest?.name ? `, ${h.latest.name}` : ''})`, ...h.preset })}>
+                  onClick={() => onPick({ name: h.name.slice(0, 64), label: `${h.name} (${SOURCE_LABEL[h.source]}${h.latest?.name ? `, ${h.latest.name}` : ''})`, ...h.preset, source: h.source, ref: h.ref, versionVar: VERSION_VAR[h.source] })}>
                   {t('common.choose')}
                 </Button>
               </div>
