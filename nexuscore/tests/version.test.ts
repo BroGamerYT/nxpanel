@@ -20,6 +20,8 @@ describe('Versionsnummer', () => {
   it('der MSI-Bau nimmt die Version aus package.json statt einer festen Zahl', () => {
     const wxs = fs.readFileSync(path.join(root, 'deploy', 'windows', 'NexusCore.wxs'), 'utf8');
     expect(wxs).toContain('Version="$(CoreVersion)"');
+    // Oberflaeche, Spielvorlagen und Doku muessen im Installer liegen - der Core sucht sie neben nexuscore.exe
+    for (const dir of ['WebFolder', 'EggsFolder', 'DocsFolder']) expect(wxs).toContain(`Directory="${dir}"`);
     const script = fs.readFileSync(path.join(root, 'scripts', 'build-windows-package.ps1'), 'utf8');
     expect(script).toContain('-d CoreVersion=');
   });

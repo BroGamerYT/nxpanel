@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn Dominik den Core für fertig erklärt.
 
+## [0.3.4] – 2026-11-13 – Windows-Installer enthält Oberfläche und Spielvorlagen
+
+### Behoben
+- Der Windows-Installer (MSI) enthielt nur die Programme, aber weder die Weboberfläche noch die Spielvorlagen (`eggs`) noch die Doku. Ein damit installierter Core hätte keine Oberfläche und keine Spiele gehabt. Jetzt liegen `web`, `eggs` und `docs` neben `nexuscore.exe`.
+
 ## [0.3.3] – 2026-11-13 – Schnelleres Dashboard, Modpack-Version wählbar, Hilfe gefüllt
 
 ### Neu

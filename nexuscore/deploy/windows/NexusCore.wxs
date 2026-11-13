@@ -9,7 +9,11 @@
     <MediaTemplate EmbedCab="yes" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="NexusCore" />
+      <Directory Id="INSTALLFOLDER" Name="NexusCore">
+        <Directory Id="WebFolder" Name="web" />
+        <Directory Id="EggsFolder" Name="eggs" />
+        <Directory Id="DocsFolder" Name="docs" />
+      </Directory>
     </StandardDirectory>
 
     <StandardDirectory Id="ProgramMenuFolder">
@@ -59,6 +63,17 @@
       </Component>
     </ComponentGroup>
 
+    <!-- Weboberflaeche, Spielvorlagen und Doku: der Core sucht sie neben nexuscore.exe (web, eggs, docs); die Pfade gelten ab dieser Datei -->
+    <ComponentGroup Id="WebFiles" Directory="WebFolder">
+      <Files Include="..\..\dist\web\**" />
+    </ComponentGroup>
+    <ComponentGroup Id="EggFiles" Directory="EggsFolder">
+      <Files Include="..\..\..\eggs\*.json" />
+    </ComponentGroup>
+    <ComponentGroup Id="DocFiles" Directory="DocsFolder">
+      <Files Include="..\..\docs\*.md" />
+    </ComponentGroup>
+
     <Component Id="ProgramMenuDir" Directory="ApplicationProgramsFolder" Guid="724b0193-2940-410a-8bf6-11f87920ab32">
       <RemoveFolder Id="CleanUpProgramMenuDir" Directory="ApplicationProgramsFolder" On="uninstall" />
       <RegistryValue Root="HKCU" Key="Software\NexusPanel\NexusCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
@@ -66,6 +81,9 @@
 
     <Feature Id="MainFeature" Title="NexusCore Host Daemon" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="WebFiles" />
+      <ComponentGroupRef Id="EggFiles" />
+      <ComponentGroupRef Id="DocFiles" />
       <ComponentRef Id="ProgramMenuDir" />
     </Feature>
   </Package>
