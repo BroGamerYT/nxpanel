@@ -1,0 +1,65 @@
+name: NexusCore Release
+
+# Baut den Windows-Installer (NexusCore-Setup.msi) und legt ihn als Release an.
+# Gestartet wird mit einem Tag der Form core-vX.Y.Z (z. B. core-v0.3.8) - die Zahl muss nexuscore/package.json entsprechen.
+# Der Core fragt dieses Release ab und bietet das Update im Admin-Hub an.
+on:
+  push:
+    tags:
+      - 'core-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    name: MSI bauen und Release anlegen
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Tag und Version vergleichen
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $pkg = (Get-Content nexuscore/package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne "core-v$pkg") { throw "Tag $tag passt nicht zur Version $pkg in nexuscore/package.json" }
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Abhaengigkeiten
+        shell: pwsh
+        run: |
+          npm ci
+          npm --prefix web ci
+          npm --prefix nexuscore ci
+
+      - name: Weboberflaeche bauen
+        run: npm --prefix web run build
+
+      - name: WiX installieren
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+
+      - name: Tests
+        run: npm --prefix nexuscore test
+
+      - name: Installer bauen
+        shell: pwsh
+        run: ./nexuscore/scripts/build-windows-package.ps1
+
+      - name: Release veroeffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "NexusCore ${{ github.ref_name }}"
+          prerelease: true
+          draft: false
+          body_path: nexuscore/docs/CHANGELOG.md
+          files: nexuscore/dist/NexusCore-Setup.msi

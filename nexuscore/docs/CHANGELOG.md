@@ -2,6 +2,17 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.8] – 2026-11-14 – Core-Update von GitHub (Windows)
+
+### Neu
+- Admin-Hub: Karte „Core-Update“ zeigt die laufende und die neueste Version von GitHub; „Jetzt aktualisieren“ lädt den Installer, prüft seine SHA-256-Prüfsumme und installiert ihn still (nur Windows, nur aus dem Installer; `GET /api/v1/admin/core-update`, `POST …/install`, nur Administratoren). Ohne Prüfsumme von GitHub wird nicht installiert, der Installer muss von `github.com/<Repository>/releases/download/` kommen.
+- GitHub-Release für den Core: ein Tag `core-vX.Y.Z` baut den MSI und legt ihn als Release an (`.github/workflows/core-release.yml`).
+- Einstellungen: `NEXUSCORE_UPDATE_REPO` (Standard `BroGamerYT/nxpanel`) und `NEXUSCORE_UPDATE_CHECK=false` (nie bei GitHub nachfragen).
+
+### Offen
+- Linux und macOS: die Karte zeigt die neue Version, aktualisiert aber noch nicht selbst.
+- Der Release-Ablauf auf GitHub und das Einspielen sind noch nicht mit einem echten Release erprobt.
+
 ## [0.3.7] – 2026-11-13 – Desktop-Symbol und eigenes Icon
 
 ### Neu

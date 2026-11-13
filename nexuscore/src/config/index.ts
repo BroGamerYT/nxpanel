@@ -50,6 +50,10 @@ const schema = z
     NEXUSCORE_ALLOW_USER_FILE_WRITE: envBool(false),
     NEXUSCORE_SFTP_ENABLED: envBool(false),
     NEXUSCORE_FIREWALL_AUTO: envBool(true),
+    /** GitHub-Repository, aus dem der Core Updates holt (`Besitzer/Name`). */
+    NEXUSCORE_UPDATE_REPO: z.string().regex(/^[\w.-]+\/[\w.-]+$/, 'NEXUSCORE_UPDATE_REPO muss Besitzer/Name sein').default('BroGamerYT/nxpanel'),
+    /** false: der Core fragt nie bei GitHub nach neuen Versionen. */
+    NEXUSCORE_UPDATE_CHECK: envBool(true),
     NEXUSCORE_SFTP_PORT: z.coerce.number().int().min(1).max(65535).default(2022),
     NEXUSCORE_SFTP_HOST: z.string().default(''),
     NEXUSCORE_SECRET_KEY: z.string().default(''),
@@ -119,6 +123,8 @@ export const config = {
     .filter(Boolean),
   /** Verzeichnis, in dem alle Instanzen liegen muessen. Leer = `<dataDir>/servers`. */
   serverRoot: env.NEXUSCORE_SERVER_ROOT.trim(),
+  updateRepo: env.NEXUSCORE_UPDATE_REPO,
+  updateCheck: env.NEXUSCORE_UPDATE_CHECK,
   /** Groesste Datei, die der Dateimanager hochladen darf (MB). */
   maxUploadMb: env.NEXUSCORE_MAX_UPLOAD_MB,
   /** Bereich, aus dem der Core Spielports vergibt. */

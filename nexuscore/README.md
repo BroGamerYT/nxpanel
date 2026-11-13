@@ -181,5 +181,6 @@ Bei jeder Änderung, die man als Nutzer merkt, in dieser Reihenfolge:
 2. Eintrag oben in `docs/CHANGELOG.md` schreiben.
 3. Betroffene Doku anpassen (`docs/INSTALLATION.md`, `docs/ABNAHME-PANEL-CORE.md`, diese Datei).
 4. Tests und Typecheck: `npm test` und `npx tsc --noEmit`.
-5. Windows-Installer neu bauen: `pwsh scripts/build-windows-package.ps1` (die MSI-Version kommt automatisch aus `package.json`).
+5. Release für das Update per Knopf: `git tag core-vX.Y.Z` (X.Y.Z wie in `package.json`) und den Tag pushen - GitHub baut den MSI und legt das Release an.
+6. Windows-Installer neu bauen: `pwsh scripts/build-windows-package.ps1` (die MSI-Version kommt automatisch aus `package.json`).
    Die MSI liegt danach in `dist/` und gehört nicht ins Git.

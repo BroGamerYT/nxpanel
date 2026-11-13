@@ -33,6 +33,13 @@ describe('Versionsnummer', () => {
     expect(fs.statSync(path.join(root, 'deploy', 'windows', 'nexuscore.ico')).size).toBeGreaterThan(1000);
   });
 
+  it('das Core-Release auf GitHub: Tag core-vX.Y.Z baut den MSI mit dem Bau-Skript', () => {
+    const wf = fs.readFileSync(path.join(root, '..', '.github', 'workflows', 'core-release.yml'), 'utf8');
+    expect(wf).toContain("- 'core-v*'");
+    expect(wf).toContain('build-windows-package.ps1');
+    expect(wf).toContain('NexusCore-Setup.msi');
+  });
+
   it('der MSI-Bau nimmt die Version aus package.json statt einer festen Zahl', () => {
     const wxs = fs.readFileSync(path.join(root, 'deploy', 'windows', 'NexusCore.wxs'), 'utf8');
     expect(wxs).toContain('Version="$(CoreVersion)"');

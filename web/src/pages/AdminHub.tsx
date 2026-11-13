@@ -23,6 +23,7 @@ import { api } from '../lib/api';
 import { useFeatures } from '../lib/features';
 import { useAuth } from '../lib/auth';
 import { Spinner } from '../components/ui';
+import { CoreUpdateCard } from '../components/CoreUpdateCard';
 
 interface AdminOverviewData {
   version: string;
@@ -241,6 +242,8 @@ export function AdminHub() {
           </div>
         </div>
       </div>
+
+      {isAdmin && <CoreUpdateCard />}
 
       {/* Module Kacheln */}
       <div className="space-y-4">

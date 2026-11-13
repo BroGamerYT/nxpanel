@@ -209,6 +209,8 @@ const RULES: readonly Rule[] = [
   { methods: '*', pattern: /^\/api\/v1\/steam\/accounts(\/|$)/, need: { kind: 'user' } },
   // Globale Speicherziele (Zugangsdaten fuer Backups): nur Administratoren
   { methods: '*', pattern: /^\/api\/v1\/admin\/storage-targets(\/|$)/, need: { kind: 'admin' } },
+  // Update des Cores von GitHub: nur Administratoren
+  { methods: '*', pattern: /^\/api\/v1\/admin\/core-update(\/|$)/, need: { kind: 'admin' } },
   // Der CurseForge-Schluessel: nur Administratoren
   { methods: '*', pattern: /^\/api\/v1\/admin\/modpacks(\/|$)/, need: { kind: 'admin' } },
   { methods: GET, pattern: /^\/api\/v1\/admin\/(overview|host-logs)$/, need: { kind: 'admin' } },

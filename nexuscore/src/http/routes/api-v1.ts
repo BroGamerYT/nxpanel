@@ -62,6 +62,7 @@ import { registerDocsRoutes } from './docs.js';
 import { registerEggAdminRoutes } from './egg-admin.js';
 import { registerImportRoutes } from './imports.js';
 import { registerModpackRoutes } from './modpacks.js';
+import { registerCoreUpdateRoutes } from './core-update.js';
 import { registerStorageTargetRoutes } from './storage-targets.js';
 import { registerDnsRoutes } from './dns.js';
 import { AutoRestart } from '../../ops/auto-restart.js';
@@ -374,6 +375,7 @@ export function registerApiV1Routes(
   registerImportRoutes(server, { registry, imports, policy, find: findServer, stateOf, isOwnerOf });
   const modpacks = createModpackUpdater({ registry, driver, power, backups, bus });
   registerModpackRoutes(server, { registry, secrets, updater: modpacks, policy, find: findServer });
+  registerCoreUpdateRoutes(server, { registry, repo: config.updateRepo, enabled: config.updateCheck, ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   registerStorageTargetRoutes(server, { registry, targets: storageTargets, find: findServer });
   registerDnsRoutes(server, { registry, dns, find: findServer });
   registerSteamAccountRoutes(server, { registry, accounts: steamAccounts });
