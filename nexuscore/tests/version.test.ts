@@ -40,6 +40,13 @@ describe('Versionsnummer', () => {
     expect(wf).toContain('NexusCore-Setup.msi');
   });
 
+  it('die Sandbox-Startdatei liegt bei den Skripten', () => {
+    const bat = fs.readFileSync(path.join(root, 'scripts', 'sandbox-test.bat'), 'utf8');
+    expect(bat).toContain('WindowsSandbox.exe');
+    expect(bat).toContain('NexusCore-Setup.msi');
+    expect(fs.readFileSync(path.join(root, 'scripts', 'sandbox', 'start.cmd'), 'utf8')).toContain('/l*v');
+  });
+
   it('der MSI-Bau nimmt die Version aus package.json statt einer festen Zahl', () => {
     const wxs = fs.readFileSync(path.join(root, 'deploy', 'windows', 'NexusCore.wxs'), 'utf8');
     expect(wxs).toContain('Version="$(CoreVersion)"');

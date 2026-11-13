@@ -9,6 +9,7 @@ import { createCoreServer } from './http/server.js';
 import { EventBus } from './protocol/events.js';
 import { currentPairingPin, tokenFingerprint } from './protocol/security.js';
 import { watchServiceStdin } from './system/service-mode.js';
+import { applyPendingRestore } from './backups/core-backup.js';
 import { ServerRegistry, RegistryCorruptError } from './store/registry.js';
 import { DatabaseCorruptError } from './store/database.js';
 import type { ServerInstanceConfig } from './types.js';
@@ -78,8 +79,18 @@ async function main(): Promise<void> {
     bus.emit({ type: 'console', ...line });
   });
 
+  // Eine vorgemerkte Wiederherstellung (Admin-Hub -> Core-Sicherung) einspielen, bevor die Datenbank geoeffnet wird
+  let restored: { id: string; safety: string } | null = null;
+  try {
+    restored = await applyPendingRestore(config.dataDir);
+    if (restored) logger.warn(restored, 'Sicherung wiederhergestellt');
+  } catch (err) {
+    logger.error({ err }, 'Wiederherstellung fehlgeschlagen - der Core startet mit dem bisherigen Stand');
+  }
+
   // Registry oeffnen und gespeicherte Instanzen uebernehmen.
   const registry = await ServerRegistry.open(config.dataDir);
+  if (restored) registry.audit('core.restored', null, 'core', { ...restored });
   // Grenzen fuer Speicher und CPU: nur auf Wunsch des Administrators (Admin -> Hosts), gilt ab dem naechsten Start
   if (driver instanceof WindowsNativeDriver) driver.setLimitsPolicy(() => registry.getSetting<boolean>('limits.enforce') === true);
   const interrupted = registry.failInterruptedTasks();
@@ -179,10 +190,13 @@ async function main(): Promise<void> {
   if (process.env.NEXUSCORE_SERVICE === '1') watchServiceStdin(process.stdin, () => void shutdown('SERVICE_STOP'));
 }
 
-main().catch((err) => {
+const repairCommand = process.argv[2];
+if (repairCommand === 'backups' || repairCommand === 'restore') {
+  void import('./cli-repair.js').then(async (m) => process.exit(await m.runRepairCli(repairCommand, process.argv[3])));
+} else main().catch((err) => {
   if (err instanceof RegistryCorruptError || err instanceof DatabaseCorruptError) {
     // Laut und eindeutig: hier geht es um die Liste aller Server.
-    console.error(`\n  ${err.message}\n`);
+    console.error(`\n  ${err.message}\n  Reparatur: Dienst beenden, dann 'nexuscore backups' und 'nexuscore restore latest' - oder im Admin-Hub eine Sicherung zurückspielen.\n`);
   }
   logger.error({ err }, 'NexusCore konnte nicht starten');
   process.exit(1);

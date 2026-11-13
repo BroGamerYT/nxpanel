@@ -138,6 +138,17 @@ describe('Installieren', () => {
     expect((await u.status()).state).toBe('installing');
   });
 
+  it('sichert den Core vor dem Installer; schlägt die Sicherung fehl, wird nicht aktualisiert', async () => {
+    const order: string[] = [];
+    const ok = updater({ beforeInstall: async () => void order.push('sicherung'), runner: { launch: async () => void order.push('installer') } }, [release('0.3.8')]);
+    await ok.u.install();
+    expect(order).toEqual(['sicherung', 'installer']);
+
+    const bad = updater({ beforeInstall: async () => { throw new Error('Platte voll'); } }, [release('0.3.8')]);
+    await expect(bad.u.install()).rejects.toThrow(/Sicherung vor dem Update fehlgeschlagen.*Platte voll/);
+    expect(bad.launched).toHaveLength(0);
+  });
+
   it('falsche Prüfsumme: nichts wird gestartet, die Datei ist weg', async () => {
     const { u, launched } = updater({}, [release('0.3.8')], Buffer.from('manipuliert'));
     await expect(u.install()).rejects.toThrow(/Prüfsumme/);

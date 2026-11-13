@@ -9,7 +9,7 @@ import type { ServerRegistry } from '../../store/registry.js';
  */
 export function registerCoreUpdateRoutes(
   server: FastifyInstance,
-  deps: { registry: ServerRegistry; repo: string; enabled: boolean; fetchImpl?: FetchLike; updater?: CoreUpdater },
+  deps: { registry: ServerRegistry; repo: string; enabled: boolean; fetchImpl?: FetchLike; beforeInstall?: () => Promise<void>; updater?: CoreUpdater },
 ): CoreUpdater {
   const { registry } = deps;
   const updater =
@@ -19,6 +19,7 @@ export function registerCoreUpdateRoutes(
       enabled: deps.enabled,
       dir: path.join(registry.dir, 'updates'),
       ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      ...(deps.beforeInstall ? { beforeInstall: deps.beforeInstall } : {}),
       audit: (action, detail) => registry.audit(action, null, 'standalone', detail),
     });
   const fail = (reply: FastifyReply, err: unknown): FastifyReply => {

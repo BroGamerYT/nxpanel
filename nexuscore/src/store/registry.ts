@@ -358,6 +358,18 @@ export class ServerRegistry {
     this.db.exec('PRAGMA wal_checkpoint(PASSIVE)');
   }
 
+  /** Schreibt eine in sich stimmige Kopie der Datenbank (auch wenn gerade geschrieben wird) in `file`. */
+  snapshot(file: string): void {
+    this.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+  }
+
+  /** `PRAGMA integrity_check`: leer = in Ordnung, sonst die Meldungen von SQLite. */
+  integrityProblems(): string[] {
+    const rows = this.db.prepare('PRAGMA integrity_check').all() as Array<Record<string, string>>;
+    const msgs = rows.map((r) => String(Object.values(r)[0] ?? ''));
+    return msgs.length === 1 && msgs[0] === 'ok' ? [] : msgs;
+  }
+
   /** Schliesst die Datenbank. Danach darf die Registry nicht mehr benutzt werden. */
   close(): void {
     if (this.closed) return;

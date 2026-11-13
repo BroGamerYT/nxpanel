@@ -135,6 +135,8 @@ export interface CoreUpdaterOptions {
   audit?: (action: string, detail: Record<string, unknown>) => void;
   /** false: gar nicht bei GitHub nachfragen. */
   enabled?: boolean;
+  /** Wird vor dem Start des Installers aufgerufen (Sicherung des Cores); schlaegt sie fehl, wird nicht aktualisiert. */
+  beforeInstall?: () => Promise<void>;
 }
 
 export class CoreUpdater {
@@ -237,6 +239,12 @@ export class CoreUpdater {
       const digest = hash.digest('hex');
       if (digest !== asset.sha256) throw new Error('Die Prüfsumme des Installers stimmt nicht - er wird nicht installiert.');
 
+      this.message = 'Sichere den Core vor dem Update …';
+      try {
+        await this.o.beforeInstall?.();
+      } catch (err) {
+        throw new Error(`Sicherung vor dem Update fehlgeschlagen - es wird nicht aktualisiert: ${err instanceof Error ? err.message : String(err)}`);
+      }
       this.state = 'installing';
       this.message = `Installiere Version ${latest.version} - der Core startet gleich neu.`;
       this.o.audit?.('core.update', { from: this.current, to: latest.version, sha256: digest });

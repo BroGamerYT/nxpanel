@@ -24,6 +24,7 @@ import { useFeatures } from '../lib/features';
 import { useAuth } from '../lib/auth';
 import { Spinner } from '../components/ui';
 import { CoreUpdateCard } from '../components/CoreUpdateCard';
+import { CoreBackupCard } from '../components/CoreBackupCard';
 
 interface AdminOverviewData {
   version: string;
@@ -244,6 +245,7 @@ export function AdminHub() {
       </div>
 
       {isAdmin && <CoreUpdateCard />}
+      {isAdmin && <CoreBackupCard />}
 
       {/* Module Kacheln */}
       <div className="space-y-4">

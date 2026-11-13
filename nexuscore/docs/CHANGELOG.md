@@ -2,6 +2,17 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.9] – 2026-11-14 – Core-Sicherung, Reparatur und Sandbox-Test
+
+### Neu
+- **Core-Sicherung:** Admin-Hub → „Core-Sicherung & Reparatur“ sichert Server-Liste, Einstellungen, Benutzer, Schlüssel und Firewall-Regeln des Cores (Datenbank als in sich stimmige Momentaufnahme, Prüfsummen je Datei, die neuesten 10 bleiben). Vor jedem Update passiert das automatisch; schlägt die Sicherung fehl, wird nicht aktualisiert.
+- **Wiederherstellen:** Ein Klick spielt eine Sicherung beim nächsten Start ein, der jetzige Stand wird vorher selbst gesichert (`…-vor-wiederherstellung`). Beschädigte Sicherungen werden abgelehnt.
+- **Reparatur-Modus:** „Prüfen“ untersucht Datenbank, Datenordner, Benutzerkonten, Weboberfläche, Spielvorlagen und Sicherungen und sagt, wie man ein Problem behebt. Startet der Core gar nicht mehr: `nexuscore.exe backups` und `nexuscore.exe restore latest` (Dienst vorher beenden). Fehlen Programmdateien: Installer erneut starten, „Reparieren“ wählen.
+- **Sandbox-Test:** `nexuscore/scripts/sandbox-test.bat` startet die Windows-Sandbox mit dem Installer (mit Installationsprotokoll `install.log`) und dem Editor (Notepad); der Ordner ist auch auf dem PC unter `%USERPROFILE%\sbx-nexuscore` sichtbar.
+
+### Offen
+- Gesichert wird der Core selbst, nicht die Spieldaten (die haben ihre eigenen Backups je Server).
+
 ## [0.3.8] – 2026-11-14 – Core-Update von GitHub (Windows)
 
 ### Neu

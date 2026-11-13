@@ -14,6 +14,14 @@ wird und was die Firewall kann. Nichts sonst im Core hängt vom System ab (ein T
 | **Firewall je Spielprogramm** | ja (`netsh`) | nein — Docker umgeht die Rechner-Firewall, die Ports regelt die Firewall des Rechners | nein |
 | **Getestet** | ja, auf diesem PC (Dienst-Einrichtung braucht Administrator: nicht live geprüft) | Auf einer echten Debian-12-VM (Docker) getestet: Dienst, Updates und ein Gesamtlauf über alle 47 Spiele (39 bestanden, Stand 13.11.2026; der Rest braucht eine Steam-Lizenz, eine CPU mit AVX2 oder wird noch geprüft). **Noch kein Lauf auf einer frischen Hyper-V-VM mit dem Installer** | Skripte nur per Probelauf. **Noch kein Lauf auf einem Mac** |
 
+## Installer ausprobieren (Windows-Sandbox)
+
+`nexuscore\scripts\sandbox-test.bat` per Doppelklick: startet die Windows-Sandbox mit dem Installer aus `nexuscore\dist` (Protokoll `install.log`) und Notepad. Im Sandbox-Ordner „NexusCore-Test“ liegen `Logs-ansehen.cmd` und `Logs-kopieren.cmd`; was dort liegt, sieht man auch auf dem PC unter `%USERPROFILE%\sbx-nexuscore`.
+
+## Sichern und Reparieren
+
+Im Admin-Hub: „Core-Sicherung & Reparatur“ (sichern, prüfen, wiederherstellen; vor jedem Update automatisch). Startet der Core nicht mehr: Dienst beenden, dann `nexuscore.exe backups` und `nexuscore.exe restore latest`. Fehlen Programmdateien: den Installer erneut starten und „Reparieren“ wählen.
+
 ## Gemeinsam auf allen Systemen
 
 * Node.js **22.13 oder neuer**
