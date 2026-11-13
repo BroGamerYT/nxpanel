@@ -369,7 +369,7 @@ Diese Vorlagen waren genauso schnell selbst zu erstellen wie zu beschreiben. Sie
 - **Kein Startmuster:** Ohne `done`-Text springt der Status erst nach dem Timeout (15 min) auf „läuft“. Bis dahin funktioniert der Server trotzdem. Man kann das Muster nachträglich im Egg setzen.
 - **Wine/Proton:** Windows-Server laufen, brauchen aber spürbar mehr Ressourcen. Der erste Start kann mehrere Minuten dauern.
 - **Datenpfade außerhalb von `/home/container` bzw. `/mnt/server`** (z. B. `/root/...`) lehnt das Panel aus Sicherheitsgründen ab. In dem Fall gibt es oft eine alternative Vorlage, so wie bei Terraria.
-- **Ungetestet auf der VM:** Alle Bewertungen stammen aus der Analyse der Egg-Dateien. Der echte Start auf VM 120 steht noch aus.
+- **Ungetestet auf der VM:** Alle Bewertungen stammen aus der Analyse der Egg-Dateien. Der echte Start auf einer Linux-VM steht noch aus.
 
 ## Lizenz und Quellen
 

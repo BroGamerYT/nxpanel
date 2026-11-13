@@ -26,8 +26,8 @@ describe('Hilfe: Was ist neu, Geplant, Entwickler-Log', () => {
   });
 
   it('das echte Entwicklungslog des Projekts ergibt viele Einträge mit Text', () => {
-    const file = path.resolve(__dirname, '..', '..', 'docs', 'ENTWICKLUNGSLOG.md');
-    if (!fs.existsSync(file)) return;
+    const file = [path.resolve(__dirname, '..', '..', 'private', 'ENTWICKLUNGSLOG.md'), path.resolve(__dirname, '..', '..', 'docs', 'ENTWICKLUNGSLOG.md')].find((f) => fs.existsSync(f));
+    if (!file) return; // liegt nicht im Repository (private/)
     const r = parseDevlog(fs.readFileSync(file, 'utf8'));
     expect(r.length).toBeGreaterThan(20);
     expect(r.every((e) => e.text.length > 5 && e.date.length === 10)).toBe(true);

@@ -6,9 +6,9 @@ Format: `- [ ] Aufgabe` offen, `- [x] Aufgabe (0.3.2)` erledigt mit der Version,
 
 ## Bis 1.0
 
-1.0 gibt es erst, wenn Dominik den Core für fertig erklärt.
+1.0 gibt es erst, wenn der Besitzer den Core für fertig erklärt.
 
-- [x] Core ersetzt das Panel 1:1 auf Linux (Docker-Treiber, getestet auf VM 120) (0.3.0)
+- [x] Core ersetzt das Panel 1:1 auf Linux (Docker-Treiber, getestet auf einer Linux-VM) (0.3.0)
 - [x] Windows-Dienst, Firewall je Spielprogramm und MSI-Installer (0.2.0)
 - [x] Übernahme der Daten aus dem alten Panel (Benutzer, Server, Backups, Steam-Konten) (0.2.0)
 - [x] Gesamttestlauf über alle 47 Spiele auf dem echten Core (0.3.2)

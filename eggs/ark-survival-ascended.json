@@ -398,9 +398,9 @@
       "match": "LogEOS.*Session.*(fail|error|unable)",
       "flags": "i",
       "level": "error",
-      "text": "Epic-Sitzung konnte nicht angelegt werden – der Server fehlt dann in der Liste. Direkt verbinden geht trotzdem: im Spiel mit Tab die Konsole öffnen und „open 193.34.69.60:PORT“ eingeben.",
+      "text": "Epic-Sitzung konnte nicht angelegt werden – der Server fehlt dann in der Liste. Direkt verbinden geht trotzdem: im Spiel mit Tab die Konsole öffnen und „open <Server-IP>:PORT“ eingeben.",
       "text_locales": {
-        "de": "Epic-Sitzung konnte nicht angelegt werden – der Server fehlt dann in der Liste. Direkt verbinden geht trotzdem: im Spiel mit Tab die Konsole öffnen und „open 193.34.69.60:PORT“ eingeben.",
+        "de": "Epic-Sitzung konnte nicht angelegt werden – der Server fehlt dann in der Liste. Direkt verbinden geht trotzdem: im Spiel mit Tab die Konsole öffnen und „open <Server-IP>:PORT“ eingeben.",
         "en": "Could not register Epic session – server may not show in the browser. Direct connect still works: open in-game console with Tab and type 'open IP:PORT'."
       }
     },

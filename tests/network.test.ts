@@ -89,7 +89,7 @@ describe('Netzwerk-API', () => {
     expect(game.inRange).toBe(false);
     expect(game.server.name).toBe('Alt');
     // Adresse ausserhalb des Bereichs wird nicht als oeffentlich ausgegeben
-    await app.inject({ method: 'PATCH', url: `/api/v1/admin/nodes/${nodeId}`, headers: auth(admin), payload: { publicHost: '193.34.69.60' } });
+    await app.inject({ method: 'PATCH', url: `/api/v1/admin/nodes/${nodeId}`, headers: auth(admin), payload: { publicHost: '203.0.113.10' } });
     const list = (await app.inject({ method: 'GET', url: '/api/v1/servers', headers: auth(user) })).json().servers;
     expect(list[0].publicHost).toBeNull();
   });

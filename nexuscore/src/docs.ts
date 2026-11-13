@@ -198,6 +198,8 @@ function sources(): Array<{ dir: string; rel: string; onlyReadme: boolean }> {
   return [
     { dir: join(cwd, 'docs'), rel: 'docs', onlyReadme: false },
     { dir: join(cwd, '..', 'docs'), rel: 'docs', onlyReadme: false },
+    // Interne Notizen (nicht im Repository, siehe .gitignore) - nur auf dem Rechner des Entwicklers vorhanden
+    { dir: join(cwd, '..', 'private'), rel: 'private', onlyReadme: false },
     { dir: cwd, rel: '', onlyReadme: true },
   ].filter((s) => existsSync(s.dir));
 }

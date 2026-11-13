@@ -363,7 +363,7 @@
     "publicAccess": "Öffentlicher Zugang",
     "publicHost": "Öffentliche Adresse",
     "publicHostHint": "Domain oder IP, die du an Mitspieler weitergibst – ohne Port. Leer = die Adresse, unter der du das Panel gerade öffnest.",
-    "publicHostPlaceholder": "z. B. 193.34.69.60 oder mc.example.de",
+    "publicHostPlaceholder": "z. B. 203.0.113.10 oder mc.example.de",
     "rangeNote": "Ist ein Bereich gesetzt, bekommen neue Server ihre Ports nur noch daraus. Bestehende Server behalten ihre Ports.",
     "rangeSize": "{size} Ports – reicht für etwa {servers} Server.",
     "refGame": "Spiel",

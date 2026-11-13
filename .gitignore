@@ -57,3 +57,6 @@ deploy/dedicatedServer.xml
 # NexusCore: gebautes Hilfsprogramm (cargo build --release in nexuscore/helper/nxjob)
 nexuscore/helper/nxjob/target/
 nexuscore/helper/nxsvc/target/
+
+# Interne Notizen (Server-Details, Entwicklungslog): nie ins oeffentliche Repository
+private/

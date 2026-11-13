@@ -1,6 +1,6 @@
 # Änderungen am NexusCore
 
-Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn Dominik den Core für fertig erklärt.
+Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
 ## [0.3.6] – 2026-11-13 – Oberfläche als App
 

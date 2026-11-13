@@ -50,7 +50,7 @@ Tauri 2 ist seit Oktober 2024 stabil und kann seitdem auch Android und iOS. Es b
 | Tray-Symbol mit Ampel aller Server, Schnell-Start/-Stopp | ✓ | – | Tauri-Tray-API |
 | Mit dem System starten (minimiert im Tray) | ✓ | – | `tauri-plugin-autostart` |
 | Panel per QR-Code hinzufügen (im Panel anzeigen, mit dem Handy scannen) | – | ✓ | Kamera-Plugin. Der QR-Code enthält Adresse, Zertifikats-Fingerabdruck und einen Einmal-Kopplungscode. |
-| Selbst signierte Zertifikate im LAN (`https://10.0.0.120`) | ✓ | ✓ | Fingerabdruck beim ersten Verbinden bestätigen (Trust on first use), danach festgehalten |
+| Selbst signierte Zertifikate im LAN (`https://192.168.1.50`) | ✓ | ✓ | Fingerabdruck beim ersten Verbinden bestätigen (Trust on first use), danach festgehalten |
 | Automatische Updates der App | ✓ | über Play Store oder Hinweis in der App | `tauri-plugin-updater` mit signierten Paketen |
 | Links wie `nexuspanel://server/ff9dcda9` öffnen die App | ✓ | ✓ | Deep-Link-Plugin |
 | Letzter Stand ohne Verbindung (nur lesen) | ✓ | ✓ | Kleiner Zwischenspeicher in Rust (SQLite) |
