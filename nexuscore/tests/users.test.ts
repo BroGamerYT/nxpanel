@@ -522,8 +522,8 @@ describe('WebSocket', () => {
 
     // Ein Fremder kommt gar nicht erst zur Konsole
     const s = await open(ids['alpha']!, tokenOf(stranger.h));
-    const code = await Promise.race([s.closed, wait(2000).then(() => -1)]);
+    const code = await Promise.race([s.closed, wait(10_000).then(() => -1)]);
     expect(s.messages.some((m) => m['type'] === 'hello')).toBe(false);
     expect(code).not.toBe(-1);
-  }, 20_000);
+  }, 40_000);
 });

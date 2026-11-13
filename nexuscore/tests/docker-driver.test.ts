@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import os from 'node:os';
+import path from 'node:path';
 import {
   buildContainerOptions,
   containerName,
@@ -10,13 +12,16 @@ import { FakeDocker } from './helpers/fake-docker.js';
 import { loadEggs, resetEggCache } from '../src/eggs/loader.js';
 import type { LogLine, ServerInstanceConfig } from '../src/types.js';
 
+// Ein echter, beschreibbarer Ordner: der Treiber legt den Datenordner an (auf Linux ohne Rechte scheitert ein Pfad wie /srv/...)
+const WORK = path.join(os.tmpdir(), 'nx-docker-driver-test', 'mc-1');
+
 const base = (extra: Partial<ServerInstanceConfig> = {}): ServerInstanceConfig => ({
   id: 'mc-1',
   name: 'Minecraft',
   game: 'minecraft-paper',
   executable: 'itzg/minecraft-server:java21',
   args: [],
-  workingDir: '/srv/nexus/servers/mc-1',
+  workingDir: WORK,
   maxMemoryMb: 2048,
   maxCpuPercent: 200,
   ports: [{ name: 'game', hostPort: 25565, containerPort: 25565, protocol: 'tcp' }],
@@ -40,7 +45,7 @@ describe('Container-Optionen (wie im Panel)', () => {
     expect(o.OpenStdin).toBe(true);
     expect(o.Env).toEqual(['EULA=TRUE']);
     expect(o.Cmd).toBeUndefined();
-    expect(o.HostConfig.Mounts).toEqual([{ Type: 'bind', Source: '/srv/nexus/servers/mc-1', Target: '/data' }]);
+    expect(o.HostConfig.Mounts).toEqual([{ Type: 'bind', Source: WORK, Target: '/data' }]);
     expect(o.HostConfig.Memory).toBe(2048 * 1024 * 1024);
     expect(o.HostConfig.MemorySwap).toBe(o.HostConfig.Memory); // kein Swap
     expect(o.HostConfig.CpuQuota).toBe(200_000);

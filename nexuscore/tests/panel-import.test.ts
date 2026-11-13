@@ -8,7 +8,7 @@ process.env.NEXUSCORE_TOKEN = 'test-token-0123456789abcdefghij';
 process.env.NEXUSCORE_MODE = 'test';
 
 const { ServerRegistry } = await import('../src/store/registry.js');
-const { LocalAccount, verifyPassword } = await import('../src/store/account.js');
+const { LocalAccount, verifyPassword, argon2Available } = await import('../src/store/account.js');
 const { SecretStore } = await import('../src/store/secrets.js');
 const { SteamAccounts } = await import('../src/steam/accounts.js');
 const { loadEggs } = await import('../src/eggs/loader.js');
@@ -89,7 +89,7 @@ afterAll(async () => {
 });
 
 describe('Passwörter und Geheimnisse des Panels', () => {
-  it('argon2id-Hashes des Panels gelten im Core weiter; falsche Passwörter und Müll nicht', async () => {
+  it.skipIf(!argon2Available)('argon2id-Hashes des Panels gelten im Core weiter; falsche Passwörter und Müll nicht', async () => {
     expect(await verifyPassword('test-passwort-123', PANEL_HASH)).toBe(true);
     expect(await verifyPassword('falsches-passwort', PANEL_HASH)).toBe(false);
     expect(await verifyPassword('test-passwort-123', '$argon2id$v=19$m=19456,t=2,p=1$AAAA$BBBB')).toBe(false);
@@ -137,9 +137,11 @@ describe('Übernahme', () => {
     expect(chef).toMatchObject({ id: U1, role: 'admin', canCreateServers: true, email: 'chef@example.org', totpEnabled: true, steamId: '76561198000000001', globalPermissions: ['admin.nodes'], locale: 'de' });
     const helper = account.list().find((u) => u.username === 'Helfer')!;
     expect(helper).toMatchObject({ role: 'user', serverLimit: 2, ramLimitMb: 8192, allowedEggs: [] });
-    // Anmelden mit dem alten Passwort
-    expect((await account.verify('Chef', 'test-passwort-123', '127.0.0.1'))?.username).toBe('Chef');
-    expect(await account.verify('Chef', 'falsch-falsch-123', '127.0.0.2')).toBeNull();
+    // Anmelden mit dem alten Passwort (braucht argon2 aus Node >= 24.7)
+    if (argon2Available) {
+      expect((await account.verify('Chef', 'test-passwort-123', '127.0.0.1'))?.username).toBe('Chef');
+      expect(await account.verify('Chef', 'falsch-falsch-123', '127.0.0.2')).toBeNull();
+    }
     const users = JSON.parse(await fs.readFile(path.join(dir, 'core', 'users.json'), 'utf8')).users as Array<{ username: string; passkeys?: Array<{ credentialId: string; publicKey: string }>; totp?: { secret: string; lastStep: number } }>;
     const raw = users.find((u) => u.username === 'Chef')!;
     expect(raw.passkeys?.[0]).toMatchObject({ credentialId: 'cred-abc', publicKey: Buffer.from('öffentlicher-schluessel').toString('base64url') });

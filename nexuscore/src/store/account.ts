@@ -160,6 +160,9 @@ export async function hashPassword(password: string): Promise<string> {
  * Hashes aus dem Panel (argon2id, PHC-Format) pruefen die Anmeldung weiter - ohne zusaetzliche Bibliothek,
  * Node bringt argon2 selbst mit. Nach einer erfolgreichen Anmeldung gilt weiter der Hash des Panels; er wird nicht veraendert.
  */
+/** argon2 steckt erst ab Node 24.7 im Lieferumfang; auf aelteren Versionen scheitern uebernommene Panel-Passwoerter (neue gehen). */
+export const argon2Available = typeof (crypto as unknown as { argon2Sync?: unknown }).argon2Sync === 'function';
+
 function verifyArgon2(password: string, stored: string): boolean {
   const m = /^\$(argon2id|argon2i|argon2d)\$v=19\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/.exec(stored);
   if (!m) return false;

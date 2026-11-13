@@ -80,12 +80,16 @@ jobs:
         run: npm --prefix web run build
 
   nexuscore:
-    name: NexusCore – Typecheck & Tests (${{ matrix.os }})
+    name: NexusCore – Typecheck & Tests (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Node 22.13 ist die Mindestversion; Node 24 prueft zusaetzlich die argon2-Anmeldung uebernommener Panel-Passwoerter
+        include:
+          - { os: ubuntu-latest, node: 22 }
+          - { os: windows-latest, node: 22 }
+          - { os: ubuntu-latest, node: 24 }
     defaults:
       run:
         working-directory: nexuscore
@@ -97,7 +101,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: 'npm'
           cache-dependency-path: |
             nexuscore/package-lock.json
