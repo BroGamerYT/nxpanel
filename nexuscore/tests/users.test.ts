@@ -505,7 +505,10 @@ describe('WebSocket', () => {
       new Promise<{ messages: Array<Record<string, unknown>>; ws: WebSocket; closed: Promise<number> }>((resolve) => {
         const ws = new WebSocket(`${wsUrl}/api/v1/servers/${id}/ws?token=${token}`);
         const messages: Array<Record<string, unknown>> = [];
-        const closed = new Promise<number>((r) => (ws.onclose = (e) => r(e.code)));
+        const closed = new Promise<number>((r) => {
+          ws.onclose = (e) => r(e.code);
+          ws.addEventListener('error', () => r(1006)); // Node 22: abgelehnter Handshake meldet nur 'error'
+        });
         ws.onmessage = (e) => messages.push(JSON.parse(String(e.data)));
         ws.onopen = () => resolve({ messages, ws, closed });
         ws.onerror = () => resolve({ messages, ws, closed });
@@ -525,5 +528,6 @@ describe('WebSocket', () => {
     const code = await Promise.race([s.closed, wait(10_000).then(() => -1)]);
     expect(s.messages.some((m) => m['type'] === 'hello')).toBe(false);
     expect(code).not.toBe(-1);
+    expect(s.ws.readyState).not.toBe(WebSocket.OPEN);
   }, 40_000);
 });
