@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, RefreshCw } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
 import { Button, ErrorBox } from './ui';
+import type { ActiveTask } from '../lib/types';
 
 interface UpdateStatus {
   current: string;
@@ -31,6 +32,9 @@ export function CoreUpdateCard() {
     staleTime: 60_000,
   });
   const data = status.data;
+  // Laufende Installationen, Backups usw.: ein Neustart des Cores unterbricht sie
+  const active = useQuery<{ tasks: ActiveTask[] }>({ queryKey: ['tasks-active-update'], queryFn: () => api('/tasks/active'), refetchInterval: 10_000 });
+  const running = active.data?.tasks ?? [];
 
   useEffect(() => {
     if (target && data?.current === target) window.location.reload();
@@ -75,7 +79,8 @@ export function CoreUpdateCard() {
               busy={install.isPending || !!target}
               disabled={!!target}
               onClick={() => {
-                if (window.confirm(`Version ${data.latest!.version} installieren?\n\nDer Core startet dabei neu, laufende Spiele werden kurz beendet. Das dauert einige Minuten.`)) install.mutate();
+                const busy = running.length ? `\n\nAchtung, es läuft gerade:\n${running.map((t) => `• ${t.title} (${t.serverName}${t.progressPercent != null ? `, ${Math.round(t.progressPercent)} %` : ''})`).join('\n')}\nDas wird durch den Neustart abgebrochen.` : '';
+                if (window.confirm(`Version ${data.latest!.version} installieren?\n\nDer Core startet dabei neu, laufende Spiele werden kurz beendet. Das dauert einige Minuten.${busy}`)) install.mutate();
               }}
             >
               Jetzt aktualisieren{mb}
@@ -84,6 +89,11 @@ export function CoreUpdateCard() {
         </div>
       </div>
 
+      {running.length > 0 && !target && (
+        <p className="text-sm text-amber">
+          Es läuft gerade: {running.map((t) => `${t.title} (${t.serverName})`).join(', ')} – ein Update würde das abbrechen. Besser erst fertig werden lassen.
+        </p>
+      )}
       {target && <p className="text-sm text-amber">Version {target} wird installiert – der Core startet neu, diese Seite lädt danach von selbst.</p>}
       {data.updateAvailable && !data.supported && data.reason && <p className="text-sm text-dim">{data.reason}</p>}
       {data.updateAvailable && data.latest?.notes && (
