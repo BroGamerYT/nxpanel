@@ -752,22 +752,29 @@ export function BackupManager({
 
       {/* Modal: Pruefbericht & Integritaetsdetails */}
       {selectedVerifyBackup && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-rack-1 border border-seam rounded-lg p-5 max-w-lg w-full shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-seam pb-3">
-              <div className="flex items-center gap-2">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-rack-1 border border-seam rounded-lg p-5 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-start justify-between border-b border-seam pb-3 gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
                 {selectedVerifyBackup.verification_status === 'valid' ? (
-                  <ShieldCheck className="size-5 text-emerald-400" />
+                  <ShieldCheck className="size-5 text-emerald-400 shrink-0" />
                 ) : (
-                  <ShieldAlert className="size-5 text-crimson" />
+                  <ShieldAlert className="size-5 text-crimson shrink-0" />
                 )}
-                <h3 className="text-base font-semibold text-ink">
-                  Integritätsbericht: {selectedVerifyBackup.name}
-                </h3>
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-ink leading-tight">
+                    Integritätsbericht
+                  </h3>
+                  <p className="text-xs font-mono text-dim truncate max-w-sm sm:max-w-md" title={selectedVerifyBackup.name}>
+                    {selectedVerifyBackup.name}
+                  </p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedVerifyBackup(null)}
-                className="text-dim hover:text-ink text-sm"
+                className="text-dim hover:text-ink text-sm shrink-0 p-1 rounded hover:bg-rack-2 transition-colors"
+                aria-label="Schließen"
               >
                 ✕
               </button>
@@ -872,8 +879,8 @@ export function BackupManager({
 
       {/* Modal: Backup Wiederherstellen */}
       {restoreTarget && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-rack-1 border border-seam rounded-lg p-5 max-w-md w-full shadow-xl space-y-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-rack-1 border border-seam rounded-lg p-5 max-w-md w-full shadow-2xl space-y-4">
             <h3 className="text-base font-semibold text-ink">{t('backups.restore')}</h3>
 
             {!isStopped ? (
@@ -910,8 +917,8 @@ export function BackupManager({
 
       {/* Modal: Backup Löschen */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-rack-1 border border-seam rounded-lg p-5 max-w-md w-full shadow-xl space-y-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-rack-1 border border-seam rounded-lg p-5 max-w-md w-full shadow-2xl space-y-4">
             <h3 className="text-base font-semibold text-ink">{t('backups.delete')}</h3>
             <p className="text-sm text-dim">
               {t('backups.deleteConfirm', { name: deleteTarget.name })}

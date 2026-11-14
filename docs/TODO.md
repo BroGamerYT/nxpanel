@@ -222,4 +222,4 @@ Entwicklungslog, was eine Version enthält, im CHANGELOG.
 - [x] Steam-Login ohne 2FA-Abfrage – bleibt so, Steam Guard schützt (Entscheidung 10.11.)
 - [x] SFTP-Passwörter für 2FA-Konten (0.26.0)
 - [x] SFTP soll aus dem Internet erreichbar sein (Entscheidung 10.11.)
-- [ ] Auf der VM: `SFTP_PORT=28999` und `PORT_RANGE=28000-28998` in der `.env` (nutzt die vorhandene Weiterleitung), danach testen
+- [x] Auf der VM: `SFTP_PORT=28999` und `PORT_RANGE=28000-28998` in der `.env` (nutzt die vorhandene Weiterleitung), danach testen (0.26.2)

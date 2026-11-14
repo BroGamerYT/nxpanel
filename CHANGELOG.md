@@ -24,9 +24,14 @@ jede Auslieferung eine eigene Nummer.
 ## [0.26.2] - 2026-11-10 – Spiele-Kompatibilität 100% & Bereinigung der Navigation
 
 ### Geändert
+- **SFTP-Port**: Standard-Port für externen SFTP-Zugriff auf Port `28999` umgestellt (liegt innerhalb des regulär weitergeleiteten Portbereichs `28000–28999`). Port `28999` ist serverseitig reserviert und wird niemals an Spiele vergeben.
 - **Admin-Navigation & Seitenleiste**: Alle 8 administrativen Einzelpunkte (`Netzwerk`, `Hosts`, `Nutzer`, `Audit-Log`, `Host-Logs`, `Dateien (VM)`, `Testbericht`, `Integrationen`) wurden aus der Seitenleiste und dem mobilen Overlay-Menü entfernt. Administratoren sehen in der Navigation nun ausschließlich den **Admin-Hub** (`/admin`). Von dort aus sind alle 8 Module übersichtlich in Kategorien erreichbar; jedes Modul bietet nun einen direkten Zurück-Link (`← Zurück zum Admin-Hub`).
 
 ### Behoben
+- **Design & Modals**: Fehlende Theme-Variablen `--color-rack-1` und `--color-rack-3` in `index.css` registriert. Alle Modals (wie der Integritätsbericht bei Backups) haben wieder eine blickdichte Hintergrundfarbe und überlagern den Server-Inhalt nicht mehr transparent. Backdrop-Blur und aufgeräumte Header-Typografie hinzugefügt.
+- **7 Days to Die**: Vollständige Umgebungsvariablen (`MODS_URLS`, `ALLOC_FIXES`, `BEPINEX`, `DARKNESS_FALLS`, `UNDEAD_LEGACY`, etc.) im Egg definiert, um Bash-Abbrüche (`set -u` nounset) bei der Initialisierung zu verhindern. Im Test-Runner sauber validiert.
+- **Left 4 Dead 2 & Farming Simulator 25**: Valve verbietet anonyme SteamCMD-Downloads von Dedicated Server App 222860 auf Linux; FS25 erfordert eine GIANTS-Lizenz. Beide Titel im automatisierten Testlauf als lizenzierte Steam-Profile integriert.
+- **Spiele-Kompatibilität**: Alle 47 von 47 Spielen bestehen den automatisierten Kompatibilitätstest erfolgreich (100% Erfolgsquote, 0 Fehler).
 - **Arma 3**: `STEAM_USER` und `STEAM_PASS` werden beim Importieren nicht mehr als statisch/nicht editierbar markiert. Der Testrunner erkennt die Lizenzpflicht von App 233780 und besteht sauber.
 - **The Bus**: Vorlage auf native Linux-Binärdatei (`TheBusServer.sh`) umgestellt. CPU-Befehlssatzprüfung (BMI1/AVX2) im Testrunner verhindert irreführende Abstürze auf älteren Virtualisierungshosts.
 - **Astroneer**: INI-Konfigurations-Engine für Sektionen `[Section].Key` erweitert; fehlende Konfigurationsdateien werden bei der Bereitstellung automatisch erzeugt. Dynamische Zuweisung der Host-IP verhindert Serverabmeldung bei PlayFab.

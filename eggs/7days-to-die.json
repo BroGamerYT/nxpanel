@@ -11,8 +11,26 @@
   "environment": {
     "START_MODE": "1",
     "BACKUP": "no",
+    "BACKUP_HOUR": "5",
+    "BACKUP_MAX": "7",
     "MONITOR": "no",
-    "ALLOC_FIXES": "no"
+    "ALLOC_FIXES": "no",
+    "ALLOC_FIXES_UPDATE": "no",
+    "BEPINEX": "no",
+    "BEPINEX_UPDATE": "no",
+    "DARKNESS_FALLS": "no",
+    "DARKNESS_FALLS_UPDATE": "no",
+    "DARKNESS_FALLS_URL": "False",
+    "UNDEAD_LEGACY": "no",
+    "UNDEAD_LEGACY_UPDATE": "no",
+    "UNDEAD_LEGACY_URL": "False",
+    "UPDATE_MODS": "no",
+    "TEST_ALERT": "no",
+    "MODS_URLS": "",
+    "VERSION": "stable",
+    "PUID": "1000",
+    "PGID": "1000",
+    "TimeZone": "Europe/Berlin"
   },
   "console": "readonly",
   "stop": {
@@ -21,8 +39,8 @@
   },
   "ready_check": {
     "kind": "done",
-    "regex": "GameServer.LogOn successful|StartGame done|Starting sdtdserver|The server have been installed",
-    "timeout_seconds": 1200
+    "regex": "GameServer.LogOn successful|StartGame done|Dedicated server only build|Server version:",
+    "timeout_seconds": 1500
   },
   "ports": {
     "primary": {
@@ -50,7 +68,7 @@
     ]
   },
   "resources": {
-    "base_ram_mb": 8192,
+    "base_ram_mb": 12288,
     "ram_per_player_mb": 200,
     "min_cpu_percent": 300,
     "disk_mb": 30000,
@@ -219,5 +237,45 @@
         "en": "Not enough memory. 7 Days to Die needs 8–12 GB RAM for random-generated maps."
       }
     }
-  ]
+  ],
+  "windows": {
+    "steam_app_id": 294420,
+    "executable": "7DaysToDieServer.exe",
+    "args": [
+      "-logfile",
+      "output_log.txt",
+      "-quit",
+      "-batchmode",
+      "-nographics",
+      "-dedicated",
+      "-configfile=serverconfig.xml"
+    ],
+    "stop": {
+      "timeout_seconds": 60
+    },
+    "files": [
+      {
+        "path": "serverconfig.xml",
+        "format": "xml",
+        "root": "ServerSettings",
+        "set": {
+          "property:ServerPort": {
+            "$number": "{{PORT_GAME}}"
+          },
+          "property:ServerName": "{{SERVER_NAME}}",
+          "property:ServerDescription": "{{SERVER_DESCRIPTION}}",
+          "property:ServerPassword": "{{SERVER_PASSWORD}}",
+          "property:ServerMaxPlayerCount": "{{SERVER_MAX_PLAYERS}}",
+          "property:GameWorld": "{{GAME_WORLD}}",
+          "property:GameDifficulty": "{{GAME_DIFFICULTY}}",
+          "property:DropOnDeath": "{{DROP_ON_DEATH}}",
+          "property:BloodMoonEnemyCount": "{{BLOOD_MOON_ENEMY_COUNT}}",
+          "property:ControlPanelPort": {
+            "$number": "{{PORT_WEB}}"
+          },
+          "property:UserDataFolder": "userdata"
+        }
+      }
+    ]
+  }
 }

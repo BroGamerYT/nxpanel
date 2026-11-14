@@ -18,7 +18,9 @@
 
   --color-night: #121822;      /* Seitengrund */
   --color-rack: #19212E;       /* Flaechen */
+  --color-rack-1: #19212E;     /* Flaechen Basis (Modals, Cards) */
   --color-rack-2: #212B3B;     /* Hervorgehobene Flaechen, Eingabefelder */
+  --color-rack-3: #2A364A;     /* Erhoehte Flaechen, Badges, Tooltips */
   --color-seam: #2C3749;       /* Linien */
   --color-ink: #E4E8EF;        /* Text */
   --color-dim: #8C97AB;        /* Nebentext */
