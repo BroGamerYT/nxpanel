@@ -1,6 +1,8 @@
 name: NexusCore Release
 
-# Baut den Windows-Installer (NexusCore-Setup.msi) und legt ihn als Release an.
+# Baut den Windows-Installer (NexusCore-Setup.msi) und das Linux-Paket (NexusCore-linux.tar.gz) und legt beides als ein Release an.
+# Das Release entsteht erst, wenn beide Pakete gebaut sind (kein halbes Release). Es ist zuerst eine Vorabversion: nach dem Test auf
+# GitHub den Haken "Pre-release" entfernen - erst dann bietet der Core das Update allen an.
 # Gestartet wird mit einem Tag der Form core-vX.Y.Z (z. B. core-v0.3.8) - die Zahl muss nexuscore/package.json entsprechen.
 # Der Core fragt dieses Release ab und bietet das Update im Admin-Hub an.
 on:
@@ -13,7 +15,7 @@ permissions:
 
 jobs:
   windows-installer:
-    name: MSI bauen und Release anlegen
+    name: Windows-Installer (MSI) bauen
     runs-on: windows-latest
 
     steps:
@@ -67,11 +69,70 @@ jobs:
         shell: pwsh
         run: ./nexuscore/scripts/build-windows-package.ps1
 
+      - name: MSI und Release-Text weitergeben
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            nexuscore/dist/NexusCore-Setup.msi
+            release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  linux-package:
+    name: Linux-Paket bauen
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Tag und Version vergleichen
+        run: |
+          pkg="$(node -p "require('./nexuscore/package.json').version")"
+          if [ "${{ github.ref_name }}" != "core-v$pkg" ]; then echo "::error::Tag ${{ github.ref_name }} passt nicht zur Version $pkg in nexuscore/package.json"; exit 1; fi
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Paket bauen (Weboberflaeche, Core, Archiv - jeder Schritt wird geprueft)
+        run: bash nexuscore/scripts/build-linux-package.sh
+
+      - name: Paket weitergeben
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: nexuscore/dist-package/NexusCore-linux.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Release veroeffentlichen
+    needs: [windows-installer, linux-package]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pakete holen
+        uses: actions/download-artifact@v4
+        with:
+          path: pakete
+
+      - name: Pakete pruefen
+        run: |
+          find pakete -type f -printf '%p %s Byte\n'
+          test -s pakete/windows/nexuscore/dist/NexusCore-Setup.msi || { echo "::error::MSI fehlt"; exit 1; }
+          test -s pakete/windows/release-notes.md || { echo "::error::Release-Text fehlt"; exit 1; }
+          test -s pakete/linux/NexusCore-linux.tar.gz || { echo "::error::Linux-Paket fehlt"; exit 1; }
+
       - name: Release veroeffentlichen
         uses: softprops/action-gh-release@v2
         with:
           name: "NexusCore ${{ github.ref_name }}"
           prerelease: true
           draft: false
-          body_path: release-notes.md
-          files: nexuscore/dist/NexusCore-Setup.msi
+          body_path: pakete/windows/release-notes.md
+          files: |
+            pakete/windows/nexuscore/dist/NexusCore-Setup.msi
+            pakete/linux/NexusCore-linux.tar.gz

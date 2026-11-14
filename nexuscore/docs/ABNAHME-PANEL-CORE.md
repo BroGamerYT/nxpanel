@@ -59,7 +59,7 @@ Entscheidung: **BAUEN** = nötig, damit der Core das Panel ersetzt · **SPÄTER*
 
 ## Danach: Panel-Backend abschalten
 
-Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche Anfragen gegen Panel und Core) keine Abweichung zeigt, (c) die Daten des Panels (Postgres) in den Core übernommen werden können — **diese Datenübernahme gibt es noch nicht** und ist eine eigene Aufgabe (Benutzer, Server, Zeitpläne, Backups).
+Erst wenn: (a) alle BAUEN-Bereiche stehen, (b) ein Seite-an-Seite-Test (gleiche Anfragen gegen Panel und Core) keine Abweichung zeigt, (c) die Daten des Panels (Postgres) in den Core übernommen werden können — **die Datenübernahme gibt es seit 0.2.0** (Benutzer, Server, Backups, Steam-Konten; siehe `PANEL-UEBERNAHME.md`). Offen ist ein Durchlauf mit den echten Daten des Panels.
 
 ## Anhang: alle fehlenden Routen
 

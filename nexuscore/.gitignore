@@ -8,3 +8,4 @@ data/
 ERSTES-PASSWORT.txt
 panel-export*.json
 *.sql.gz
+dist-package/

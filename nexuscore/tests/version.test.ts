@@ -38,6 +38,26 @@ describe('Versionsnummer', () => {
     expect(wf).toContain("- 'core-v*'");
     expect(wf).toContain('build-windows-package.ps1');
     expect(wf).toContain('NexusCore-Setup.msi');
+    // Linux-Paket im selben Release; veroeffentlicht wird erst, wenn beide Pakete gebaut sind
+    expect(wf).toContain('build-linux-package.sh');
+    expect(wf).toContain('NexusCore-linux.tar.gz');
+    expect(wf).toContain('needs: [windows-installer, linux-package]');
+    expect(wf.match(/softprops\/action-gh-release/g)).toHaveLength(1);
+  });
+
+  it('das Linux-Paket hat den Aufbau, den install-core.sh erwartet, und prueft sich selbst', () => {
+    const script = fs.readFileSync(path.join(root, 'scripts', 'build-linux-package.sh'), 'utf8');
+    expect(script).not.toContain('\r');
+    for (const must of ['nexuscore-linux/nexuscore/dist/index.js', 'nexuscore-linux/web/dist/index.html', 'nexuscore-linux/docs/EGG-KATALOG.md', 'nexuscore-linux/nexuscore/deploy/linux/install-core.sh']) {
+      expect(script).toContain(must);
+    }
+    const install = fs.readFileSync(path.join(root, 'deploy', 'linux', 'install-core.sh'), 'utf8');
+    // Das Einrichtungsskript sucht diese Ordner relativ zu sich - das Paket muss sie genauso anlegen
+    expect(install).toContain('$REPO_SRC/eggs');
+    expect(install).toContain('$REPO_SRC/web/dist');
+    expect(install).toContain('$REPO_SRC/docs/EGG-KATALOG.md');
+    // Zeilenenden: LF erzwingen, sonst bricht das Skript auf Linux mit \r
+    expect(fs.readFileSync(path.join(root, '..', '.gitattributes'), 'utf8')).toContain('nexuscore/scripts/*.sh text eol=lf');
   });
 
   it('die Sandbox-Startdatei liegt bei den Skripten', () => {

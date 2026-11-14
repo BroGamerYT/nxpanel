@@ -363,9 +363,10 @@ export class LocalAccount {
         `NexusCore - erste Anmeldung\n\nBenutzer: ${hint.username}\nPasswort: ${hint.password}\n\nDiese Datei wird nach der ersten erfolgreichen Anmeldung geloescht.\nPasswort vergessen: users.json loeschen und den Core neu starten.\n`,
         { encoding: 'utf8', mode: 0o600 },
       );
-      // Bewusst ueber console und nicht ueber den Logger: das Passwort soll
-      // einmal im Fenster stehen, aber nicht als Feld in den Logdaten landen.
-      if (!process.env.VITEST) {
+      // Bewusst ueber console und nicht ueber den Logger: das Passwort soll einmal im Fenster stehen, aber nicht als Feld in den
+      // Logdaten landen. Nur bei einem Terminal: ein Dienst (systemd, Windows-Dienst) schreibt die Ausgabe in eine Logdatei - dort
+      // wuerde das Passwort dauerhaft stehen (und im Admin-Hub unter Host-Logs). Dort gilt die Hinweisdatei.
+      if (!process.env.VITEST && process.stdout.isTTY) {
         console.log(`\n  NexusCore - erste Anmeldung\n  Benutzer: ${hint.username}\n  Passwort: ${hint.password}\n  (steht auch in ${hintFile})\n`);
       }
       logger.info({ username: hint.username, hintFile }, 'Administrator angelegt - Passwort steht in der Hinweisdatei');
