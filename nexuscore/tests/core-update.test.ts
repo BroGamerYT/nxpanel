@@ -144,7 +144,6 @@ describe('Installieren', () => {
     const st = await u.status();
     expect(st.progress?.phase).toBe('install');
     expect(st.progress?.installStartedAt).toBeTruthy();
-    await new Promise((r) => setTimeout(r, 50));
     const lines = await u.logs('update');
     expect(lines.join('\n')).toContain('Prüfsumme stimmt');
     await fs.writeFile(path.join(dir, 'updates', 'install-0.3.8.log'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('Zeile eins\r\nZeile zwei\r\n', 'utf16le')]));

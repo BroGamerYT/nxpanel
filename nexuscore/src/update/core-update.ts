@@ -251,9 +251,11 @@ export class CoreUpdater {
   /** Protokoll des Updates: das Update selbst (auch nach dem Neustart aus der Datei), das Installer-Protokoll der neuesten Version. */
   async logs(source: 'update' | 'installer', lines = 300): Promise<string[]> {
     if (source === 'update') {
-      const fromFile = await tailFile(path.join(this.o.dir, 'update.log'), lines);
-      return fromFile.length ? fromFile : this.lines.slice(-lines).map((l) => `${l.ts} ${l.text}`);
+      // Im Speicher steht alles seit dem Start; nach einem Neustart (Speicher leer) kommt es aus der Datei
+      if (this.lines.length) return this.lines.slice(-lines).map((l) => `${l.ts} ${l.text}`);
+      return tailFile(path.join(this.o.dir, 'update.log'), lines);
     }
+
     let names: string[] = [];
     try {
       names = (await readdir(this.o.dir)).filter((n) => /^install-\d+\.\d+\.\d+\.log$/.test(n));
