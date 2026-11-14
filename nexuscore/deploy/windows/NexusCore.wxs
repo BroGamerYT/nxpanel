@@ -5,7 +5,10 @@
            UpgradeCode="e38f6b01-5764-4e3a-92ea-df73cf763291" 
            Scope="perMachine">
     
-    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von NexusCore ist bereits installiert." Schedule="afterInstallExecute" />
+    <!-- Die alte Version wird ZUERST entfernt, dann die neue installiert. Die Node-Exe traegt immer dieselbe Dateiversion (die von Node):
+         Liegt sie schon auf der Platte, ueberschreibt MSI sie nicht ("Action Null"), und das spaetere Entfernen der alten Version loescht sie
+         dann - es bliebe KEINE nexuscore.exe uebrig (so geschehen beim Update 0.3.11 -> 0.3.12). -->
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version von NexusCore ist bereits installiert." Schedule="afterInstallValidate" />
 
     <!-- Das NexusPanel-Symbol: in "Apps & Features" und an den Verknuepfungen (erzeugt von scripts/make-icon.py) -->
     <Icon Id="NexusIcon" SourceFile="nexuscore.ico" />

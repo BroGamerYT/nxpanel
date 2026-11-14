@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.13] – 2026-11-14 – Update lässt die Exe nicht mehr verschwinden
+
+### Behoben
+- Beim Update (0.3.11 → 0.3.12) blieb keine `nexuscore.exe` übrig: MSI überschrieb die gleich versionierte Exe nicht, und das Entfernen der alten Version löschte sie danach. Jetzt wird die alte Version zuerst entfernt und die neue danach installiert.
+
 ## [0.3.12] – 2026-11-14 – Dienst startet auf frischem Windows
 
 ### Behoben
