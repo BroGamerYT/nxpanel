@@ -38,8 +38,33 @@ if ($running) {
     Start-Sleep -Milliseconds 500
 }
 
-Copy-Item (Get-Command node).Source dist\nexuscore.exe -Force
-npx postject dist\nexuscore.exe NODE_SEA_BLOB dist\sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+$seaFuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
+# Pruefung: ist der Code wirklich in der Exe? (Sicherung umgelegt = ":1", Ressource NODE_SEA_BLOB als UTF-16 vorhanden)
+function Test-SeaExe([string]$path) {
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $ascii = [Text.Encoding]::ASCII.GetString($bytes)
+    $utf16 = [Text.Encoding]::Unicode.GetString($bytes)
+    return ($ascii.Contains("${seaFuse}:1")) -and (-not $ascii.Contains("${seaFuse}:0")) -and ($utf16.Contains('NODE_SEA_BLOB'))
+}
+
+$seaOk = $false
+for ($try = 1; $try -le 5 -and -not $seaOk; $try++) {
+    Copy-Item (Get-Command node).Source dist\nexuscore.exe -Force
+    # Virenscanner und Dateisperren: kurz warten, dann einbauen
+    Start-Sleep -Seconds (2 * $try)
+    $out = (& npx --yes postject dist\nexuscore.exe NODE_SEA_BLOB dist\sea-prep.blob --sentinel-fuse $seaFuse 2>&1 | Out-String)
+    $code = $LASTEXITCODE
+    Write-Host $out
+    if ($code -eq 0 -and (Test-SeaExe 'dist\nexuscore.exe')) { $seaOk = $true; break }
+    $short = ($out -replace '\s+', ' ').Trim()
+    Write-Host "::warning::Einbau in nexuscore.exe fehlgeschlagen (Versuch $try, Code $code): $short"
+}
+if (-not $seaOk) {
+    $node = (& node --version)
+    Write-Host "::error::nexuscore.exe enthaelt den Core-Code nicht (Node $node, postject-Code $code): $short"
+    throw "Der Einbau des Cores in nexuscore.exe ist fehlgeschlagen - der Bau wird abgebrochen."
+}
+Write-Host "nexuscore.exe enthaelt den Core-Code (geprueft)." -ForegroundColor Green
 
 Write-Host "`n[3.5/4] 1:1 React-Frontend (web/dist) für Standalone kopieren..." -ForegroundColor Yellow
 $targetWeb = Join-Path $NexusCoreDir 'dist\web'

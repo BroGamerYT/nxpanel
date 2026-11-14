@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.14] – 2026-11-14 – Installer enthält wieder den Core
+
+### Behoben
+- Die vom Release-Bau erzeugte `nexuscore.exe` war nur das nackte Node.js (der Core-Code war nicht eingebaut): der Dienst lief, aber der Core startete nie. Der Bau prüft jetzt, ob der Code wirklich in der Exe steckt, versucht den Einbau mehrfach und bricht mit einer Fehlermeldung ab, statt eine kaputte Version zu veröffentlichen.
+
 ## [0.3.13] – 2026-11-14 – Update lässt die Exe nicht mehr verschwinden
 
 ### Behoben
