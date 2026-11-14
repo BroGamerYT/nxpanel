@@ -60,6 +60,8 @@ describe('Versionsnummer', () => {
     const bundle = fs.readFileSync(path.join(root, 'scripts', 'bundle-sea.mjs'), 'utf8');
     expect(bundle).toContain("'import.meta.url': '__IMPORT_META_URL'");
     // Das Bauskript nutzt das Bundle-Skript und prueft jeden Schritt (sonst entsteht still eine Exe ohne Core-Code)
+    // Native Module (.node), die nur auf dem CI-Rechner gebaut werden, duerfen den Bau nicht abbrechen (sonst fehlt die ganze Exe)
+    expect(bundle).toContain("external: ['*.node']");
     expect(script).toContain('scripts/bundle-sea.mjs');
     expect(script).toContain('Assert-Step');
     expect(script).toContain('Test-SeaExe');

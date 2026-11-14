@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.17] – 2026-11-14 – Exe-Bau auf dem Release-Rechner
+
+### Behoben
+- Auf dem Release-Rechner (GitHub) werden die optionalen nativen Module von `ssh2` und `cpu-features` tatsächlich gebaut; `esbuild` konnte die `.node`-Dateien nicht bündeln, der Bau brach (unbemerkt) ab und es entstand eine `nexuscore.exe` ohne Core-Code. Die `.node`-Dateien bleiben jetzt extern (das Programm fällt dort auf reines JavaScript zurück).
+
 ## [0.3.16] – 2026-11-14 – Bau der Exe repariert
 
 ### Behoben

@@ -17,6 +17,9 @@ await build({
     'import.meta.url': '__IMPORT_META_URL',
   },
   inject: ['scripts/sea-shim.js'],
+  // Optionale native Module (ssh2: sshcrypto.node, cpu-features): wo sie gebaut wurden (z. B. auf dem CI-Rechner mit Visual Studio), kann esbuild
+  // sie nicht buendeln. Extern lassen: das Programm sucht sie zur Laufzeit in try/catch und faellt auf reines JavaScript zurueck.
+  external: ['*.node'],
   logLevel: 'info',
 });
 if (!existsSync(out) || statSync(out).size < 100_000) {

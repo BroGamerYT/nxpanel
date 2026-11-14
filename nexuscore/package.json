@@ -1,6 +1,6 @@
 {
   "name": "nexuscore",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "NexusCore - Dezentraler Host Daemon fuer Gameserver (Windows & Linux)",
   "type": "module",
   "main": "dist/index.js",
