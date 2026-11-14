@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { createWriteStream, existsSync } from 'node:fs';
+import { createWriteStream, existsSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -24,6 +24,12 @@ export const ASSET_NAME = 'NexusCore-Setup.msi';
 const MAX_DOWNLOAD_BYTES = 400 * 1024 * 1024;
 const CACHE_MS = 15 * 60_000;
 const TASK_NAME = 'NexusCoreUpdate';
+/** So lange darf der Installer brauchen, bis er den Core beendet. Danach gilt das Update als gescheitert (sonst bliebe es fuer immer "laeuft"). */
+export const INSTALL_TIMEOUT_MS = 15 * 60_000;
+const CHANNEL_FILE = 'channel.json';
+
+/** `stable`: nur Releases, die auf GitHub nicht als Vorabversion markiert sind. `prerelease`: alle. */
+export type UpdateChannel = 'stable' | 'prerelease';
 
 export interface ReleaseInfo {
   version: string;
@@ -31,6 +37,8 @@ export interface ReleaseInfo {
   name: string;
   notes: string;
   publishedAt: string | null;
+  /** Auf GitHub als Vorabversion markiert (noch nicht freigegeben). */
+  prerelease: boolean;
   url: string;
   asset: { name: string; url: string; size: number; sha256: string | null } | null;
 }
@@ -47,6 +55,8 @@ export interface UpdateStatus {
   latest: ReleaseInfo | null;
   updateAvailable: boolean;
   checkedAt: string | null;
+  /** Welche Releases angeboten werden. */
+  channel: UpdateChannel;
   /** Fehler bei der Abfrage von GitHub (der Core laeuft trotzdem). */
   error: string | null;
   state: UpdateState;
@@ -105,14 +115,18 @@ export function compareVersions(a: string, b: string): number {
 }
 
 interface GhAsset { name?: string; browser_download_url?: string; size?: number; digest?: string | null }
-interface GhRelease { tag_name?: string; name?: string; body?: string; draft?: boolean; published_at?: string | null; html_url?: string; assets?: GhAsset[] }
+interface GhRelease { tag_name?: string; name?: string; body?: string; draft?: boolean; prerelease?: boolean; published_at?: string | null; html_url?: string; assets?: GhAsset[] }
 
-/** Das neueste Core-Release (Tag `core-vX.Y.Z`, kein Entwurf) aus der Liste von GitHub. */
-export function latestRelease(list: unknown, repo: string): ReleaseInfo | null {
+/**
+ * Das neueste Core-Release (Tag `core-vX.Y.Z`, kein Entwurf) aus der Liste von GitHub.
+ * Vorabversionen zaehlen nur mit `includePrerelease` - sonst bekaeme jeder Rechner ein Release, bevor es getestet ist.
+ */
+export function latestRelease(list: unknown, repo: string, includePrerelease = false): ReleaseInfo | null {
   if (!Array.isArray(list)) return null;
   let best: ReleaseInfo | null = null;
   for (const raw of list as GhRelease[]) {
     if (!raw || raw.draft) continue;
+    if (raw.prerelease && !includePrerelease) continue;
     const m = RELEASE_TAG.exec(String(raw.tag_name ?? ''));
     if (!m) continue;
     const version = m[1]!;
@@ -126,6 +140,7 @@ export function latestRelease(list: unknown, repo: string): ReleaseInfo | null {
       name: raw.name || raw.tag_name!,
       notes: String(raw.body ?? '').slice(0, 4000),
       publishedAt: raw.published_at ?? null,
+      prerelease: raw.prerelease === true,
       url: raw.html_url ?? `https://github.com/${repo}/releases`,
       asset: a?.browser_download_url?.startsWith(prefix)
         ? { name: a.name!, url: a.browser_download_url, size: Number(a.size ?? 0), sha256: digest }
@@ -171,6 +186,8 @@ export interface CoreUpdaterOptions {
   enabled?: boolean;
   /** Wird vor dem Start des Installers aufgerufen (Sicherung des Cores); schlaegt sie fehl, wird nicht aktualisiert. */
   beforeInstall?: () => Promise<void>;
+  /** Uhr (fuer Tests). */
+  now?: () => number;
 }
 
 export class CoreUpdater {
@@ -184,8 +201,17 @@ export class CoreUpdater {
   private message: string | null = null;
   private progress: UpdateProgress | null = null;
   private readonly lines: UpdateLogLine[] = [];
+  private readonly now: () => number;
+  private chan: UpdateChannel = 'stable';
 
   constructor(private readonly o: CoreUpdaterOptions) {
+    this.now = o.now ?? Date.now;
+    try {
+      const saved = JSON.parse(readFileSync(path.join(o.dir, CHANNEL_FILE), 'utf8')) as { channel?: unknown };
+      if (saved.channel === 'prerelease') this.chan = 'prerelease';
+    } catch {
+      // keine Datei: stabil
+    }
     this.f = o.fetchImpl ?? fetch;
     this.platform = o.platform ?? platformFor().id;
     this.execPath = o.execPath ?? process.execPath;
@@ -204,7 +230,33 @@ export class CoreUpdater {
     return { supported: true, reason: null };
   }
 
+  channel(): UpdateChannel {
+    return this.chan;
+  }
+
+  /** Stellt um, welche Releases angeboten werden, und merkt es sich ueber den Neustart. */
+  async setChannel(channel: UpdateChannel): Promise<void> {
+    if (channel === this.chan) return;
+    this.chan = channel;
+    this.cache = null;
+    await mkdir(this.o.dir, { recursive: true });
+    await writeFile(path.join(this.o.dir, CHANNEL_FILE), JSON.stringify({ channel }), 'utf8');
+    this.o.audit?.('core.update.channel', { channel });
+  }
+
+  /** Der Installer laeuft zu lange, ohne dass der Core beendet wurde: er ist gescheitert. Ohne das bliebe jeder weitere Versuch gesperrt. */
+  private expire(): void {
+    if (this.state !== 'installing') return;
+    const since = this.progress?.installStartedAt ? Date.parse(this.progress.installStartedAt) : Number.NaN;
+    if (Number.isNaN(since) || this.now() - since < INSTALL_TIMEOUT_MS) return;
+    this.state = 'failed';
+    this.message = 'Der Installer hat den Core nicht neu gestartet - das Update ist gescheitert. Das Installer-Protokoll zeigt den Grund.';
+    this.progress = null;
+    this.log(`Fehler: ${this.message}`);
+  }
+
   async status(refresh = false): Promise<UpdateStatus> {
+    this.expire();
     const { supported, reason } = this.support();
     if (this.o.enabled !== false && (refresh || !this.cache || Date.now() - this.cache.at > CACHE_MS)) {
       try {
@@ -212,7 +264,7 @@ export class CoreUpdater {
           signal: AbortSignal.timeout(8000),
         });
         if (!res.ok) throw new Error(`GitHub antwortet ${res.status}`);
-        this.cache = { at: Date.now(), release: latestRelease(await res.json(), this.o.repo), error: null };
+        this.cache = { at: Date.now(), release: latestRelease(await res.json(), this.o.repo, this.chan === 'prerelease'), error: null };
       } catch (err) {
         this.cache = { at: Date.now(), release: this.cache?.release ?? null, error: err instanceof Error ? err.message : String(err) };
       }
@@ -226,6 +278,7 @@ export class CoreUpdater {
       latest,
       updateAvailable: !!latest && compareVersions(latest.version, this.current) > 0,
       checkedAt: this.cache ? new Date(this.cache.at).toISOString() : null,
+      channel: this.chan,
       error: this.cache?.error ?? null,
       state: this.state,
       message: this.message,
@@ -269,6 +322,7 @@ export class CoreUpdater {
 
   /** Laedt den neuesten Installer, prueft die Pruefsumme und startet ihn. Kehrt zurueck, sobald der Installer laeuft (der Core wird dabei neu gestartet). */
   async install(): Promise<{ version: string }> {
+    this.expire();
     if (this.state === 'downloading' || this.state === 'installing') throw new UpdateError('Ein Update läuft bereits.', 409, 'conflict');
     const { supported, reason } = this.support();
     if (!supported) throw new UpdateError(reason ?? 'Update nicht möglich.', 409, 'not_supported');
@@ -325,7 +379,7 @@ export class CoreUpdater {
       }
       this.log('Sicherung fertig.');
       this.state = 'installing';
-      this.step('install', `Installiere Version ${latest.version} - der Core startet gleich neu.`, { installStartedAt: new Date().toISOString() });
+      this.step('install', `Installiere Version ${latest.version} - der Core startet gleich neu.`, { installStartedAt: new Date(this.now()).toISOString() });
       this.o.audit?.('core.update', { from: this.current, to: latest.version, sha256: digest });
       await this.runner.launch(file, path.join(this.o.dir, `install-${latest.version}.log`), this.o.dir);
       this.log('Installer gestartet (Aufgabenplaner, SYSTEM). Der Core wird beendet und neu gestartet.');

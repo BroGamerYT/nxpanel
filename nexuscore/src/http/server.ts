@@ -15,6 +15,7 @@ import {
   isWriteMethod,
   SECURITY_HEADERS,
   CONTENT_SECURITY_POLICY,
+  urlForLog,
 } from '../protocol/security.js';
 import type { EventBus } from '../protocol/events.js';
 import type { HostDriver } from '../drivers/interface.js';
@@ -77,7 +78,7 @@ export async function createCoreServer(
 
   server.addHook('onResponse', async (req, reply) => {
     logger.info(
-      { method: req.method, url: req.url, status: reply.statusCode },
+      { method: req.method, url: urlForLog(req.url), status: reply.statusCode },
       'HTTP-Anfrage',
     );
   });

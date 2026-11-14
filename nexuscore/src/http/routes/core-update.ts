@@ -55,6 +55,15 @@ export function registerCoreUpdateRoutes(
     return { source, lines: out };
   });
 
+  const channelBody = z.object({ channel: z.enum(['stable', 'prerelease']) });
+  /** Stabil (nur freigegebene Releases) oder auch Vorabversionen. */
+  server.post('/api/v1/admin/core-update/channel', async (req, reply) => {
+    const b = channelBody.safeParse(req.body);
+    if (!b.success) return reply.status(400).send({ error: 'channel muss stable oder prerelease sein', code: 'invalid_request' });
+    await updater.setChannel(b.data.channel);
+    return updater.status(true);
+  });
+
   server.post('/api/v1/admin/core-update/install', async (_req, reply) => {
     try {
       return { ok: true, ...(await updater.install()) };

@@ -11,9 +11,10 @@ interface UpdateStatus {
   platform: string;
   supported: boolean;
   reason: string | null;
-  latest: { version: string; name: string; notes: string; publishedAt: string | null; url: string; asset: { size: number; sha256: string | null } | null } | null;
+  latest: { version: string; prerelease?: boolean; name: string; notes: string; publishedAt: string | null; url: string; asset: { size: number; sha256: string | null } | null } | null;
   updateAvailable: boolean;
   checkedAt: string | null;
+  channel?: 'stable' | 'prerelease';
   error: string | null;
   state: 'idle' | 'downloading' | 'installing' | 'failed';
   message: string | null;
@@ -47,6 +48,10 @@ export function CoreUpdateCard() {
     mutationFn: () => api<UpdateStatus>('/admin/core-update?refresh=1'),
     onSuccess: (d) => qc.setQueryData(['core-update'], d),
   });
+  const channel = useMutation({
+    mutationFn: (c: 'stable' | 'prerelease') => api<UpdateStatus>('/admin/core-update/channel', { method: 'POST', body: { channel: c } }),
+    onSuccess: (d) => qc.setQueryData(['core-update'], d),
+  });
   const install = useMutation({
     mutationFn: () => api<{ version: string }>('/admin/core-update/install', { method: 'POST' }),
     onSuccess: (r) => setTarget(r.version),
@@ -68,7 +73,7 @@ export function CoreUpdateCard() {
           </h2>
           <p className="text-sm text-dim mt-1">
             Läuft: <span className="font-mono text-ink">{data.current}</span>
-            {data.latest && <> · Neueste auf GitHub: <span className="font-mono text-ink">{data.latest.version}</span></>}
+            {data.latest && <> · Neueste auf GitHub: <span className="font-mono text-ink">{data.latest.version}</span>{data.latest.prerelease && <span className="text-amber"> (Vorabversion)</span>}</>}
             {data.latest && !data.updateAvailable && <span className="text-led-run"> · aktuell</span>}
           </p>
         </div>
@@ -102,7 +107,20 @@ export function CoreUpdateCard() {
           <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed">{data.latest.notes}</pre>
         </details>
       )}
-      {!data.latest && !data.error && <p className="text-sm text-dim">Auf GitHub gibt es noch kein Core-Release.</p>}
+      {!data.latest && !data.error && (
+        <p className="text-sm text-dim">
+          {data.channel === 'prerelease' ? 'Auf GitHub gibt es noch kein Core-Release.' : 'Auf GitHub gibt es noch kein freigegebenes Core-Release.'}
+        </p>
+      )}
+      <label className="flex items-center gap-2 text-sm text-dim">
+        <input
+          type="checkbox"
+          checked={data.channel === 'prerelease'}
+          disabled={channel.isPending || !!target || data.state === 'downloading' || data.state === 'installing'}
+          onChange={(e) => channel.mutate(e.target.checked ? 'prerelease' : 'stable')}
+        />
+        Auch Vorabversionen anbieten (noch nicht freigegeben, zum Testen)
+      </label>
       {data.error && <p className="text-xs text-dim">GitHub nicht erreichbar: {data.error}</p>}
       {data.state === 'failed' && data.message && <ErrorBox>{data.message}</ErrorBox>}
       {err && <ErrorBox>{err}</ErrorBox>}

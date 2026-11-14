@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSET_NAME, CoreUpdater, UpdateError, compareVersions, latestRelease, type UpdateRunner } from '../src/update/core-update.js';
+import { urlForLog } from '../src/protocol/security.js';
+import { ASSET_NAME, CoreUpdater, INSTALL_TIMEOUT_MS, UpdateError, compareVersions, latestRelease, type UpdateRunner } from '../src/update/core-update.js';
 
 const REPO = 'BroGamerYT/nxpanel';
 const MSI = Buffer.from('so-tut-als-waere-das-ein-installer'.repeat(50));
@@ -183,5 +184,54 @@ describe('Installieren', () => {
     const first = u.install();
     await expect(u.install()).rejects.toBeInstanceOf(UpdateError);
     await first;
+  });
+});
+
+describe('Kanal: stabil oder Vorabversionen', () => {
+  it('Vorabversionen werden nur auf Wunsch angeboten; die Wahl übersteht den Neustart', async () => {
+    const list = [release('0.3.8'), release('0.3.9', { prerelease: true })];
+    expect(latestRelease(list, REPO)!.version).toBe('0.3.8');
+    expect(latestRelease(list, REPO, true)).toMatchObject({ version: '0.3.9', prerelease: true });
+    expect(latestRelease([release('0.3.9', { prerelease: true })], REPO)).toBeNull();
+
+    const sub = path.join(dir, 'kanal');
+    const { u, audits } = updater({ dir: sub }, list);
+    expect(await u.status()).toMatchObject({ channel: 'stable', latest: { version: '0.3.8' } });
+    await u.setChannel('prerelease');
+    // ohne refresh: der Wechsel verwirft die gemerkte Antwort
+    expect(await u.status()).toMatchObject({ channel: 'prerelease', latest: { version: '0.3.9', prerelease: true } });
+    expect(audits).toContain('core.update.channel');
+    expect(updater({ dir: sub }, list).u.channel()).toBe('prerelease');
+    await u.setChannel('stable');
+    expect(updater({ dir: sub }, list).u.channel()).toBe('stable');
+  });
+});
+
+describe('Hängendes Update', () => {
+  it('beendet der Installer den Core nicht, gilt das Update nach der Frist als gescheitert und ein neuer Versuch geht', async () => {
+    let now = Date.parse('2026-11-14T12:00:00Z');
+    const { u, launched } = updater({ dir: path.join(dir, 'haengt'), now: () => now }, [release('0.3.8')]);
+    await u.install();
+    expect((await u.status()).state).toBe('installing');
+    await expect(u.install()).rejects.toMatchObject({ code: 'conflict' });
+    now += INSTALL_TIMEOUT_MS - 1000;
+    expect((await u.status()).state).toBe('installing');
+    now += 2000;
+    const st = await u.status();
+    expect(st.state).toBe('failed');
+    expect(st.message).toContain('nicht neu gestartet');
+    expect(st.progress).toBeNull();
+    await u.install();
+    expect(launched).toHaveLength(2);
+  });
+});
+
+describe('Adresse im Log', () => {
+  it('ersetzt Zugänge in der Abfrage, lässt den Rest stehen', () => {
+    expect(urlForLog('/api/v1/servers/a/ws?token=geheim123')).toBe('/api/v1/servers/a/ws?token=[entfernt]');
+    expect(urlForLog('/api/v1/live/ws?serverId=x&ticket=abc.def&lines=5')).toBe('/api/v1/live/ws?serverId=x&ticket=[entfernt]&lines=5');
+    expect(urlForLog('/core/v1/stream?TOKEN=a%2Fb')).toBe('/core/v1/stream?TOKEN=[entfernt]');
+    expect(urlForLog('/api/v1/admin/core-update?refresh=1')).toBe('/api/v1/admin/core-update?refresh=1');
+    expect(urlForLog('/api/v1/servers/tokenizer')).toBe('/api/v1/servers/tokenizer');
   });
 });

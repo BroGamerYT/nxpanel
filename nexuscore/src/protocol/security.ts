@@ -426,6 +426,14 @@ export function isAllowedOrigin(
   });
 }
 
+/**
+ * Adresse fuers Log: Zugaenge in der Abfrage (`?token=`, `?ticket=` der WebSockets usw.) werden ersetzt.
+ * Die Schwaerzung des Loggers greift nur bei Feldern, nicht bei Text in der Adresse.
+ */
+export function urlForLog(rawUrl: string): string {
+  return rawUrl.replace(/([?&](?:token|ticket|access_token|pin|code|key|secret|password)=)[^&#]*/gi, '$1[entfernt]');
+}
+
 /** Sicherheits-Header fuer jede Antwort. */
 export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'x-content-type-options': 'nosniff',

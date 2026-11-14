@@ -2,6 +2,16 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.18] – 2026-11-14 – Sicherere Updates, keine Zugänge im Log
+
+### Geändert
+- Das Core-Update bietet nur noch freigegebene Releases an. Vorabversionen (auf GitHub als „Pre-release“ markiert) gibt es nur, wenn im Admin-Hub „Auch Vorabversionen anbieten“ angehakt ist. So erreicht ein ungetestetes Release nicht mehr jeden Rechner. Ein Release wird freigegeben, indem auf GitHub der Haken „Pre-release“ entfernt wird.
+
+### Behoben
+- Zugänge in der Adresse (`?token=`, `?ticket=` der Live-Verbindungen) werden im Log ersetzt; bisher konnten sie im Core-Log und damit in den Host-Logs des Admin-Hubs stehen.
+- Scheitert der Installer, ohne den Core zu beenden, blieb das Update für immer auf „läuft“ und jeder neue Versuch wurde abgelehnt. Nach 15 Minuten gilt es jetzt als gescheitert und lässt sich neu starten.
+- Der SFTP-Host-Schlüssel wird nach dem Erzeugen gegengeprüft: die Bibliothek erzeugt in etwa 0,5 % der Fälle einen Schlüssel, der sich nicht wieder einlesen lässt – der SFTP-Zugang wäre dann dauerhaft nicht gestartet.
+
 ## [0.3.17] – 2026-11-14 – Exe-Bau auf dem Release-Rechner
 
 ### Behoben
