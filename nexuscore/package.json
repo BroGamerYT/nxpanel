@@ -25,7 +25,7 @@
     "nexuscore"
   ],
   "author": "NexusPanel Team",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@fastify/cors": "^10.0.2",
     "@fastify/multipart": "^10.1.8",

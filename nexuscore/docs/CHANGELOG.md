@@ -8,6 +8,8 @@ Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, we
 - **Linux-Paket im Release:** Jedes Core-Release enthält jetzt auch `NexusCore-linux.tar.gz` (Core, Weboberfläche, Spielvorlagen, Einrichtungsskript). Auspacken und `sudo bash nexuscore/deploy/linux/install-core.sh` genügt; Quellcode, Build-Werkzeuge und ein Git-Klon sind nicht mehr nötig. Das Release entsteht erst, wenn beide Pakete (Windows und Linux) gebaut sind; der Bau prüft das Archiv und bricht sonst ab.
 
 ### Geändert
+- Die Lizenz des Cores in `package.json` ist jetzt AGPL-3.0-or-later wie beim Panel und im Installer-Text (stand dort noch MIT).
+- Der Ordner `scratch/` (Debug-Skripte) ist nicht mehr im Repository.
 - Das Start-Passwort steht nicht mehr in der Ausgabe des Dienstes (und damit nicht im Core-Log und unter Host-Logs): es erscheint nur noch im Fenster, wenn der Core von Hand in einem Terminal gestartet wird. Sonst steht es in der Hinweisdatei `ERSTES-PASSWORT.txt` im Datenordner.
 - Das Core-Update bietet nur noch freigegebene Releases an. Vorabversionen (auf GitHub als „Pre-release“ markiert) gibt es nur, wenn im Admin-Hub „Auch Vorabversionen anbieten“ angehakt ist. So erreicht ein ungetestetes Release nicht mehr jeden Rechner. Ein Release wird freigegeben, indem auf GitHub der Haken „Pre-release“ entfernt wird.
 
