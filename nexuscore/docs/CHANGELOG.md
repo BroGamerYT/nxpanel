@@ -2,7 +2,7 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
-## [0.3.15] – 2026-11-14 – Bau der Exe repariert
+## [0.3.16] – 2026-11-14 – Bau der Exe repariert
 
 ### Behoben
 - Im Release-Bau fehlte die Datei `sea-prep.blob`, weil ein vorheriger Schritt still scheiterte (Bundle über `esbuild.cmd` mit verschachtelten Anführungszeichen unter PowerShell 7). Das Bundle wird jetzt per `scripts/bundle-sea.mjs` ohne Shell-Quoting gebaut, und jeder Bau-Schritt (Kompilieren, Bundle, Blob, Hilfsprogramme) bricht bei einem Fehler mit einer lesbaren Meldung ab.

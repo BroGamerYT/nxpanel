@@ -58,7 +58,8 @@ if ($running) {
 $seaFuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
 # Pruefung: ist der Code wirklich in der Exe? (Sicherung umgelegt = ":1", Ressource NODE_SEA_BLOB als UTF-16 vorhanden)
 function Test-SeaExe([string]$path) {
-    $bytes = [IO.File]::ReadAllBytes($path)
+    # .NET loest relative Pfade vom Startordner des Prozesses auf, nicht vom Ordner, in den Set-Location gewechselt hat
+    $bytes = [IO.File]::ReadAllBytes((Resolve-Path $path).Path)
     $ascii = [Text.Encoding]::ASCII.GetString($bytes)
     $utf16 = [Text.Encoding]::Unicode.GetString($bytes)
     return ($ascii.Contains("${seaFuse}:1")) -and (-not $ascii.Contains("${seaFuse}:0")) -and ($utf16.Contains('NODE_SEA_BLOB'))
