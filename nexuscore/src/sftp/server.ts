@@ -56,6 +56,18 @@ interface Accessible {
 
 // -------------------------------------------------------------- Host-Schluessel
 
+/**
+ * ssh2 erzeugt ed25519-Schluessel, die sich in etwa 0,5 % der Faelle nicht wieder einlesen lassen ("Malformed OpenSSH private key").
+ * Deshalb wird jeder neue Schluessel gegengeprueft und bei Bedarf neu erzeugt - sonst landet ein kaputter Schluessel auf der Platte.
+ */
+export function generateHostKey(): string {
+  for (let i = 0; i < 20; i++) {
+    const key = utils.generateKeyPairSync('ed25519').private;
+    if (!(utils.parseKey(key) instanceof Error)) return key;
+  }
+  throw new Error('SFTP-Host-Schluessel konnte nicht erzeugt werden');
+}
+
 function loadHostKey(dir: string): { key: string; fingerprint: string } {
   const file = path.join(dir, 'sftp_host_key.pem');
   let key: string | undefined;
@@ -67,8 +79,7 @@ function loadHostKey(dir: string): { key: string; fingerprint: string } {
     }
   }
   if (!key) {
-    const pair = utils.generateKeyPairSync('ed25519');
-    key = pair.private;
+    key = generateHostKey();
     try {
       // sync, damit der Schluessel vor dem ersten Start sicher auf der Platte liegt
       writeFileSync(file, key, { mode: 0o600 });

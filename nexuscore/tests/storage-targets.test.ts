@@ -11,6 +11,7 @@ const { MockDriver } = await import('../src/drivers/mock-driver.js');
 const { EventBus } = await import('../src/protocol/events.js');
 const { ServerRegistry } = await import('../src/store/registry.js');
 const { createCoreServer } = await import('../src/http/server.js');
+const { generateHostKey } = await import('../src/sftp/server.js');
 const { isPrivateAddress, assertPublicHost, parseTargetConfig, StorageTargetError } = await import('../src/store/storage-targets.js');
 
 const json = { 'content-type': 'application/json' };
@@ -41,7 +42,7 @@ async function login(name: string): Promise<Headers> {
 // ------------------------------------------------------------ ein winziger SFTP-Server zum Testen
 
 function startBox(port = 0): Promise<{ port: number; close: () => Promise<void> }> {
-  const hostKey = ssh2.utils.generateKeyPairSync('ed25519').private;
+  const hostKey = generateHostKey();
   const box = new ssh2.Server({ hostKeys: [hostKey] }, (client) => {
     client.on('authentication', (ctx) => (ctx.method === 'password' && ctx.username === 'box' && ctx.password === BOX_PW ? ctx.accept() : ctx.reject(['password'])));
     client.on('ready', () =>
