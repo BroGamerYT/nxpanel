@@ -19,16 +19,33 @@ Write-Host "=============================================" -ForegroundColor Cyan
 
 Set-Location $NexusCoreDir
 
+# Native Programme melden Fehler nur ueber den Exitcode - $ErrorActionPreference greift dort nicht. Ohne Pruefung entsteht eine kaputte Exe.
+function Assert-Step([string]$name, [string]$output = '') {
+    if ($LASTEXITCODE -ne 0) {
+        $short = ($output -replace '\s+', ' ').Trim()
+        Write-Host "::error::$name fehlgeschlagen (Code $LASTEXITCODE): $short"
+        throw "$name fehlgeschlagen (Code $LASTEXITCODE)"
+    }
+}
+
 Write-Host "`n[1/4] TypeScript kompilieren..." -ForegroundColor Yellow
 npm run build
+Assert-Step 'npm run build'
 
 Write-Host "`n[2/4] Standalone Bundle mit ESBuild schnüren..." -ForegroundColor Yellow
-$esbuild = Join-Path $ProjectRoot 'node_modules\.bin\esbuild.cmd'
-& $esbuild dist/index.js --bundle --platform=node --target=node22 --outfile=dist/bundle.cjs --format=cjs --define:process.env.NEXUSCORE_STANDALONE='"1"' --inject:scripts/sea-shim.js --define:import.meta.url=__IMPORT_META_URL
+$bundleOut = (& node scripts/bundle-sea.mjs 2>&1 | Out-String)
+Write-Host $bundleOut
+Assert-Step 'Bundle (esbuild)' $bundleOut
 
 Write-Host "`n[3/4] Native nexuscore.exe (Node SEA) erzeugen..." -ForegroundColor Yellow
 Set-Content -Path dist\sea-config.json -Value '{"main": "dist/bundle.cjs", "output": "dist/sea-prep.blob", "disableExperimentalSEAWarning": true}'
-node --experimental-sea-config dist\sea-config.json
+$seaOut = (& node --experimental-sea-config dist\sea-config.json 2>&1 | Out-String)
+Write-Host $seaOut
+Assert-Step 'SEA-Blob erzeugen' $seaOut
+if (-not (Test-Path dist\sea-prep.blob)) {
+    Write-Host "::error::dist\sea-prep.blob wurde nicht erzeugt: $(($seaOut -replace '\s+', ' ').Trim())"
+    throw 'dist\sea-prep.blob fehlt'
+}
 
 # Falls nexuscore.exe noch laeuft, informieren oder beenden
 $running = Get-Process -Name nexuscore -ErrorAction SilentlyContinue
@@ -73,7 +90,9 @@ Copy-Item (Join-Path $ProjectRoot 'web\dist') $targetWeb -Recurse -Force
 
 Write-Host "`n[3.8/4] Hilfsprogramme bauen (nxjob: harte Grenzen, nxsvc: Dienst-Huelle)..." -ForegroundColor Yellow
 npm run build:helper
+Assert-Step 'Hilfsprogramm nxjob (cargo)'
 npm run build:service
+Assert-Step 'Dienst-Huelle nxsvc (cargo)'
 
 Write-Host "`n[4/4] Windows Installer MSI (WiX v5) erstellen..." -ForegroundColor Yellow
 $coreVersion = (Get-Content (Join-Path $NexusCoreDir 'package.json') -Raw | ConvertFrom-Json).version
