@@ -1,0 +1,4 @@
+# Die Laufzeitbibliothek (VCRUNTIME140.dll) fest einbauen: auf einem frischen Windows ohne Visual-C++-Paket sonst startet die Exe nicht
+# (beim Dienst: Fehler 1053 "reagiert nicht rechtzeitig").
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
