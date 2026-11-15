@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.20] – 2026-11-15 – Keine leere Seite mehr beim Seitenwechsel
+
+### Behoben
+- Beim Wechsel der Seite blieb die Oberfläche manchmal leer: ein Fehler beim Laden oder Anzeigen einer Seite (typisch: eine nachgeladene Seitendatei, die es nach einem Update nicht mehr gibt) riss die ganze Oberfläche mit. Die Seiten sind jetzt abgesichert: bei einer fehlenden Seitendatei lädt die Oberfläche einmal selbst neu, sonst erscheint eine Meldung mit „Neu laden“ und „Erneut versuchen“; beim Wechsel der Seite verschwindet die Meldung wieder.
+
 ## [0.3.19] – 2026-11-15 – Oberfläche lädt nach dem Update neu
 
 ### Behoben

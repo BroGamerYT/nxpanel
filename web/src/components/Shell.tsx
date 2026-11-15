@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
+import { PageErrorBoundary } from './PageErrorBoundary';
 import {
   Server, LogOut, Plus, Users, Search, Shield,
   HelpCircle, Bell, Menu, X, AlertTriangle, CheckCircle2, Info, CheckCheck, Eye,
@@ -464,9 +465,11 @@ export function Shell() {
 
       {/* Main Content Area */}
       <main className="min-w-0 px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 w-full max-w-[1800px] mx-auto">
-        <Suspense fallback={<Spinner />}>
-          <Outlet />
-        </Suspense>
+        <PageErrorBoundary>
+          <Suspense fallback={<Spinner />}>
+            <Outlet />
+          </Suspense>
+        </PageErrorBoundary>
       </main>
       <GlobalTaskProgress />
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
