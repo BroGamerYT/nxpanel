@@ -9,6 +9,7 @@ param(
     [ValidateSet('deploy', 'restart', 'stop', 'logs', 'status', 'monitor', 'shell', 'test-games', 'test-games-logs')]
     [string]$Action = 'deploy',
     [switch]$SkipTests,
+    [switch]$Force,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$RemainingArgs
 )
@@ -131,6 +132,19 @@ if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
     Write-Err "ssh fehlt. Unter Windows nachinstallieren:"
     Write-Host "    Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0" -ForegroundColor White
     exit 1
+}
+
+# --- Schutz: laeuft auf dem Ziel schon der NexusCore, ist das alte Panel dort abgeloest ----------------
+# Der Core belegt Port 8080 (das alte Panel wuerde dort nicht starten) und das Panel-Stack (Postgres, Redis) ist nur noch der
+# Rueckweg. Mit -Force trotzdem ausfuehren.
+if ($Action -in @('deploy', 'restart', 'stop') -and -not $Force) {
+    $coreState = ((& ssh @sshArgs $target "systemctl is-active nexuscore 2>/dev/null") | Select-Object -First 1)
+    if ("$coreState".Trim() -eq 'active') {
+        Write-Err "Auf $($cfg.host) laeuft der NexusCore (Dienst nexuscore) - das alte Panel ist dort abgeloest und wuerde am belegten Port 8080 scheitern."
+        Write-Host "  Den Core aktualisierst du im Admin-Hub (Core-Update) oder mit nexuscore/deploy/linux/install-core.sh." -ForegroundColor White
+        Write-Host "  Trotzdem ausfuehren: deploy.bat $Action -Force" -ForegroundColor White
+        exit 1
+    }
 }
 
 # --- Kurzbefehle -----------------------------------------------------------
