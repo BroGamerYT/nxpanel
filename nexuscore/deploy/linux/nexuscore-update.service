@@ -1,0 +1,9 @@
+[Unit]
+Description=NexusCore-Update einspielen (ausgeloest vom Core ueber nexuscore-update.path)
+Documentation=file:///opt/nexuscore/deploy/apply-update.sh
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nexuscore/deploy/apply-update.sh
+# Download, Installation und Neustart des Cores (der zuerst alle Spiele sauber beendet) brauchen Zeit
+TimeoutStartSec=1800

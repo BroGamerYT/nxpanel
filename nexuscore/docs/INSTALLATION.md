@@ -20,6 +20,8 @@ wird und was die Firewall kann. Nichts sonst im Core hängt vom System ab (ein T
 
 ## Sichern und Reparieren
 
+Update per Knopf: Windows (Installer) und Linux (ab 0.3.21, Dienst `nexuscore-update`, wird von `install-core.sh` eingerichtet; Details im Kopf von `deploy/linux/apply-update.sh`). Wer unter Linux von einer älteren Version kommt, spielt 0.3.21 einmal von Hand ein.
+
 Im Admin-Hub: „Core-Sicherung & Reparatur“ (sichern, prüfen, wiederherstellen; vor jedem Update automatisch). Startet der Core nicht mehr: Dienst beenden, dann `nexuscore.exe backups` und `nexuscore.exe restore latest`. Fehlen Programmdateien: den Installer erneut starten und „Reparieren“ wählen.
 
 ## Gemeinsam auf allen Systemen

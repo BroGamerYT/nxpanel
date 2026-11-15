@@ -2,6 +2,16 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.21] – 2026-11-15 – Update per Knopf auch unter Linux
+
+### Neu
+- **Linux: „Jetzt aktualisieren“ geht jetzt auch hier.** Der Core hat unter Linux keine Root-Rechte und ersetzt sich nicht selbst. Er sichert sich, legt nur eine Anforderung (den Release-Tag) in seinem Datenordner ab und ein kleiner Dienst (`nexuscore-update`, root, ausgelöst von `nexuscore-update.path`) erledigt den Rest: Er holt Adresse und SHA-256-Prüfsumme des Pakets selbst bei GitHub (nicht vom Core), prüft Tag, Version (nur neuere) und Prüfsumme, installiert mit `install-core.sh` und prüft, dass die neue Version antwortet. Schlägt etwas fehl, spielt er den bisherigen Stand zurück; die Oberfläche zeigt dann die Meldung. Ergebnis und Protokoll liegen in root-eigenen Ordnern (`/run/nexuscore-update`, `/var/log/nexuscore-update`), der Core liest dort nur.
+- **Einmalig von Hand:** Der Dienst wird von `install-core.sh` eingerichtet. Wer von einer älteren Version kommt, spielt 0.3.21 einmal von Hand ein (Paket entpacken, `sudo bash nexuscore/deploy/linux/install-core.sh`); danach geht jedes Update per Knopf. Bis dahin zeigt die Karte, was zu tun ist.
+- „Was ist neu“ zeigt die Änderungsliste jetzt formatiert statt als Rohtext.
+
+### Geändert
+- `install-core.sh` startet einen schon laufenden Core neu (vorher blieb nach dem Kopieren der alte Code im Speicher).
+
 ## [0.3.20] – 2026-11-15 – Keine leere Seite mehr beim Seitenwechsel
 
 ### Behoben

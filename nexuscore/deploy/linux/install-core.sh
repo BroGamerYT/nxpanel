@@ -79,7 +79,11 @@ if [ -d "$REPO_SRC/web/dist" ]; then
 fi
 log "Abhaengigkeiten installieren (npm ci --omit=dev)"
 if [ "$DRY" = 1 ]; then echo "   (Probelauf) (cd $APP_DIR && npm ci --omit=dev)"; else (cd "$APP_DIR" && npm ci --omit=dev --no-audit --no-fund); fi
+# Update per Knopf: der Core legt nur eine Anforderung ab, dieses Skript (root) spielt das Paket ein (siehe apply-update.sh)
+run install -d -m 0755 "$APP_DIR/deploy"
+run install -m 0755 "$HERE/apply-update.sh" "$APP_DIR/deploy/apply-update.sh"
 run chown -R root:root "$APP_DIR"
+run install -d -m 0750 -o nexuscore -g nexuscore "$DATA_DIR/updates"
 
 # --- Einstellungen ---------------------------------------------------------------------------------------------
 if [ -f "$ENV_FILE" ]; then
@@ -121,12 +125,20 @@ run install -m 0644 "$HERE/nexuscore.service" "$UNIT"
 # Node liegt nicht immer unter /usr/bin (z. B. aus dem Tarball nach /usr/local/bin): den tatsaechlichen Pfad eintragen
 NODE_BIN="$(command -v node)"
 if [ "$NODE_BIN" != /usr/bin/node ]; then run sed -i "s#^ExecStart=/usr/bin/node #ExecStart=$NODE_BIN #" "$UNIT"; fi
+UPDATE_SERVICE=/etc/systemd/system/nexuscore-update.service
+UPDATE_PATH=/etc/systemd/system/nexuscore-update.path
+run install -m 0644 "$HERE/nexuscore-update.service" "$UPDATE_SERVICE"
+run install -m 0644 "$HERE/nexuscore-update.path" "$UPDATE_PATH"
+run sed -i "s#^PathExists=.*#PathExists=$DATA_DIR/updates/request#" "$UPDATE_PATH"
 run systemctl daemon-reload
+run systemctl enable --now nexuscore-update.path
 if [ "${NO_START:-0}" = 1 ]; then
   run systemctl enable nexuscore
   log "Fertig (nicht gestartet). Starten mit: systemctl start nexuscore"
 else
-  run systemctl enable --now nexuscore
+  run systemctl enable nexuscore
+  # Laeuft der Dienst schon (Aktualisierung), muss er neu starten, sonst bliebe der alte Code im Speicher
+  if [ "$DRY" = 0 ] && systemctl is-active --quiet nexuscore; then run systemctl restart nexuscore; else run systemctl start nexuscore; fi
   if [ "$DRY" = 0 ]; then
     sleep 3
     systemctl is-active --quiet nexuscore || { journalctl -u nexuscore -n 30 --no-pager; die "Der Dienst laeuft nicht - Log siehe oben."; }

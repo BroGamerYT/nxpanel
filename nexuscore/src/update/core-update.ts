@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { createWriteStream, existsSync, readFileSync } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createWriteStream, existsSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { appendFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -21,6 +21,13 @@ export type FetchLike = Fetcher;
 
 export const RELEASE_TAG = /^core-v(\d+\.\d+\.\d+)$/;
 export const ASSET_NAME = 'NexusCore-Setup.msi';
+export const LINUX_ASSET_NAME = 'NexusCore-linux.tar.gz';
+/** Wo der Root-Dienst (deploy/linux/apply-update.sh) Ergebnis und Protokoll ablegt; der Core liest dort nur. */
+const HELPER_RUN_DIR = '/run/nexuscore-update';
+const HELPER_LOG_DIR = '/var/log/nexuscore-update';
+const HELPER_UNIT = '/etc/systemd/system/nexuscore-update.path';
+/** Wartezeit, bis der Root-Dienst die Anforderung abholt; sonst fehlt er oder ist kaputt. */
+export const HELPER_PICKUP_MS = 90_000;
 const MAX_DOWNLOAD_BYTES = 400 * 1024 * 1024;
 const CACHE_MS = 15 * 60_000;
 const TASK_NAME = 'NexusCoreUpdate';
@@ -41,6 +48,8 @@ export interface ReleaseInfo {
   prerelease: boolean;
   url: string;
   asset: { name: string; url: string; size: number; sha256: string | null } | null;
+  /** Das Linux-Paket (NexusCore-linux.tar.gz). */
+  linuxAsset: { name: string; url: string; size: number; sha256: string | null } | null;
 }
 
 export type UpdateState = 'idle' | 'downloading' | 'installing' | 'failed';
@@ -131,9 +140,12 @@ export function latestRelease(list: unknown, repo: string, includePrerelease = f
     if (!m) continue;
     const version = m[1]!;
     if (best && compareVersions(version, best.version) <= 0) continue;
-    const a = (raw.assets ?? []).find((x) => x.name === ASSET_NAME);
     const prefix = `https://github.com/${repo}/releases/download/`;
-    const digest = typeof a?.digest === 'string' && /^sha256:[0-9a-f]{64}$/i.test(a.digest) ? a.digest.slice(7).toLowerCase() : null;
+    const pick = (name: string): ReleaseInfo['asset'] => {
+      const a = (raw.assets ?? []).find((x) => x.name === name);
+      const digest = typeof a?.digest === 'string' && /^sha256:[0-9a-f]{64}$/i.test(a.digest) ? a.digest.slice(7).toLowerCase() : null;
+      return a?.browser_download_url?.startsWith(prefix) ? { name: a.name!, url: a.browser_download_url, size: Number(a.size ?? 0), sha256: digest } : null;
+    };
     best = {
       version,
       tag: raw.tag_name!,
@@ -142,9 +154,8 @@ export function latestRelease(list: unknown, repo: string, includePrerelease = f
       publishedAt: raw.published_at ?? null,
       prerelease: raw.prerelease === true,
       url: raw.html_url ?? `https://github.com/${repo}/releases`,
-      asset: a?.browser_download_url?.startsWith(prefix)
-        ? { name: a.name!, url: a.browser_download_url, size: Number(a.size ?? 0), sha256: digest }
-        : null,
+      asset: pick(ASSET_NAME),
+      linuxAsset: pick(LINUX_ASSET_NAME),
     };
   }
   return best;
@@ -188,6 +199,8 @@ export interface CoreUpdaterOptions {
   beforeInstall?: () => Promise<void>;
   /** Uhr (fuer Tests). */
   now?: () => number;
+  /** Linux: Ordner/Dateien des Root-Dienstes (fuer Tests ersetzbar). */
+  linuxHelper?: { unit: string; runDir: string; logDir: string };
 }
 
 export class CoreUpdater {
@@ -203,6 +216,7 @@ export class CoreUpdater {
   private readonly lines: UpdateLogLine[] = [];
   private readonly now: () => number;
   private chan: UpdateChannel = 'stable';
+  private seenResultAt = 0;
 
   constructor(private readonly o: CoreUpdaterOptions) {
     this.now = o.now ?? Date.now;
@@ -219,10 +233,35 @@ export class CoreUpdater {
     this.current = o.currentVersion ?? CORE_VERSION;
   }
 
-  /** Windows und aus dem Installer (nexuscore.exe neben nxsvc.exe) - nur dort ersetzt ein MSI die laufende Version. */
+  private get helper(): { unit: string; runDir: string; logDir: string } {
+    return this.o.linuxHelper ?? { unit: HELPER_UNIT, runDir: HELPER_RUN_DIR, logDir: HELPER_LOG_DIR };
+  }
+
+  private get requestFile(): string {
+    return path.join(this.o.dir, 'request');
+  }
+
+  /** Ergebnis des Root-Dienstes (Linux): `failed`/`ok` und eine Meldung; null, wenn es keins gibt. */
+  private helperResult(): { ok: boolean; message: string; at: number } | null {
+    try {
+      const file = path.join(this.helper.runDir, 'result');
+      const [head = '', ...rest] = readFileSync(file, 'utf8').split('\n');
+      return { ok: head.trim() === 'ok', message: rest.join(' ').trim(), at: statSync(file).mtimeMs };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Windows und aus dem Installer (nexuscore.exe neben nxsvc.exe); Linux mit dem Update-Dienst (nexuscore-update.path, ab install-core.sh 0.3.21). */
   support(): { supported: boolean; reason: string | null } {
     if (this.o.enabled === false) return { supported: false, reason: 'Die Update-Abfrage ist abgeschaltet (NEXUSCORE_UPDATE_CHECK=0).' };
-    if (this.platform !== 'windows') return { supported: false, reason: 'Das Update per Knopf gibt es bisher nur unter Windows. Auf Linux den neuen Stand von Hand einspielen.' };
+    if (this.platform === 'linux') {
+      if (!existsSync(this.helper.unit)) {
+        return { supported: false, reason: 'Der Update-Dienst fehlt. Einmal den neuen Stand von Hand einspielen (install-core.sh richtet ihn ein); danach geht das Update per Knopf.' };
+      }
+      return { supported: true, reason: null };
+    }
+    if (this.platform !== 'windows') return { supported: false, reason: 'Das Update per Knopf gibt es bisher unter Windows und Linux. Auf macOS den neuen Stand von Hand einspielen.' };
     const dir = path.dirname(this.execPath);
     if (path.basename(this.execPath).toLowerCase() !== 'nexuscore.exe' || !existsSync(path.join(dir, 'nxsvc.exe'))) {
       return { supported: false, reason: 'Dieser Core läuft nicht aus dem Windows-Installer (kein Dienst). Das Update gilt nur für installierte Versionen.' };
@@ -248,6 +287,24 @@ export class CoreUpdater {
   private expire(): void {
     if (this.state !== 'installing') return;
     const since = this.progress?.installStartedAt ? Date.parse(this.progress.installStartedAt) : Number.NaN;
+    if (this.platform === 'linux' && !Number.isNaN(since)) {
+      const res = this.helperResult();
+      if (res && !res.ok && res.at >= since - 1000) {
+        this.state = 'failed';
+        this.message = res.message || 'Der Update-Dienst meldet einen Fehler.';
+        this.progress = null;
+        this.log(`Fehler: ${this.message}`);
+        return;
+      }
+      if (existsSync(this.requestFile) && this.now() - since > HELPER_PICKUP_MS) {
+        rmSync(this.requestFile, { force: true });
+        this.state = 'failed';
+        this.message = 'Der Update-Dienst hat die Anforderung nicht abgeholt (systemctl status nexuscore-update.path prüfen).';
+        this.progress = null;
+        this.log(`Fehler: ${this.message}`);
+        return;
+      }
+    }
     if (Number.isNaN(since) || this.now() - since < INSTALL_TIMEOUT_MS) return;
     this.state = 'failed';
     this.message = 'Der Installer hat den Core nicht neu gestartet - das Update ist gescheitert. Das Installer-Protokoll zeigt den Grund.';
@@ -255,8 +312,19 @@ export class CoreUpdater {
     this.log(`Fehler: ${this.message}`);
   }
 
+  /** Linux: Ein zurueckgespieltes Update (der Core laeuft nach dem Neustart wieder mit dem alten Stand) bleibt als Fehler sichtbar, solange es juenger als eine Stunde ist. */
+  private adoptHelperFailure(): void {
+    if (this.platform !== 'linux' || this.state !== 'idle') return;
+    const res = this.helperResult();
+    if (!res || res.ok || res.at <= this.seenResultAt || this.now() - res.at > 3_600_000) return;
+    this.seenResultAt = res.at;
+    this.state = 'failed';
+    this.message = res.message || 'Das letzte Update ist fehlgeschlagen.';
+  }
+
   async status(refresh = false): Promise<UpdateStatus> {
     this.expire();
+    this.adoptHelperFailure();
     const { supported, reason } = this.support();
     if (this.o.enabled !== false && (refresh || !this.cache || Date.now() - this.cache.at > CACHE_MS)) {
       try {
@@ -309,15 +377,48 @@ export class CoreUpdater {
       return tailFile(path.join(this.o.dir, 'update.log'), lines);
     }
 
+    const logDir = this.platform === 'linux' ? this.helper.logDir : this.o.dir;
     let names: string[] = [];
     try {
-      names = (await readdir(this.o.dir)).filter((n) => /^install-\d+\.\d+\.\d+\.log$/.test(n));
+      names = (await readdir(logDir)).filter((n) => /^install-\d+\.\d+\.\d+\.log$/.test(n));
     } catch {
       return [];
     }
     names.sort((a, b) => compareVersions(a.slice(8, -4), b.slice(8, -4)));
     const last = names.at(-1);
-    return last ? [`# ${last}`, ...(await tailFile(path.join(this.o.dir, last), lines))] : [];
+    return last ? [`# ${last}`, ...(await tailFile(path.join(logDir, last), lines))] : [];
+  }
+
+  /**
+   * Linux: Der Core hat keine Root-Rechte und laedt nichts selbst. Er sichert sich und legt nur die Anforderung (den Release-Tag) ab;
+   * der Dienst nexuscore-update (root, deploy/linux/apply-update.sh) holt Paket und Pruefsumme selbst von GitHub, installiert und startet den Core neu.
+   */
+  private async requestLinux(latest: ReleaseInfo): Promise<{ version: string }> {
+    try {
+      this.step('backup', 'Sichere den Core vor dem Update …', { version: latest.version, percent: null });
+      try {
+        await this.o.beforeInstall?.();
+      } catch (err) {
+        throw new Error(`Sicherung vor dem Update fehlgeschlagen - es wird nicht aktualisiert: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      this.log('Sicherung fertig.');
+      await mkdir(this.o.dir, { recursive: true });
+      const tmp = `${this.requestFile}.tmp`;
+      await writeFile(tmp, `${latest.tag}\n`, 'utf8');
+      this.state = 'installing';
+      this.step('install', `Der Update-Dienst lädt und installiert Version ${latest.version} - der Core startet gleich neu.`, { installStartedAt: new Date(this.now()).toISOString() });
+      this.o.audit?.('core.update', { from: this.current, to: latest.version, tag: latest.tag });
+      await rename(tmp, this.requestFile);
+      this.log('Anforderung abgelegt (nexuscore-update.path). Der Dienst prüft das Paket bei GitHub selbst.');
+      return { version: latest.version };
+    } catch (err) {
+      await rm(`${this.requestFile}.tmp`, { force: true }).catch(() => undefined);
+      this.state = 'failed';
+      this.message = err instanceof Error ? err.message : String(err);
+      this.progress = null;
+      this.log(`Fehler: ${this.message}`);
+      throw new UpdateError(this.message, 502, 'update_failed');
+    }
   }
 
   /** Laedt den neuesten Installer, prueft die Pruefsumme und startet ihn. Kehrt zurueck, sobald der Installer laeuft (der Core wird dabei neu gestartet). */
@@ -336,9 +437,11 @@ export class CoreUpdater {
       const st = await this.status(true);
       latest = st.latest;
       if (!latest || !st.updateAvailable) throw new UpdateError('Es gibt keine neuere Version.', 409, 'no_update');
-      if (!latest.asset) throw new UpdateError(`Im Release ${latest.tag} fehlt ${ASSET_NAME}.`, 409, 'no_asset');
-      if (!latest.asset.sha256) throw new UpdateError('GitHub nennt keine Prüfsumme für den Installer - ohne sie wird nicht installiert.', 409, 'no_checksum');
-      asset = latest.asset;
+      const wanted = this.platform === 'linux' ? latest.linuxAsset : latest.asset;
+      const wantedName = this.platform === 'linux' ? LINUX_ASSET_NAME : ASSET_NAME;
+      if (!wanted) throw new UpdateError(`Im Release ${latest.tag} fehlt ${wantedName}.`, 409, 'no_asset');
+      if (!wanted.sha256) throw new UpdateError('GitHub nennt keine Prüfsumme für den Installer - ohne sie wird nicht installiert.', 409, 'no_checksum');
+      asset = wanted;
     } catch (err) {
       this.state = 'idle';
       this.message = null;
@@ -346,6 +449,8 @@ export class CoreUpdater {
       this.log(`Abgebrochen: ${err instanceof Error ? err.message : String(err)}`);
       throw err;
     }
+
+    if (this.platform === 'linux') return this.requestLinux(latest);
 
     this.step('download', `Lade ${ASSET_NAME} ${latest.version} …`, { version: latest.version, total: asset.size, percent: 0 });
     const file = path.join(this.o.dir, `NexusCore-${latest.version}.msi`);

@@ -5,13 +5,14 @@ import { api, ApiError } from '../lib/api';
 import { Button, ErrorBox } from './ui';
 import type { ActiveTask } from '../lib/types';
 import { CoreUpdateModal, type UpdateProgress } from './CoreUpdateModal';
+import { MarkdownViewer } from './MarkdownViewer';
 
 interface UpdateStatus {
   current: string;
   platform: string;
   supported: boolean;
   reason: string | null;
-  latest: { version: string; prerelease?: boolean; name: string; notes: string; publishedAt: string | null; url: string; asset: { size: number; sha256: string | null } | null } | null;
+  latest: { version: string; prerelease?: boolean; name: string; notes: string; publishedAt: string | null; url: string; asset: { size: number; sha256: string | null } | null; linuxAsset?: { size: number; sha256: string | null } | null } | null;
   updateAvailable: boolean;
   checkedAt: string | null;
   channel?: 'stable' | 'prerelease';
@@ -21,7 +22,7 @@ interface UpdateStatus {
   progress: UpdateProgress | null;
 }
 
-/** Core-Update (nur Administratoren): neueste Version von GitHub, ein Klick laedt und installiert sie (Windows). */
+/** Core-Update (nur Administratoren): neueste Version von GitHub, ein Klick laedt und installiert sie (Windows, Linux). */
 export function CoreUpdateCard() {
   const qc = useQueryClient();
   // Nach dem Start des Installers ist der Core kurz weg: so lange immer wieder fragen, bis die neue Version antwortet
@@ -60,7 +61,8 @@ export function CoreUpdateCard() {
   if (status.isLoading) return null;
   if (!data) return null;
 
-  const mb = data.latest?.asset?.size ? ` (${(data.latest.asset.size / (1024 * 1024)).toFixed(0)} MB)` : '';
+  const size = (data.platform === 'linux' ? data.latest?.linuxAsset : data.latest?.asset)?.size;
+  const mb = size ? ` (${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB)` : '';
   const err = install.error ? (install.error instanceof ApiError ? install.error.message : (install.error as Error).message) : null;
 
   return (
@@ -104,7 +106,7 @@ export function CoreUpdateCard() {
       {data.updateAvailable && data.latest?.notes && (
         <details className="text-sm text-dim">
           <summary className="cursor-pointer text-ink">Was ist neu in {data.latest.version}</summary>
-          <pre className="mt-2 whitespace-pre-wrap font-sans text-xs leading-relaxed">{data.latest.notes}</pre>
+          <MarkdownViewer content={data.latest.notes} showRawToggle={false} showCopyButton={false} className="mt-2 text-xs" />
         </details>
       )}
       {!data.latest && !data.error && (

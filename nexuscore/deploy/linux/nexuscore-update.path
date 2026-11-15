@@ -1,0 +1,10 @@
+[Unit]
+Description=Auf eine Update-Anforderung des NexusCore warten
+
+[Path]
+# Der Datenordner wird beim Einrichten (install-core.sh) eingetragen
+PathExists=/var/lib/nexuscore/updates/request
+Unit=nexuscore-update.service
+
+[Install]
+WantedBy=multi-user.target
