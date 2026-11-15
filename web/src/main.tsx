@@ -30,6 +30,7 @@ const Account = page(() => import('./pages/Account'), 'Account');
 import { Spinner, Toaster } from './components/ui';
 import { useToasts, dismiss } from './lib/toast';
 import { I18nProvider, i18nReady, t } from './lib/i18n';
+import { useReloadOnNewCore } from './lib/useReloadOnNewCore';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 2_000 } },
@@ -38,6 +39,8 @@ const queryClient = new QueryClient({
 function App() {
   const { me, ready } = useAuth();
   const toasts = useToasts();
+  // Nach einem Core-Update die Seite neu laden (sonst laeuft die alte Oberflaeche weiter), auch auf der Anmeldeseite
+  useReloadOnNewCore();
   if (!ready) return <div className="min-h-full grid place-items-center"><Spinner /></div>;
   if (!me) return <Login />;
   return (

@@ -2,6 +2,11 @@
 
 Neueste Version oben. Nummerierung wie beim Panel: `0.MINOR.PATCH`, 1.0 erst, wenn der Besitzer den Core für fertig erklärt.
 
+## [0.3.19] – 2026-11-15 – Oberfläche lädt nach dem Update neu
+
+### Behoben
+- Nach einem Core-Update zeigte die Oberfläche weiter die alte Fassung, bis man von Hand neu lud (Strg+Umschalt+R): der Neustart meldet ab, dabei verschwand die Update-Karte, die sonst selbst neu lädt. Die Oberfläche fragt jetzt alle 20 Sekunden die öffentliche Info-Route (`/core/v1/info`) und lädt sich neu, sobald der Core eine andere Version meldet – auch auf der Anmeldeseite. Beim Neustart (Core kurz nicht erreichbar) passiert nichts.
+
 ## [0.3.18] – 2026-11-14 – Sicherere Updates, keine Zugänge im Log
 
 ### Neu
